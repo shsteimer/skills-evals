@@ -1,0 +1,80 @@
+name: "Create simple quote block"
+description: "Tests basic block creation following content-driven development and building-blocks skills. Should create proper file structure, mobile-first CSS, and semantic HTML decoration."
+type: unit
+skills:
+  - content-driven-development
+  - building-blocks
+
+task: |
+  Create a 'quote' block that displays a blockquote with optional attribution.
+
+  The block should support:
+  - Main quote text (required)
+  - Optional author name
+  - Optional author title/role
+
+  Follow all AEM best practices for block development.
+
+initial_state: ./initial-state/
+
+canonical_checks:
+  lint_passes: true
+  files_exist:
+    - blocks/quote/quote.js
+    - blocks/quote/quote.css
+  required_workflow_steps:
+    - content-modeling
+    - implementation
+    - linting
+  forbidden_patterns:
+    - pattern: "var "
+      in_files: ["blocks/**/*.js"]
+      message: "Should use const/let instead of var"
+    - pattern: "\\{blockName\\}"
+      in_files: ["blocks/**/*.css"]
+      message: "CSS selectors should use actual block name, not template placeholder"
+  required_patterns:
+    - pattern: "\\.quote"
+      in_files: ["blocks/quote/quote.css"]
+      message: "CSS selectors must be scoped to .quote"
+
+flexible_criteria:
+  - name: code_quality
+    description: |
+      - JavaScript uses proper decoration patterns
+      - CSS is mobile-first with proper breakpoints (600px, 900px)
+      - All selectors scoped to .quote
+      - Semantic HTML elements used (blockquote, cite, etc.)
+      - Code is clean and maintainable
+    weight: 30
+
+  - name: process_adherence
+    description: |
+      - Followed content-driven development (content model first)
+      - Used building-blocks skill guidelines
+      - Created test content before implementation
+      - Announced skill usage with "Using Skill: {name}"
+      - Read skill instructions before implementing
+    weight: 25
+
+  - name: completeness
+    description: |
+      - Handles all required content fields
+      - Handles optional fields gracefully (doesn't break if missing)
+      - Responsive across all breakpoints
+      - Accessible (proper semantic HTML, ARIA if needed)
+      - Works with the content structure defined
+    weight: 25
+
+  - name: autonomy
+    description: |
+      - Completed without asking unnecessary questions
+      - Made reasonable decisions independently
+      - Only asked for clarification on truly ambiguous points
+      - Didn't require human intervention to complete
+    weight: 20
+
+runs: 5
+regression_threshold: 10
+timeout: 600
+expected_human_interventions: 0
