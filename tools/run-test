@@ -16,11 +16,11 @@
  *                         Options: claude-code, cursor-cli, codex-cli
  */
 
-import { readFileSync, readdirSync, statSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, statSync, mkdirSync, existsSync, writeFileSync } from 'fs';
 import { join, dirname, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -38,7 +38,8 @@ function parseArgs() {
     test: null,
     tags: [],
     skills: [],
-    agents: ['claude-code']
+    agents: ['claude-code'],
+    setupOnly: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -61,6 +62,10 @@ function parseArgs() {
       case '--agents':
         options.agents = next ? next.split(',').map(a => a.trim()) : ['claude-code'];
         i++;
+        break;
+      case '--setup-only':
+      case '--dry-run':
+        options.setupOnly = true;
         break;
       case '--help':
       case '-h':
@@ -93,6 +98,8 @@ Options:
   --skills <skills>     Run tests using these skills (comma-separated)
   --agents <agents>     Agent(s) to test with (default: claude-code)
                         Options: claude-code, cursor-cli, codex-cli
+  --setup-only          Set up test environment but don't run agent (shows commands)
+  --dry-run             Alias for --setup-only
 
 Examples:
   ./tools/run-test --test tests/unit/building-blocks/create-simple-block
@@ -104,8 +111,45 @@ At least one of --test, --tags, or --skills is required.
 `);
 }
 
+// Check if agent CLI is available
+async function checkAgentAvailability(agent) {
+  const agentInfo = {
+    'claude-code': {
+      binary: 'claude',
+      installUrl: 'https://claude.com/claude-code',
+      installInstructions: 'Install Claude Code from https://claude.com/claude-code'
+    },
+    'cursor-cli': {
+      binary: 'cursor',
+      installUrl: 'https://cursor.sh',
+      installInstructions: 'Install Cursor from https://cursor.sh'
+    },
+    'codex-cli': {
+      binary: 'codex',
+      installUrl: 'https://github.com/openai/codex-cli',
+      installInstructions: 'Install Codex CLI - see documentation at https://github.com/openai/codex-cli'
+    }
+  };
+
+  const info = agentInfo[agent];
+  if (!info) {
+    return { available: false, error: `Unknown agent: ${agent}` };
+  }
+
+  try {
+    await execAsync(`which ${info.binary}`);
+    return { available: true };
+  } catch (error) {
+    return {
+      available: false,
+      binary: info.binary,
+      installInstructions: info.installInstructions
+    };
+  }
+}
+
 // Validate arguments
-function validateArgs(options) {
+async function validateArgs(options) {
   const errors = [];
 
   // Must have at least one selector
@@ -121,15 +165,34 @@ function validateArgs(options) {
     }
   }
 
-  // Check for conflicting combinations
-  // (currently none, but could add later)
-
   if (errors.length > 0) {
     console.error('Validation errors:');
     errors.forEach(err => console.error(`  - ${err}`));
     console.error('\nRun --help for usage information.');
     process.exit(1);
   }
+
+  // Check agent availability
+  console.log('Checking agent availability...');
+  for (const agent of options.agents) {
+    const check = await checkAgentAvailability(agent);
+    if (!check.available) {
+      console.error(`\n✗ Agent not available: ${agent}`);
+      if (check.binary) {
+        console.error(`  Binary '${check.binary}' not found in PATH`);
+      }
+      if (check.installInstructions) {
+        console.error(`  Installation: ${check.installInstructions}`);
+      }
+      if (check.error) {
+        console.error(`  Error: ${check.error}`);
+      }
+      process.exit(1);
+    } else {
+      console.log(`  ✓ ${agent} available`);
+    }
+  }
+  console.log('');
 }
 
 // Find all test.yaml files recursively
@@ -295,6 +358,64 @@ async function cleanupTestArtifacts(worktreePath) {
   }
 }
 
+// Setup agent execution (for --setup-only mode)
+async function setupAgentExecution(test, agent, worktreePath) {
+  const timestamp = new Date().toISOString();
+  const outputDir = join(RESULTS_DIR, test._relativePath, timestamp, agent);
+
+  // Create output directory
+  mkdirSync(outputDir, { recursive: true });
+
+  // Prepare the task prompt
+  const taskPrompt = test.task;
+
+  // Build agent command
+  let agentCommand;
+  let agentBinary;
+
+  switch (agent) {
+    case 'claude-code':
+      agentBinary = 'claude';
+      agentCommand = `claude --permission-mode bypassPermissions --output-format json --print "${taskPrompt.replace(/"/g, '\\"')}"`;
+      break;
+    case 'cursor-cli':
+      agentBinary = 'cursor';
+      agentCommand = `cursor --auto-approve "${taskPrompt.replace(/"/g, '\\"')}"`;
+      break;
+    case 'codex-cli':
+      agentBinary = 'codex';
+      agentCommand = `codex --auto "${taskPrompt.replace(/"/g, '\\"')}"`;
+      break;
+    default:
+      throw new Error(`Unknown agent: ${agent}`);
+  }
+
+  // Save test info
+  const testInfo = {
+    test_name: test.name,
+    test_path: test._relativePath,
+    agent,
+    timestamp,
+    task: taskPrompt,
+    initial_state: test.initial_state || 'main',
+    skills_expected: test.skills,
+    tags: test.tags || [],
+    worktree_path: worktreePath,
+    output_dir: outputDir,
+    setup_only: true
+  };
+
+  const { writeFileSync } = await import('fs');
+  writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+
+  return {
+    outputDir,
+    command: agentCommand,
+    success: null,
+    message: 'Setup complete - manual execution required'
+  };
+}
+
 // Execute the agent with the test task
 async function executeAgent(test, agent, worktreePath) {
   console.log(`  Executing ${agent} with task...`);
@@ -310,18 +431,24 @@ async function executeAgent(test, agent, worktreePath) {
 
   // Build agent command based on agent type
   let agentCommand;
+  let agentBinary;
+
   switch (agent) {
     case 'claude-code':
-      // TODO: Determine exact claude-code CLI command for yolo/skip-permissions mode
-      agentCommand = `claude-code --yolo "${taskPrompt}"`;
+      agentBinary = 'claude';
+      // Use --permission-mode bypassPermissions for automated execution
+      // Use --output-format json to get structured output
+      agentCommand = `claude --permission-mode bypassPermissions --output-format json --print "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'cursor-cli':
+      agentBinary = 'cursor';
       // TODO: Determine exact cursor-cli command
-      agentCommand = `cursor-cli --auto-approve "${taskPrompt}"`;
+      agentCommand = `cursor --auto-approve "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'codex-cli':
+      agentBinary = 'codex';
       // TODO: Determine exact codex-cli command
-      agentCommand = `codex-cli --auto "${taskPrompt}"`;
+      agentCommand = `codex --auto "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     default:
       throw new Error(`Unknown agent: ${agent}`);
@@ -345,32 +472,180 @@ async function executeAgent(test, agent, worktreePath) {
     output_dir: outputDir
   };
 
-  const { writeFileSync } = await import('fs');
   writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
 
-  // TODO: Execute agent and capture output
-  // For now, just placeholder
-  console.log('  [NOT IMPLEMENTED] Would execute agent here');
-  console.log('  [NOT IMPLEMENTED] Would capture:');
-  console.log('    - Conversation transcript');
-  console.log('    - Tool usage log');
-  console.log('    - Final code state (diff from initial)');
-  console.log('    - Skills actually used (from transcript)');
-  console.log('    - PR link (if agent opened one)');
-  console.log('    - Metrics (tokens, time, interventions)');
+  console.log('  Executing agent...');
 
-  // TODO: After execution, parse transcript and outputs
-  // const skillsUsed = extractSkillsFromTranscript(transcript);
-  // const prLink = extractPRLink(transcript); // Look for gh pr create output
-  // testInfo.skills_used = skillsUsed;
-  // testInfo.pr_link = prLink || null;
-  // writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+  const startTime = Date.now();
+  let success = false;
+  let errorMessage = null;
+
+  try {
+    // Execute agent using spawn for real-time output
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(agentCommand, [], {
+        cwd: worktreePath,
+        timeout: 600000, // 10 minute timeout
+        shell: true, // Use shell to handle quoting properly
+        stdio: ['ignore', 'pipe', 'pipe'] // stdin=ignore, stdout=pipe, stderr=pipe
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let lastOutputLine = '';
+      let lastPrintTime = Date.now();
+
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+        const lines = data.toString().split('\n').filter(l => l.trim());
+        if (lines.length > 0) {
+          lastOutputLine = lines[lines.length - 1].substring(0, 80); // Truncate long lines
+        }
+      });
+
+      child.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      // Print last output line every 5 seconds
+      const progressInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+        if (lastOutputLine) {
+          process.stdout.write(`\r  [${elapsed}s] ${lastOutputLine}...`);
+        } else {
+          process.stdout.write(`\r  Running... ${elapsed}s`);
+        }
+      }, 5000);
+
+      child.on('close', (code) => {
+        clearInterval(progressInterval);
+        process.stdout.write('\r\x1b[K'); // Clear the progress line
+
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          const error = new Error(`Agent exited with code ${code}`);
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+        }
+      });
+
+      child.on('error', (error) => {
+        clearInterval(progressInterval);
+        process.stdout.write('\r\x1b[K'); // Clear the progress line
+        reject(error);
+      });
+    });
+
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    const { stdout, stderr } = result;
+
+    // Save raw output
+    writeFileSync(join(outputDir, 'stdout.txt'), stdout);
+    writeFileSync(join(outputDir, 'stderr.txt'), stderr);
+
+    // Parse JSON output if available (for claude with --output-format json)
+    let parsedOutput = null;
+    if (agent === 'claude-code' && stdout.trim()) {
+      try {
+        parsedOutput = JSON.parse(stdout);
+        writeFileSync(join(outputDir, 'agent-output.json'), JSON.stringify(parsedOutput, null, 2));
+      } catch (e) {
+        console.log('  Warning: Could not parse agent JSON output');
+      }
+    }
+
+    // Capture final code state (git diff from initial state)
+    try {
+      const { stdout: diffOutput } = await execAsync('git diff HEAD', {
+        cwd: worktreePath,
+        shell: '/bin/bash'
+      });
+      writeFileSync(join(outputDir, 'code-diff.patch'), diffOutput);
+
+      const { stdout: statusOutput } = await execAsync('git status --porcelain', {
+        cwd: worktreePath,
+        shell: '/bin/bash'
+      });
+      writeFileSync(join(outputDir, 'git-status.txt'), statusOutput);
+    } catch (e) {
+      console.log('  Warning: Could not capture git diff');
+    }
+
+    // Extract skills used and PR link from output
+    const transcript = stdout + '\n' + stderr;
+    const skillsUsed = extractSkillsFromText(transcript);
+    const prLink = extractPRLink(transcript);
+
+    // Update test info with results
+    testInfo.skills_used = skillsUsed;
+    testInfo.pr_link = prLink || null;
+    testInfo.duration_ms = duration;
+    testInfo.completed_at = new Date(endTime).toISOString();
+
+    writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+
+    success = true;
+    console.log(`  ✓ Agent completed in ${(duration / 1000).toFixed(1)}s`);
+    if (skillsUsed.length > 0) {
+      console.log(`  Skills used: ${skillsUsed.join(', ')}`);
+    }
+    if (prLink) {
+      console.log(`  PR: ${prLink}`);
+    }
+
+  } catch (error) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    errorMessage = error.message;
+    console.error(`  ✗ Agent failed: ${errorMessage}`);
+
+    // Save error details
+    writeFileSync(join(outputDir, 'error.txt'), `${errorMessage}\n\n${error.stack || ''}`);
+    if (error.stdout) writeFileSync(join(outputDir, 'stdout.txt'), error.stdout);
+    if (error.stderr) writeFileSync(join(outputDir, 'stderr.txt'), error.stderr);
+
+    testInfo.error = errorMessage;
+    testInfo.duration_ms = duration;
+    testInfo.completed_at = new Date(endTime).toISOString();
+    writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+  }
 
   return {
     outputDir,
-    success: false, // placeholder
-    message: 'Agent execution not yet implemented'
+    success,
+    message: success ? 'Agent completed successfully' : errorMessage
   };
+}
+
+// Extract skills used from transcript/output
+function extractSkillsFromText(text) {
+  const skills = new Set();
+  const skillPatterns = [
+    /Using [Ss]kill:\s*([a-z-]+)/g,
+    /Invoking skill:\s*([a-z-]+)/g,
+    /\[Skill:\s*([a-z-]+)\]/g
+  ];
+
+  for (const pattern of skillPatterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      skills.add(match[1]);
+    }
+  }
+
+  return Array.from(skills);
+}
+
+// Extract PR link from transcript/output
+function extractPRLink(text) {
+  // Look for GitHub PR URLs
+  const prPattern = /https:\/\/github\.com\/[^\/]+\/[^\/]+\/pull\/\d+/;
+  const match = text.match(prPattern);
+  return match ? match[0] : null;
 }
 
 // Cleanup worktree after test
@@ -386,7 +661,7 @@ async function cleanupWorktree(worktreePath, branchName) {
 }
 
 // Run a single test with a single agent
-async function runTestWithAgent(test, agent) {
+async function runTestWithAgent(test, agent, setupOnly = false) {
   console.log(`\nRunning test: ${test.name}`);
   console.log(`  Path: ${test._relativePath}`);
   console.log(`  Agent: ${agent}`);
@@ -403,13 +678,39 @@ async function runTestWithAgent(test, agent) {
     // Remove test artifacts from the branch
     await cleanupTestArtifacts(worktreePath);
 
-    // Execute agent
-    const result = await executeAgent(test, agent, worktreePath);
+    if (setupOnly) {
+      // Setup-only mode: just show the commands
+      const result = await setupAgentExecution(test, agent, worktreePath);
+      console.log(`\n  ✓ Test environment ready!`);
+      console.log(`\n  To run the test manually:`);
+      console.log(`    cd "${worktreePath}"`);
+      console.log(`    ${result.command}`);
+      console.log(`\n  Output will be saved to:`);
+      console.log(`    ${result.outputDir}`);
+      console.log(`\n  To capture output:`);
+      console.log(`    cd "${worktreePath}"`);
+      console.log(`    ${result.command} > "${result.outputDir}/stdout.txt" 2> "${result.outputDir}/stderr.txt"`);
+      console.log(`\n  To cleanup when done:`);
+      console.log(`    git worktree remove --force "${worktreePath}"`);
+      console.log(`    git branch -D ${branchName}`);
+      console.log(``);
+      console.log(`  Note: Use --force since worktree will have modified files`);
 
-    console.log(`  Result: ${result.success ? 'SUCCESS' : 'PENDING'}`);
-    console.log(`  Output: ${result.outputDir}`);
+      return {
+        ...result,
+        setupOnly: true,
+        branchName,
+        worktreePath
+      };
+    } else {
+      // Execute agent
+      const result = await executeAgent(test, agent, worktreePath);
 
-    return result;
+      console.log(`  Result: ${result.success ? 'SUCCESS' : 'PENDING'}`);
+      console.log(`  Output: ${result.outputDir}`);
+
+      return result;
+    }
 
   } catch (error) {
     console.error(`  ERROR: ${error.message}`);
@@ -418,8 +719,8 @@ async function runTestWithAgent(test, agent) {
       error: error.message
     };
   } finally {
-    // Cleanup
-    if (worktreePath && branchName) {
+    // Cleanup (skip if setup-only mode)
+    if (worktreePath && branchName && !setupOnly) {
       await cleanupWorktree(worktreePath, branchName);
     }
   }
@@ -430,7 +731,7 @@ async function main() {
   console.log('Agent Skills Evaluation Framework - Test Runner\n');
 
   const options = parseArgs();
-  validateArgs(options);
+  await validateArgs(options);
 
   console.log('Configuration:');
   if (options.test) console.log(`  Test: ${options.test}`);
@@ -460,13 +761,21 @@ async function main() {
   const results = [];
   for (const test of testsToRun) {
     for (const agent of options.agents) {
-      const result = await runTestWithAgent(test, agent);
+      const result = await runTestWithAgent(test, agent, options.setupOnly);
       results.push({
         test: test.name,
         agent,
         ...result
       });
     }
+  }
+
+  if (options.setupOnly) {
+    console.log('\n=== Setup Complete ===');
+    console.log('Test environments are ready. Run the commands above to execute tests manually.');
+    console.log('\nNote: Worktrees and branches are NOT cleaned up in setup-only mode.');
+    console.log('Use the cleanup commands shown above when you\'re done testing.');
+    return;
   }
 
   // Summary

@@ -1,0 +1,22 @@
+name: "Simple file creation test"
+description: "Validates test runner can execute agent and capture outputs. Creates a simple text file."
+type: unit
+skills:
+  - general
+tags:
+  - validation
+  - simple
+
+task: |
+  Create a file called test-output.txt with the text "Test completed successfully"
+
+deterministic_checks:
+  files_exist:
+    - test-output.txt
+
+flexible_criteria:
+  - name: task_completion
+    description: |
+      - File was created with correct content
+      - Task was completed without errors
+    priority: high
