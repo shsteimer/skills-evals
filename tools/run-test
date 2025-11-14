@@ -12,7 +12,7 @@
  *   --test <name>         Run specific test(s) by name (supports wildcards)
  *   --tags <tags>         Run tests matching these tags (comma-separated)
  *   --skills <skills>     Run tests using these skills (comma-separated)
- *   --agents <agents>     Agent(s) to test with (default: claude-code)
+ *   --agents <agents>     Agent(s) to test with (default: all agents)
  *                         Options: claude-code, cursor-cli, codex-cli
  */
 
@@ -38,7 +38,7 @@ function parseArgs() {
     test: null,
     tags: [],
     skills: [],
-    agents: ['claude-code'],
+    agents: ['claude-code', 'cursor-cli', 'codex-cli'],
     setupOnly: false
   };
 
@@ -60,7 +60,7 @@ function parseArgs() {
         i++;
         break;
       case '--agents':
-        options.agents = next ? next.split(',').map(a => a.trim()) : ['claude-code'];
+        options.agents = next ? next.split(',').map(a => a.trim()) : ['claude-code', 'cursor-cli', 'codex-cli'];
         i++;
         break;
       case '--setup-only':
@@ -96,7 +96,7 @@ Options:
   --test <name>         Run specific test(s) by name (path to test directory)
   --tags <tags>         Run tests matching these tags (comma-separated)
   --skills <skills>     Run tests using these skills (comma-separated)
-  --agents <agents>     Agent(s) to test with (default: claude-code)
+  --agents <agents>     Agent(s) to test with (default: all agents)
                         Options: claude-code, cursor-cli, codex-cli
   --setup-only          Set up test environment but don't run agent (shows commands)
   --dry-run             Alias for --setup-only
@@ -120,9 +120,9 @@ async function checkAgentAvailability(agent) {
       installInstructions: 'Install Claude Code from https://claude.com/claude-code'
     },
     'cursor-cli': {
-      binary: 'cursor',
-      installUrl: 'https://cursor.sh',
-      installInstructions: 'Install Cursor from https://cursor.sh'
+      binary: 'cursor-agent',
+      installUrl: 'https://cursor.com/cli',
+      installInstructions: 'Install Cursor CLI from https://cursor.com/cli'
     },
     'codex-cli': {
       binary: 'codex',
@@ -379,12 +379,12 @@ async function setupAgentExecution(test, agent, worktreePath) {
       agentCommand = `claude --permission-mode bypassPermissions --output-format json --print "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'cursor-cli':
-      agentBinary = 'cursor';
-      agentCommand = `cursor --auto-approve "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentBinary = 'cursor-agent';
+      agentCommand = `cursor-agent --force "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'codex-cli':
       agentBinary = 'codex';
-      agentCommand = `codex --auto "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `codex --search --dangerously-bypass-approvals-and-sandbox "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     default:
       throw new Error(`Unknown agent: ${agent}`);
@@ -441,14 +441,12 @@ async function executeAgent(test, agent, worktreePath) {
       agentCommand = `claude --permission-mode bypassPermissions --output-format json --print "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'cursor-cli':
-      agentBinary = 'cursor';
-      // TODO: Determine exact cursor-cli command
-      agentCommand = `cursor --auto-approve "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentBinary = 'cursor-agent';
+      agentCommand = `cursor-agent --force "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'codex-cli':
       agentBinary = 'codex';
-      // TODO: Determine exact codex-cli command
-      agentCommand = `codex --auto "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `codex --search --dangerously-bypass-approvals-and-sandbox "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     default:
       throw new Error(`Unknown agent: ${agent}`);

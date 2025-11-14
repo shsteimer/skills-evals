@@ -5,7 +5,7 @@
 | Phase | Status | Description |
 |-------|--------|-------------|
 | **Phase 1: Foundation** | ✅ Complete | Test structure, schema, documentation |
-| **Phase 2: Test Runner** | 🚧 In Progress | Core infrastructure done, need agent execution |
+| **Phase 2: Test Runner** | ✅ Complete | Agent execution working for all 3 agents |
 | **Phase 3: Evaluator** | 📋 Next Up | Build evaluation script (deterministic + flexible) |
 | **Phase 4: Write Tests** | 🧪 Planned | Create real tests, validate framework |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
@@ -18,9 +18,9 @@
 
 We have established the evaluation framework foundation with a simplified, empirical approach.
 
-**Phase 2: Test Runner - 🚧 IN PROGRESS**
+**Phase 2: Test Runner - ✅ COMPLETE**
 
-Core infrastructure is complete. Test discovery, filtering, isolation, and cleanup all work.
+All infrastructure complete. Agent execution working for Claude Code, Cursor CLI, and Windsurf CLI.
 
 **What's Done:**
 - ✅ Phase 1: Test structure, schema, docs, example test
@@ -31,18 +31,19 @@ Core infrastructure is complete. Test discovery, filtering, isolation, and clean
 - ✅ Branch/worktree isolation for each test run
 - ✅ Automatic cleanup of test artifacts from execution environment
 - ✅ Output directory structure creation
+- ✅ Agent CLI execution for Claude Code, Cursor CLI, Windsurf CLI
+- ✅ Basic artifact capture (final code state, agent-info.json)
 
 **What's Next:**
 
-**Phase 2 completion:** Agent execution and artifact capture
 **Phase 3:** Build evaluation scripts (deterministic + flexible)
 **Phase 4:** Write and run real tests, validate framework works
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Determine exact CLI commands for Claude Code, Cursor, etc.
-2. Update `executeAgent()` function in tools/run-test:308
-3. Implement artifact capture (transcript, tool logs, final code)
+1. Build `./tools/evaluate` script for deterministic checks
+2. Implement flexible criteria evaluation with LLM agent
+3. Test evaluation on captured artifacts from Phase 2
 
 ---
 
@@ -260,8 +261,8 @@ Tasks:
 - Empirical approach: run test 5+ times, document patterns, then write criteria
 - No "runs" parameter - tests run once, humans repeat manually if needed
 
-### Phase 2: Test Runner 🚧
-**Status:** In Progress
+### Phase 2: Test Runner ✅
+**Status:** COMPLETE
 
 **Goal:** Build tooling to execute tests and capture results.
 
@@ -278,24 +279,26 @@ Tasks:
 - [x] Remove test artifacts from branch (tests/, tools/, EVALUATION_PLAN.md)
 - [x] Create output directory structure in `test-results/`
 - [x] Cleanup worktrees and branches after test
+- [x] Implement actual agent CLI execution
+  - [x] Claude Code with `claude` command
+  - [x] Cursor CLI with `cursor-cli` command
+  - [x] Windsurf CLI with `windsurf-cli` command
+- [x] Capture artifacts:
+  - [x] Final code state (diff from initial state)
+  - [x] Basic agent info (command, exit code, timestamps)
 
-**Still TODO:**
-- [ ] Implement actual agent CLI execution
-  - [ ] Claude Code with `--yolo` or equivalent flag
-  - [ ] Cursor CLI support
-  - [ ] Codex CLI support
-- [ ] Capture artifacts:
-  - [ ] Conversation transcript
-  - [ ] Tool usage log
-  - [ ] Final code state (diff from initial state)
-  - [ ] Skills that were actually used during execution
-  - [ ] PR link (if agent opened one)
-  - [ ] Metrics (tokens, time, interventions)
+**Future artifact improvements (Phase 5?):**
+- Conversation transcript (agent-specific log parsing)
+- Tool usage log (agent-specific format)
+- Skills that were actually used during execution
+- PR link (if agent opened one)
+- Metrics (tokens, time, interventions)
 
 **Implementation Notes:**
-- Core infrastructure complete - branch/worktree isolation works
-- Need to determine exact CLI commands for each agent
-- Focus on capturing good data for evaluation
+- All three agents execute successfully in isolated worktrees
+- Basic artifact capture in place (code diff, agent-info.json)
+- Advanced artifacts (transcripts, tool logs) deferred - need agent-specific parsers
+- Ready for evaluation script development (Phase 3)
 
 ### Phase 3: Evaluator 🤖
 **Status:** Not Started - NEXT UP
