@@ -43,8 +43,6 @@ mkdir -p tests/unit/{skill-name}/{test-name}
 mkdir -p tests/integration/{workflow-name}
 ```
 
-Note: No need for `initial-state/` or `baseline/` directories - we use git branches instead.
-
 ### Step 2: Create Minimal test.yaml
 
 Start with just the essentials - you'll add criteria after running it.
