@@ -20,6 +20,17 @@ This guide explains how to create new test cases for the Agent Skills Evaluation
 - **Duration**: May take 10-15 minutes
 - **Example**: "Build new feature end-to-end", "Fix bug workflow"
 
+## Recommended Workflow
+
+**The best way to write tests is empirically:**
+
+1. Create initial state branch (if needed) and basic test.yaml with just the task
+2. Run the test 5+ times, documenting what happens
+3. Identify patterns: What fails? What varies? What's consistently good/bad?
+4. Use those real observations to write your criteria
+
+**Don't try to predict everything upfront** - let the agent show you what needs to be checked!
+
 ## Creating a New Test
 
 ### Step 1: Choose Test Location
@@ -34,73 +45,144 @@ mkdir -p tests/integration/{workflow-name}
 
 Note: No need for `initial-state/` or `baseline/` directories - we use git branches instead.
 
-### Step 2: Create test.yaml
+### Step 2: Create Minimal test.yaml
 
-See `tests/TEST_SCHEMA.md` for the complete schema reference.
+Start with just the essentials - you'll add criteria after running it.
 
-#### Required Decisions
+**Initial test.yaml template:**
+```yaml
+name: "Your test name"
+description: "Brief description"
+type: unit  # or integration
+skills:
+  - skill-name
 
-1. **What skills are you testing?**
-   - List them in `skills: []`
-   - Should exist in `.claude/skills/`
+task: |
+  Your realistic task prompt here
+```
 
-2. **What's the task?**
-   - Write like a realistic human would - clear but not overly detailed
-   - "Create a quote block with optional attribution"
-   - NOT: "Create a quote block that displays a blockquote with optional attribution, using the following exact content model structure with these specific fields..."
-
-3. **What branch should it start from?**
-   - Specify in `initial_state: branch-name`
-   - Omit to use `main` branch
-   - Create test branches with minimal setup needed
-
-4. **What MUST pass?** (Deterministic checks - required)
-   - Which files must exist?
-   - Should linting pass?
-   - What patterns are forbidden?
-   - Which workflow steps are required?
-   - Any custom scripts to run?
-
-5. **What's nice to have?** (Optional deterministic checks)
-   - README files?
-   - Accessibility patterns?
-   - Performance checks?
-   - Best practices that aren't hard requirements?
-
-6. **What should be evaluated for quality?** (Flexible criteria)
-   - Code quality?
-   - Process adherence?
-   - Completeness?
-   - Autonomy?
-   - Set priority for each: high, medium, or low
+That's it! No checks, no criteria yet. See `tests/TEST_SCHEMA.md` for complete schema.
 
 ### Step 3: Set Up Initial State Branch (Optional)
 
-If your test needs a specific starting point:
+If starting from `main` isn't appropriate:
 
 ```bash
-# Create a branch with the initial state
+# Create a branch with minimal setup
 git checkout -b test/my-test-setup main
 
-# Add only what's needed for the test
-# Example: package.json, basic scripts, etc.
+# Add only what's needed
+# Example: package.json, basic scripts, linting config
 
-git add -A
+git add package.json .eslintrc.js scripts/ styles/
 git commit -m "test: initial state for my-test"
 git push -u origin test/my-test-setup
-
-# Return to main
 git checkout main
 ```
 
-Then reference it in test.yaml:
+Reference in test.yaml:
 ```yaml
 initial_state: test/my-test-setup
 ```
 
-If omitted, test starts from `main` branch.
+### Step 4: Run Test 5+ Times
 
-### Step 4: Write Test README
+**This is the key step!** Run your minimal test multiple times and observe:
+
+```bash
+# Run 1
+./tools/run-test tests/unit/my-skill/my-test > results/run-1.txt
+
+# Run 2
+./tools/run-test tests/unit/my-skill/my-test > results/run-2.txt
+
+# ... continue for runs 3, 4, 5+
+```
+
+**Document everything:**
+- What files were created?
+- Did linting pass?
+- Were there errors?
+- Did it follow the expected workflow?
+- What varied across runs?
+- What was consistently good/bad?
+
+**Create a notes file:**
+```markdown
+# Test Run Observations
+
+## Run 1
+- Created blocks/quote/quote.js ✅
+- Created blocks/quote/quote.css ✅
+- Used `var` instead of `const` ❌
+- Skipped linting step ❌
+- Didn't announce skill usage ⚠️
+
+## Run 2
+- Created same files ✅
+- Used `const` properly ✅
+- Ran linting and passed ✅
+- Announced skill usage ✅
+- But created blocks/quote/quote.test.js (unnecessary) ⚠️
+
+## Run 3
+...
+
+## Patterns Identified
+### Hard failures (should be deterministic checks):
+- Sometimes uses `var` instead of `const/let`
+- Sometimes skips linting entirely
+
+### Inconsistent but not critical (optional checks or flexible):
+- Sometimes creates test files (not needed)
+- Skill announcement varies
+
+### Quality issues (flexible criteria):
+- CSS scoping varies in quality
+- Code structure varies
+```
+
+### Step 5: Write Criteria Based on Observations
+
+Now use your real-world data to inform the test:
+
+**Deterministic checks (required)** - Things that MUST be true:
+```yaml
+deterministic_checks:
+  lint_passes: true  # Failed in run 3
+  files_exist:
+    - blocks/quote/quote.js  # Present in all runs
+    - blocks/quote/quote.css  # Present in all runs
+  forbidden_patterns:
+    - pattern: "var "  # Saw this fail in run 1
+      in_files: ["**/*.js"]
+      message: "Should use const/let instead of var"
+```
+
+**Optional deterministic checks** - Nice to have, but seen valid exceptions:
+```yaml
+optional_deterministic_checks:
+  files_not_exist:
+    - blocks/quote/quote.test.js  # Sometimes created, not needed
+```
+
+**Flexible criteria** - Quality that varies but should be evaluated:
+```yaml
+flexible_criteria:
+  - name: code_quality
+    description: |
+      - CSS selectors properly scoped (saw issues in run 4)
+      - Clean code structure (varied across runs)
+    priority: high
+
+  - name: process_adherence
+    description: |
+      - Announces skill usage (inconsistent in early runs)
+      - Follows content-driven development
+    priority: high
+```
+
+### Step 6: Write Test README
 
 Create `README.md` explaining the test:
 
@@ -143,7 +225,7 @@ Create `README.md` explaining the test:
 [What typically goes wrong]
 ```
 
-### Step 5: Validate Test Definition
+### Step 7: Validate Test Definition
 
 ```bash
 ./tools/validate-test tests/unit/my-skill/my-test
@@ -154,6 +236,48 @@ Validates:
 - Skills exist in `.claude/skills/`
 - Priorities are "high", "medium", or "low"
 - If `initial_state` specified, branch exists
+
+## Why This Workflow Works
+
+### Benefits of Empirical Test Creation
+
+1. **Avoid over-specifying** - Only check what actually matters
+2. **Catch real issues** - Find problems you wouldn't predict
+3. **Proper categorization** - Clear which things are hard failures vs. nice-to-haves
+4. **Data-driven priorities** - Set priorities based on actual impact
+5. **Realistic expectations** - Understand what the agent can/can't do consistently
+
+### Example: Learning From Runs
+
+**Before running (guessing):**
+```yaml
+deterministic_checks:
+  files_exist:
+    - blocks/quote/quote.js
+    - blocks/quote/quote.css
+    - blocks/quote/README.md  # Assumed this was needed
+  required_workflow_steps:
+    - content-modeling
+    - implementation
+    - testing  # Assumed testing was required
+```
+
+**After 5 runs (reality):**
+```yaml
+deterministic_checks:
+  files_exist:
+    - blocks/quote/quote.js
+    - blocks/quote/quote.css
+    # Removed README - not critical
+  required_workflow_steps:
+    - content-modeling
+    - implementation
+    # Removed testing - not always applicable for simple blocks
+
+optional_deterministic_checks:
+  files_exist:
+    - blocks/quote/README.md  # Nice to have, moved here
+```
 
 ## Test Design Best Practices
 
@@ -313,21 +437,53 @@ See these tests for reference:
 
 Before considering a test complete:
 
-- [ ] test.yaml has all required fields
-- [ ] Task description is clear but realistic (like a lazy human would write)
-- [ ] Deterministic checks are appropriate (hard requirements only)
-- [ ] Optional checks for nice-to-haves (don't cause failure)
-- [ ] Flexible criteria are specific with clear descriptions
-- [ ] Priorities assigned (high/medium/low)
-- [ ] Initial state branch created (if needed) with minimal setup
+- [ ] Created minimal test.yaml (name, description, type, skills, task)
+- [ ] Created initial state branch if needed (minimal setup only)
+- [ ] **Ran test at least 5 times**
+- [ ] **Documented observations from all runs**
+- [ ] **Identified patterns in failures/successes**
+- [ ] Added deterministic_checks based on hard failures
+- [ ] Added optional_deterministic_checks for nice-to-haves
+- [ ] Added flexible_criteria for quality variations
+- [ ] Set priorities based on impact observed in runs
 - [ ] Test README.md explains purpose and expectations
 - [ ] Test validated: `./tools/validate-test path/to/test`
+
+## Quick Start Example
+
+```bash
+# 1. Create test directory
+mkdir -p tests/unit/building-blocks/simple-test
+
+# 2. Create minimal test.yaml
+cat > tests/unit/building-blocks/simple-test/test.yaml <<EOF
+name: "Create quote block"
+description: "Test basic block creation"
+type: unit
+skills:
+  - building-blocks
+
+task: |
+  Create a quote block with optional attribution.
+EOF
+
+# 3. Run it 5+ times, document everything
+for i in {1..5}; do
+  ./tools/run-test tests/unit/building-blocks/simple-test > results/run-$i.txt
+done
+
+# 4. Review results, identify patterns
+# 5. Add criteria based on what you observed
+# 6. Document in README.md
+# 7. Validate
+./tools/validate-test tests/unit/building-blocks/simple-test
+```
 
 ## Next Steps
 
 After creating a test:
 
-1. Validate it: `./tools/validate-test path/to/test`
-2. Run it once manually to verify it works
-3. Save results as reference for future comparisons
-4. Add to test suite for regular execution
+1. Commit the test (even if criteria aren't perfect yet)
+2. Run it periodically as skills evolve
+3. Refine criteria based on ongoing observations
+4. Share patterns with other test creators
