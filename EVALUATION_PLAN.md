@@ -1,5 +1,29 @@
 # Agent Skills Evaluation Framework
 
+## Current Status
+
+**Phase 1: Foundation - ✅ COMPLETE**
+
+We have established the evaluation framework foundation with a simplified, empirical approach.
+
+**What's Done:**
+- ✅ Test structure defined (unit/ and integration/)
+- ✅ Test schema created (test.yaml with three-tier evaluation)
+- ✅ Example test created (create-simple-block)
+- ✅ Comprehensive documentation (TEST_SCHEMA.md, CREATING_TESTS.md)
+- ✅ Empirical test creation workflow documented
+
+**What's Next: Phase 2 - Test Runner**
+
+Build the tooling to actually run tests and capture results. See "Implementation Phases" below for details.
+
+**Quick Start to Resume:**
+1. Review Phase 2 tasks below
+2. Start with building `./tools/run-test` script
+3. Focus on: checkout branch → run agent → capture artifacts
+
+---
+
 ## Goal
 
 Create a framework to evaluate the impact of changes to agent skills and context files (like CLAUDE.md, AGENTS.md) on agent performance.
@@ -19,7 +43,7 @@ Create a framework to evaluate the impact of changes to agent skills and context
 **Scale:**
 - As many tests as necessary, as few as possible
 
-## Two-Tier Evaluation Strategy
+## Three-Tier Evaluation Strategy
 
 ### Deterministic Checks (Must Pass)
 These must be correct every time - failure = test fails:
@@ -180,57 +204,139 @@ flexible_criteria:
 
 ## Implementation Phases
 
-### Phase 1: Foundation ⏳
-**Status:** Not Started
+### Phase 1: Foundation ✅
+**Status:** COMPLETE
 
 Tasks:
-- [ ] Create test directory structure (`tests/unit/`, `tests/integration/`)
-- [ ] Define test.yaml schema formally
-- [ ] Create first example unit test case
-- [ ] Document test case creation guidelines
+- [x] Create test directory structure (`tests/unit/`, `tests/integration/`)
+- [x] Define test.yaml schema formally (tests/TEST_SCHEMA.md)
+- [x] Create first example unit test case (create-simple-block)
+- [x] Document test case creation guidelines (tests/CREATING_TESTS.md)
+- [x] Simplify approach (branches not directories, priorities not weights)
+- [x] Add empirical test creation workflow (run first, then add criteria)
+
+**Key Decisions Made:**
+- Use git branches for initial state (defaults to `main`)
+- Three-tier checks: deterministic (required), optional deterministic (warnings), flexible (LLM-evaluated)
+- Priority buckets (high/medium/low) instead of weighted scoring
+- Empirical approach: run test 5+ times, document patterns, then write criteria
+- No "runs" parameter - tests run once, humans repeat manually if needed
 
 ### Phase 2: Test Runner 📋
-**Status:** Not Started
+**Status:** Not Started - NEXT UP
 
-Tasks:
-- [ ] Build test execution script
-  - Set up isolated test environment
-  - Run agent with task
-  - Capture all artifacts (code, transcript, tool usage)
-- [ ] Implement artifact storage structure
-- [ ] Add support for initial-state setup
-- [ ] Handle multiple test runs
+**Goal:** Build tooling to execute tests and capture results.
+
+**Core Script:** `./tools/run-test`
+
+**What it needs to do:**
+1. **Setup test environment**
+   - Read test.yaml
+   - Checkout `initial_state` branch (or `main` if not specified)
+   - Create temporary working directory for the test run
+
+2. **Execute agent**
+   - Run agent with the task from test.yaml
+   - Capture conversation transcript
+   - Track tool usage (what tools, when, with what params)
+   - Note workflow steps completed/skipped
+   - Record any human interventions
+
+3. **Capture artifacts**
+   - Final code state (all files created/modified)
+   - Conversation transcript with reasoning
+   - Tool usage log
+   - What the agent would put in a PR description
+   - Metrics (tokens used, time elapsed)
+
+4. **Store results**
+   - Save to `test-results/{test-name}/{timestamp}/`
+   - Structure: code/, transcript.txt, tool-usage.json, metrics.json
+
+**Implementation Notes:**
+- Start simple - manual agent invocation is fine initially
+- Can automate more later (Phase 5)
+- Focus on capturing good data for evaluation
 
 ### Phase 3: Evaluator 🤖
 **Status:** Not Started
 
-Tasks:
-- [ ] Create evaluation agent
-  - Canonical checks (automated)
-  - Flexible criteria scoring (LLM-based)
-  - Failure mode detection
-- [ ] Generate evaluation reports (JSON)
-- [ ] Create human-readable report format
-- [ ] Track metrics (tokens, time, interventions)
+**Goal:** Automatically evaluate test results against criteria.
+
+**Core Script:** `./tools/evaluate-test`
+
+**What it needs to do:**
+1. **Run deterministic checks (required)**
+   - Check if required files exist
+   - Run linting (`npm run lint`)
+   - Check for forbidden/required patterns
+   - Run custom scripts if specified
+   - **Result:** PASS or FAIL (failures block test)
+
+2. **Run optional deterministic checks**
+   - Same types as required checks
+   - **Result:** List of warnings (don't block test)
+
+3. **Run flexible criteria evaluation (LLM)**
+   - Invoke evaluation agent with:
+     - Test criteria (from test.yaml)
+     - Captured artifacts (code, transcript, etc.)
+   - Agent scores each criterion
+   - Agent identifies strengths/issues
+   - **Result:** Assessment with score and findings
+
+4. **Generate reports**
+   - JSON output (structured data)
+   - Markdown report (human-readable)
+   - Save to test results directory
+
+**Implementation Notes:**
+- Deterministic checks can use simple scripts/regex
+- Flexible evaluation needs separate LLM agent with specific prompts
+- Keep evaluation agent prompts in separate files for easy iteration
 
 ### Phase 4: Comparison & Baselines 📊
 **Status:** Not Started
 
-Tasks:
-- [ ] Baseline storage mechanism
-- [ ] Comparison logic (statistical significance)
-- [ ] Regression detection
-- [ ] Trend tracking over time
-- [ ] Generate delta reports
+**Goal:** Compare test results across skill versions to detect regressions/improvements.
+
+**What it needs to do:**
+1. **Store baselines**
+   - Save evaluation results as named baselines
+   - Associate with git commit hash of skills
+
+2. **Compare results**
+   - Compare current run to baseline
+   - Identify score changes
+   - Flag new failures or fixed issues
+   - Highlight changes in patterns
+
+3. **Generate comparison reports**
+   - Show what improved/regressed
+   - Explain why (based on findings)
+   - Recommend actions
+
+**Implementation Notes:**
+- Since tests run once (not multiple times), comparison is straightforward
+- Focus on clear diff of evaluation results
+- Can expand later if needed
 
 ### Phase 5: Tooling & Automation 🛠️
-**Status:** Not Started
+**Status:** Not Started (Optional - Add as Needed)
 
-Tasks:
-- [ ] CLI tool for running tests
-- [ ] CI/CD integration (run on skill changes)
-- [ ] Dashboard/visualization for results
-- [ ] Test suite management commands
+**Goal:** Make the framework easier to use at scale.
+
+**Potential additions:**
+- Run all tests in a suite
+- CI/CD integration (auto-run on skill changes)
+- Dashboard/visualization for results over time
+- Test validation tool (`./tools/validate-test`)
+- Helper scripts for common tasks
+
+**Implementation Notes:**
+- Build these as pain points emerge
+- Don't over-engineer upfront
+- Keep scripts simple and composable
 
 ## Usage Examples
 
