@@ -44,21 +44,20 @@ skills:
 ```
 
 #### `task` (string)
-The prompt/task given to the agent. Should be clear and complete.
+The prompt/task given to the agent. Should be clear and complete, but represent a realistic prompt a lazy human would write.
 
 **Example:**
 ```yaml
 task: |
-  Create a simple text block called 'quote' that displays a blockquote with
-  optional attribution. Follow all AEM best practices.
+  Create a simple text block called 'quote' that displays a blockquote with optional attribution.
 ```
 
-#### `canonical_checks` (object)
-Deterministic checks that must pass every time.
+#### `deterministic_checks` (object)
+Deterministic checks that must pass every time. Failure = test fails.
 
 **Example:**
 ```yaml
-canonical_checks:
+deterministic_checks:
   lint_passes: true
   files_exist:
     - blocks/quote/quote.js
@@ -73,9 +72,30 @@ canonical_checks:
     - pattern: "var "
       in_files: ["**/*.js"]
       message: "Should use const/let instead of var"
+  custom_scripts:
+    - path: "./tests/scripts/check-accessibility.sh"
+      description: "Verify basic accessibility requirements"
 ```
 
-##### Canonical Check Types
+#### `optional_deterministic_checks` (object)
+Optional deterministic checks that are good to follow but don't cause test failure.
+These are automatically verified and reported, but failures are informational only.
+
+**Example:**
+```yaml
+optional_deterministic_checks:
+  files_exist:
+    - blocks/quote/README.md  # Nice to have, not required
+  required_patterns:
+    - pattern: "aria-"
+      in_files: ["blocks/**/*.js"]
+      message: "Consider adding ARIA attributes for accessibility"
+  custom_scripts:
+    - path: "./tests/scripts/check-performance.sh"
+      description: "Check for potential performance issues"
+```
+
+##### Deterministic Check Types
 
 **`lint_passes`** (boolean)
 - If `true`, requires `npm run lint` to pass
@@ -109,24 +129,36 @@ canonical_checks:
 - Code patterns that must appear
 - Same structure as `forbidden_patterns`
 
+**`custom_scripts`** (array of objects)
+- Custom bash or node scripts for specialized checks
+- Each object has:
+  - `path` (string): Path to script (relative to repo root)
+  - `description` (string): What the script checks
+- Script should exit 0 for pass, non-zero for fail
+- Script receives test directory as first argument
+
+##### Optional Deterministic Check Types
+
+Same types as deterministic checks (lint_passes, files_exist, files_not_exist, required_workflow_steps, forbidden_patterns, required_patterns, custom_scripts), but failures are reported without failing the test.
+
 #### `flexible_criteria` (array of objects)
-Quality criteria that can vary across runs.
+Quality criteria evaluated by LLM, can vary across runs.
 
 **Example:**
 ```yaml
 flexible_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable and well-structured
-    weight: 30
+    priority: high
   - name: process_adherence
     description: Followed skill workflow correctly and completely
-    weight: 25
+    priority: high
   - name: completeness
     description: Implementation is complete and handles edge cases appropriately
-    weight: 25
+    priority: medium
   - name: autonomy
     description: Minimal human intervention needed to complete task
-    weight: 20
+    priority: low
 ```
 
 ##### Flexible Criterion Properties
@@ -139,63 +171,21 @@ flexible_criteria:
 - What this criterion evaluates
 - Provides context to evaluation agent
 
-**`weight`** (number)
-- Relative importance (should sum to 100 across all criteria)
-- Used to calculate overall score
+**`priority`** (enum: "high" | "medium" | "low")
+- Relative importance for evaluation
+- High priority issues have more impact on overall assessment
 
 ### Optional Fields
 
 #### `initial_state` (string)
-Path to directory containing starting files for the test.
+Git branch name to use as starting point for the test.
 
 **Example:**
 ```yaml
-initial_state: ./initial-state/
+initial_state: test/hero-block-base
 ```
 
-If not specified, test starts with empty directory (except for boilerplate files).
-
-#### `runs` (number)
-Number of times to run this test. Default: `3`
-
-**Example:**
-```yaml
-runs: 5
-```
-
-#### `regression_threshold` (number)
-Alert if mean score drops more than this many points from baseline. Default: `10`
-
-**Example:**
-```yaml
-regression_threshold: 15
-```
-
-#### `timeout` (number)
-Maximum time (in seconds) for test execution. Default: `600` (10 minutes)
-
-**Example:**
-```yaml
-timeout: 1200
-```
-
-#### `expected_human_interventions` (number)
-Number of times we expect the agent to ask for human input. Default: `0`
-
-**Example:**
-```yaml
-expected_human_interventions: 0
-```
-
-#### `context_files` (array of strings)
-Additional context files to include beyond standard CLAUDE.md/AGENTS.md
-
-**Example:**
-```yaml
-context_files:
-  - docs/block-examples.md
-  - docs/accessibility-guidelines.md
-```
+If not specified, uses `main` branch as starting point.
 
 ## Complete Example
 
@@ -209,16 +199,10 @@ skills:
 
 task: |
   Create a 'quote' block that displays a blockquote with optional attribution.
-  The block should support:
-  - Main quote text
-  - Optional author name
-  - Optional author title/role
 
-  Follow all AEM best practices for block development.
+initial_state: test/basic-setup
 
-initial_state: ./initial-state/
-
-canonical_checks:
+deterministic_checks:
   lint_passes: true
   files_exist:
     - blocks/quote/quote.js
@@ -235,6 +219,14 @@ canonical_checks:
       in_files: ["blocks/**/*.css"]
       message: "CSS selectors should use actual block name, not template placeholder"
 
+optional_deterministic_checks:
+  files_exist:
+    - blocks/quote/README.md
+  required_patterns:
+    - pattern: "aria-"
+      in_files: ["blocks/quote/quote.js"]
+      message: "Consider adding ARIA attributes for better accessibility"
+
 flexible_criteria:
   - name: code_quality
     description: |
@@ -243,7 +235,7 @@ flexible_criteria:
       - All selectors scoped to .quote
       - Semantic HTML elements used
       - Code is clean and maintainable
-    weight: 30
+    priority: high
 
   - name: process_adherence
     description: |
@@ -251,7 +243,7 @@ flexible_criteria:
       - Used building-blocks skill guidelines
       - Created test content before implementation
       - Announced skill usage
-    weight: 25
+    priority: high
 
   - name: completeness
     description: |
@@ -259,19 +251,14 @@ flexible_criteria:
       - Handles optional fields gracefully
       - Responsive across all breakpoints
       - Accessible (proper semantic HTML, ARIA if needed)
-    weight: 25
+    priority: medium
 
   - name: autonomy
     description: |
       - Completed without asking unnecessary questions
       - Made reasonable decisions independently
       - Only asked for clarification on truly ambiguous points
-    weight: 20
-
-runs: 5
-regression_threshold: 10
-timeout: 600
-expected_human_interventions: 0
+    priority: low
 ```
 
 ## Validation Rules
@@ -280,23 +267,19 @@ A valid test.yaml must:
 1. Include all required fields
 2. Have `type` be either "unit" or "integration"
 3. Reference skills that exist in `.claude/skills/`
-4. Have flexible criteria weights sum to 100
-5. Have `runs` >= 1
-6. Have `timeout` > 0
-7. If `initial_state` is specified, the path must exist
+4. Have flexible criteria priorities be "high", "medium", or "low"
+5. If `initial_state` is specified, the branch must exist
 
 ## Best Practices
 
-1. **Task clarity**: Make tasks clear and complete. Don't rely on implicit knowledge.
+1. **Task clarity**: Write tasks like a realistic human would - clear but not overly detailed.
 
-2. **Canonical checks**: Focus on objective, measurable criteria that catch real problems.
+2. **Deterministic checks**: Focus on objective, measurable criteria that catch real problems.
 
 3. **Flexible criteria**: Keep descriptions specific so evaluation agent knows what to look for.
 
-4. **Weights**: Weight what matters most. If code quality is paramount, give it higher weight.
+4. **Priorities**: Use "high" for must-haves, "medium" for important, "low" for nice-to-haves.
 
-5. **Runs**: Start with 3-5 runs. Increase if you see high variance.
+5. **Initial state**: Create branches with minimal setup needed for the test scenario.
 
-6. **Initial state**: Keep it minimal - only include what's necessary for the test scenario.
-
-7. **Regression threshold**: Set based on acceptable variance. 10 points is reasonable default.
+6. **Custom scripts**: Use for specialized checks that can't be expressed with built-in check types.

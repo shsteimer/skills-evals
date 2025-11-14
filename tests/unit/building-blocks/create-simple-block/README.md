@@ -51,7 +51,7 @@ export default function decorate(block) {
 }
 ```
 
-## Canonical Pass Criteria
+## Deterministic Pass Criteria
 
 - ✅ Linting passes (`npm run lint`)
 - ✅ Files exist: `blocks/quote/quote.js`, `blocks/quote/quote.css`
@@ -61,11 +61,10 @@ export default function decorate(block) {
 
 ## Flexible Quality Criteria
 
-Evaluated and scored, but can vary:
-- Code quality (30%)
-- Process adherence (25%)
-- Completeness (25%)
-- Autonomy (20%)
+Evaluated by LLM, prioritized:
+- **High priority**: Code quality, process adherence
+- **Medium priority**: Completeness
+- **Low priority**: Autonomy
 
 ## Common Failure Modes to Watch
 

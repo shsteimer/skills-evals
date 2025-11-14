@@ -21,25 +21,35 @@ Create a framework to evaluate the impact of changes to agent skills and context
 
 ## Two-Tier Evaluation Strategy
 
-### Canonical Checks (Deterministic - Must Pass)
-These must be correct every time:
+### Deterministic Checks (Must Pass)
+These must be correct every time - failure = test fails:
 - ✅ Linting passes (yes/no)
 - ✅ Required files exist (yes/no)
 - ✅ Code runs without errors (yes/no)
 - ✅ Specific anti-patterns absent (yes/no)
 - ✅ Required workflow steps completed (yes/no)
+- ✅ Custom scripts pass (bash/node scripts for specialized checks)
 
-**Scoring:** Canonical failures = hard failures (test fails)
+**Scoring:** Deterministic failures = hard failures (test fails)
+
+### Optional Deterministic Checks (Nice to Have)
+Automatically verified but don't cause test failure:
+- ⚠️ Optional files (README, docs, etc.)
+- ⚠️ Best practice patterns
+- ⚠️ Performance checks
+- ⚠️ Additional quality checks
+
+**Scoring:** Reported as warnings/suggestions, no impact on pass/fail
 
 ### Flexible Criteria (Can Vary)
-These are evaluated for quality but can vary across runs:
+These are evaluated for quality by an LLM evaluator:
 - ~ Exact code implementation
 - ~ Order of tool usage
 - ~ Specific variable names
 - ~ PR description wording
 - ~ Alternative valid approaches
 
-**Scoring:** Scored on quality, averaged across multiple runs
+**Scoring:** Each criterion has a priority (high/medium/low) that guides overall assessment
 
 ## Test Artifacts Captured
 
@@ -59,18 +69,18 @@ tests/
 │   ├── building-blocks/
 │   │   ├── create-simple-block/
 │   │   │   ├── test.yaml          # Test definition
-│   │   │   ├── initial-state/     # Starting files (if any)
-│   │   │   └── baseline/          # Baseline results (generated)
+│   │   │   └── README.md          # Test documentation
 │   │   └── modify-existing-block/
 │   ├── content-modeling/
 │   └── testing-blocks/
 └── integration/                    # Full workflow tests
     ├── new-feature-end-to-end/
     │   ├── test.yaml
-    │   ├── initial-state/
-    │   └── baseline/
+    │   └── README.md
     └── fix-bug-workflow/
 ```
+
+**Initial State:** Tests specify a git branch as their starting point. If not specified, uses `main` branch.
 
 ## Test Definition Schema (test.yaml)
 
@@ -82,12 +92,10 @@ skills: ["content-driven-development", "building-blocks"]
 
 task: |
   Create a hero block that displays a large image, headline, and CTA button.
-  The content should support optional subheading and background image.
-  Follow all AEM best practices.
 
-initial_state: ./initial-state/  # Path to starting files (optional)
+initial_state: test/basic-setup  # Git branch name (optional, defaults to main)
 
-canonical_checks:
+deterministic_checks:
   lint_passes: true
   files_exist:
     - blocks/hero/hero.js
@@ -105,19 +113,16 @@ canonical_checks:
 flexible_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable
-    weight: 30
+    priority: high
   - name: process_adherence
     description: Followed skill workflow correctly
-    weight: 25
+    priority: high
   - name: completeness
     description: Implementation is complete and handles edge cases
-    weight: 25
+    priority: medium
   - name: autonomy
     description: Minimal human intervention needed
-    weight: 20
-
-runs: 5  # Number of times to run this test
-regression_threshold: 10  # Alert if score drops >10 points from baseline
+    priority: low
 ```
 
 ## Evaluation Output Schema
@@ -127,53 +132,45 @@ regression_threshold: 10  # Alert if score drops >10 points from baseline
   "test_name": "create-hero-block",
   "timestamp": "2025-01-14T10:00:00Z",
   "skills_version": "abc123",  // git commit hash
-  "runs": 5,
 
-  "canonical_results": {
-    "passed": 5,
-    "failed": 0,
-    "failures": []
+  "deterministic_results": {
+    "passed": true,
+    "failures": [],
+    "optional_failures": [
+      "blocks/quote/README.md does not exist",
+      "No ARIA attributes found (consider for accessibility)"
+    ]
   },
 
-  "flexible_scores": {
-    "runs": [85, 88, 83, 87, 85],
-    "mean": 85.6,
-    "std_dev": 1.9,
-    "min": 83,
-    "max": 88,
+  "flexible_assessment": {
+    "overall": "pass",
+    "score": 85,
 
-    "breakdown": {
-      "code_quality": {"mean": 87, "std_dev": 2.1},
-      "process_adherence": {"mean": 82, "std_dev": 3.2},
-      "completeness": {"mean": 88, "std_dev": 1.5},
-      "autonomy": {"mean": 95, "std_dev": 0}
+    "by_priority": {
+      "high": {
+        "code_quality": {"score": 87, "issues": []},
+        "process_adherence": {"score": 82, "issues": ["Didn't announce skill usage"]}
+      },
+      "medium": {
+        "completeness": {"score": 88, "issues": []}
+      },
+      "low": {
+        "autonomy": {"score": 95, "issues": []}
+      }
     }
-  },
-
-  "failure_modes": {
-    "forgot_to_lint": 0,
-    "wrong_file_structure": 1,
-    "missed_test_content": 0
-  },
-
-  "comparison_to_baseline": {
-    "baseline_mean": 83.2,
-    "delta": +2.4,
-    "significance": "improvement",
-    "confidence": "medium"
   },
 
   "findings": {
     "strengths": [
-      "Consistently followed mobile-first approach",
+      "Followed mobile-first approach",
       "Created test content before writing code (content-driven)"
     ],
     "issues": [
-      "In 1/5 runs, created files in wrong directory structure",
-      "PR descriptions varied in quality"
+      "Didn't announce skill usage explicitly",
+      "Could improve PR description clarity"
     ],
     "recommendations": [
-      "Clarify file structure requirements in building-blocks skill"
+      "Emphasize skill announcement requirement in AGENTS.md"
     ]
   },
 

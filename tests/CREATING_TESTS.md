@@ -26,20 +26,17 @@ This guide explains how to create new test cases for the Agent Skills Evaluation
 
 ```bash
 # Unit test example
-mkdir -p tests/unit/{skill-name}/{test-name}/{initial-state,baseline}
+mkdir -p tests/unit/{skill-name}/{test-name}
 
 # Integration test example
-mkdir -p tests/integration/{workflow-name}/{initial-state,baseline}
+mkdir -p tests/integration/{workflow-name}
 ```
+
+Note: No need for `initial-state/` or `baseline/` directories - we use git branches instead.
 
 ### Step 2: Create test.yaml
 
-Copy the template and customize:
-
-```bash
-cp tests/TEST_SCHEMA.md tests/unit/my-skill/my-test/test.yaml
-# Edit test.yaml with your test definition
-```
+See `tests/TEST_SCHEMA.md` for the complete schema reference.
 
 #### Required Decisions
 
@@ -48,55 +45,60 @@ cp tests/TEST_SCHEMA.md tests/unit/my-skill/my-test/test.yaml
    - Should exist in `.claude/skills/`
 
 2. **What's the task?**
-   - Write a clear, complete prompt
-   - Don't assume implicit knowledge
-   - Include all requirements
+   - Write like a realistic human would - clear but not overly detailed
+   - "Create a quote block with optional attribution"
+   - NOT: "Create a quote block that displays a blockquote with optional attribution, using the following exact content model structure with these specific fields..."
 
-3. **What must pass every time?** (Canonical checks)
+3. **What branch should it start from?**
+   - Specify in `initial_state: branch-name`
+   - Omit to use `main` branch
+   - Create test branches with minimal setup needed
+
+4. **What MUST pass?** (Deterministic checks - required)
    - Which files must exist?
    - Should linting pass?
    - What patterns are forbidden?
    - Which workflow steps are required?
+   - Any custom scripts to run?
 
-4. **What should be evaluated for quality?** (Flexible criteria)
+5. **What's nice to have?** (Optional deterministic checks)
+   - README files?
+   - Accessibility patterns?
+   - Performance checks?
+   - Best practices that aren't hard requirements?
+
+6. **What should be evaluated for quality?** (Flexible criteria)
    - Code quality?
    - Process adherence?
    - Completeness?
    - Autonomy?
-   - Set weights (must sum to 100)
+   - Set priority for each: high, medium, or low
 
-5. **How many runs?**
-   - Start with 3-5
-   - Increase if variance is high
+### Step 3: Set Up Initial State Branch (Optional)
 
-### Step 3: Set Up Initial State
-
-Decide what files the test should start with:
+If your test needs a specific starting point:
 
 ```bash
-# Option A: Start from boilerplate
-cp -r {package.json,.eslintrc.js,scripts/,styles/} \
-  tests/unit/my-skill/my-test/initial-state/
+# Create a branch with the initial state
+git checkout -b test/my-test-setup main
 
-# Option B: Start with custom files
-# Manually create files needed for test scenario
+# Add only what's needed for the test
+# Example: package.json, basic scripts, etc.
+
+git add -A
+git commit -m "test: initial state for my-test"
+git push -u origin test/my-test-setup
+
+# Return to main
+git checkout main
 ```
 
-Document the initial state in `initial-state/README.md`:
-
-```markdown
-# Initial State
-
-## Purpose
-[Why these files?]
-
-## Contents
-- package.json - [why needed]
-- scripts/scripts.js - [why needed]
-
-## What's NOT included
-[Files intentionally omitted]
+Then reference it in test.yaml:
+```yaml
+initial_state: test/my-test-setup
 ```
+
+If omitted, test starts from `main` branch.
 
 ### Step 4: Write Test README
 
@@ -119,15 +121,23 @@ Create `README.md` explaining the test:
 ## Expected Outcome
 [What should happen when test passes?]
 
-### Example Expected Files
-[Show what good output looks like]
+## Deterministic Pass Criteria
+- ✅ [Required check 1]
+- ✅ [Required check 2]
 
-## Canonical Pass Criteria
-- ✅ [Criterion 1]
-- ✅ [Criterion 2]
+## Optional Checks
+- ⚠️ [Nice-to-have 1]
+- ⚠️ [Nice-to-have 2]
 
 ## Flexible Quality Criteria
-[What's evaluated for quality]
+**High priority:**
+- [High priority criterion]
+
+**Medium priority:**
+- [Medium priority criterion]
+
+**Low priority:**
+- [Low priority criterion]
 
 ## Common Failure Modes
 [What typically goes wrong]
@@ -135,65 +145,76 @@ Create `README.md` explaining the test:
 
 ### Step 5: Validate Test Definition
 
-Check that your test.yaml is valid:
-
 ```bash
-./tools/validate-test tests/unit/my-skill/my-test/test.yaml
+./tools/validate-test tests/unit/my-skill/my-test
 ```
 
 Validates:
 - All required fields present
 - Skills exist in `.claude/skills/`
-- Weights sum to 100
-- File paths are valid
-- Runs > 0, timeout > 0
+- Priorities are "high", "medium", or "low"
+- If `initial_state` specified, branch exists
 
 ## Test Design Best Practices
 
-### 1. Clear Task Descriptions
+### 1. Realistic Task Descriptions
 
-❌ **Bad:**
-```yaml
-task: Create a hero block
-```
-
-✅ **Good:**
+❌ **Bad - Too detailed:**
 ```yaml
 task: |
   Create a hero block that displays a large image, headline, and CTA button.
   The block should support:
-  - Hero image (required)
-  - Headline text (required)
-  - Subheading text (optional)
-  - CTA button with link (required)
+  - Hero image (required) - should be first child
+  - Headline text (required) - use h1 tag
+  - Subheading text (optional) - use p tag with class subheading
+  - CTA button with link (required) - use proper button element
 
-  Follow all AEM best practices for block development.
+  Create the following content model:
+  | Image | Heading | Subheading | Button Text | Button Link |
+
+  Follow all AEM best practices for block development including...
+  [10 more paragraphs of requirements]
 ```
 
-### 2. Meaningful Canonical Checks
-
-Focus on things that indicate real problems:
-
-✅ **Good:**
+✅ **Good - Realistic:**
 ```yaml
-canonical_checks:
-  lint_passes: true  # Ensures code quality
+task: |
+  Create a hero block with image, headline, and CTA button.
+```
+
+The agent should figure out the details using the skills - that's what we're testing!
+
+### 2. Three-Tier Checks
+
+**Deterministic (required)** - Must pass or test fails:
+```yaml
+deterministic_checks:
+  lint_passes: true
   files_exist:
     - blocks/hero/hero.js
     - blocks/hero/hero.css
-  forbidden_patterns:
-    - pattern: "var "  # Modern JS uses const/let
-      in_files: ["**/*.js"]
 ```
 
-❌ **Bad:**
+**Optional deterministic** - Checked automatically, reported as warnings:
 ```yaml
-canonical_checks:
+optional_deterministic_checks:
   files_exist:
-    - blocks/hero/hero.js
-    - blocks/hero/hero.css
-    - blocks/hero/hero.test.js  # Don't require if not essential
-    - blocks/hero/README.md     # Don't require documentation files
+    - blocks/hero/README.md
+  required_patterns:
+    - pattern: "aria-"
+      in_files: ["blocks/hero/hero.js"]
+      message: "Consider ARIA attributes for accessibility"
+```
+
+**Flexible** - LLM evaluates with priorities:
+```yaml
+flexible_criteria:
+  - name: code_quality
+    description: Clean, maintainable code following guidelines
+    priority: high
+  - name: has_comments
+    description: Code includes helpful comments
+    priority: low
 ```
 
 ### 3. Specific Flexible Criteria
@@ -203,7 +224,7 @@ canonical_checks:
 flexible_criteria:
   - name: quality
     description: Code is good quality
-    weight: 50
+    priority: high
 ```
 
 ✅ **Good:**
@@ -216,76 +237,59 @@ flexible_criteria:
       - Selectors properly scoped
       - Semantic HTML elements used
       - Code is maintainable
-    weight: 30
+    priority: high
 ```
 
-### 4. Appropriate Weights
-
-Weight based on what matters most for this test:
+### 4. Appropriate Priorities
 
 ```yaml
 # For a test focused on following process:
 flexible_criteria:
   - name: process_adherence
-    weight: 40  # Most important
+    priority: high  # Most important for this test
   - name: code_quality
-    weight: 30
+    priority: high
   - name: completeness
-    weight: 20
+    priority: medium
   - name: autonomy
-    weight: 10
+    priority: low
 
 # For a test focused on code quality:
 flexible_criteria:
   - name: code_quality
-    weight: 40  # Most important
+    priority: high  # Most important for this test
   - name: completeness
-    weight: 30
+    priority: high
   - name: process_adherence
-    weight: 20
+    priority: medium
   - name: autonomy
-    weight: 10
+    priority: low
 ```
 
-### 5. Realistic Initial State
-
-Include only what's necessary:
-
-✅ **Good** - Minimal but realistic:
-```
-initial-state/
-├── package.json
-├── .eslintrc.js
-├── scripts/
-│   ├── aem.js
-│   └── scripts.js
-└── styles/
-    └── styles.css
-```
+### 5. Minimal Initial State
 
 ❌ **Bad** - Too much unnecessary context:
+```bash
+# Branch has entire repo with 20+ existing blocks
 ```
-initial-state/
-├── package.json
-├── blocks/
-│   ├── header/
-│   ├── footer/
-│   ├── carousel/
-│   └── [20 other blocks]
-└── [entire repository structure]
+
+✅ **Good** - Just what's needed:
+```bash
+# Branch has: package.json, basic scripts/, styles/, and linting config
+# No existing blocks (test is about creating one)
 ```
 
 ## Common Pitfalls
 
-### 1. Vague Tasks
-**Problem**: Agent doesn't know what to build
-**Solution**: Provide complete requirements
+### 1. Over-specifying Tasks
+**Problem**: Agent doesn't need to think, just follow instructions
+**Solution**: Write realistic prompts - clear goal, let agent figure out how
 
-### 2. Over-constrained Canonical Checks
+### 2. Over-constrained Deterministic Checks
 **Problem**: Penalizing valid alternative approaches
-**Solution**: Only require what's truly essential
+**Solution**: Only require what's truly essential; use optional checks for nice-to-haves
 
-### 3. Under-specified Flexible Criteria
+### 3. Vague Flexible Criteria
 **Problem**: Evaluator doesn't know what to look for
 **Solution**: List specific things to check
 
@@ -295,36 +299,35 @@ initial-state/
 - Unit = focused, single skill, quick
 - Integration = complete workflow, multiple skills
 
-### 5. Missing Context
-**Problem**: Test assumes files/knowledge not in initial state
-**Solution**: Include all necessary context in initial-state/
+### 5. Heavy Initial State
+**Problem**: Too much context makes test slow and brittle
+**Solution**: Minimal setup - only what's necessary
 
 ## Examples
 
 See these tests for reference:
 
 - `tests/unit/building-blocks/create-simple-block/` - Basic unit test
-- `tests/integration/new-feature-workflow/` - Full workflow test (TODO)
 
 ## Checklist
 
 Before considering a test complete:
 
 - [ ] test.yaml has all required fields
-- [ ] Task description is clear and complete
-- [ ] Canonical checks are appropriate and not over-constrained
+- [ ] Task description is clear but realistic (like a lazy human would write)
+- [ ] Deterministic checks are appropriate (hard requirements only)
+- [ ] Optional checks for nice-to-haves (don't cause failure)
 - [ ] Flexible criteria are specific with clear descriptions
-- [ ] Weights sum to 100
-- [ ] initial-state/ contains all necessary files
-- [ ] initial-state/README.md documents what's included and why
+- [ ] Priorities assigned (high/medium/low)
+- [ ] Initial state branch created (if needed) with minimal setup
 - [ ] Test README.md explains purpose and expectations
-- [ ] Runs validated: `./tools/validate-test path/to/test`
+- [ ] Test validated: `./tools/validate-test path/to/test`
 
 ## Next Steps
 
 After creating a test:
 
 1. Validate it: `./tools/validate-test path/to/test`
-2. Run it once manually to check it works
-3. Establish baseline: `./tools/run-test path/to/test --save-baseline`
+2. Run it once manually to verify it works
+3. Save results as reference for future comparisons
 4. Add to test suite for regular execution
