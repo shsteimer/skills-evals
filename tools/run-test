@@ -359,8 +359,7 @@ async function cleanupTestArtifacts(worktreePath) {
 }
 
 // Setup agent execution (for --setup-only mode)
-async function setupAgentExecution(test, agent, worktreePath) {
-  const timestamp = new Date().toISOString();
+async function setupAgentExecution(test, agent, worktreePath, timestamp) {
   const outputDir = join(RESULTS_DIR, test._relativePath, timestamp, agent);
 
   // Create output directory
@@ -417,10 +416,9 @@ async function setupAgentExecution(test, agent, worktreePath) {
 }
 
 // Execute the agent with the test task
-async function executeAgent(test, agent, worktreePath) {
+async function executeAgent(test, agent, worktreePath, timestamp) {
   console.log(`  Executing ${agent} with task...`);
 
-  const timestamp = new Date().toISOString();
   const outputDir = join(RESULTS_DIR, test._relativePath, timestamp, agent);
 
   // Create output directory
@@ -659,10 +657,15 @@ async function cleanupWorktree(worktreePath, branchName) {
 }
 
 // Run a single test with a single agent
-async function runTestWithAgent(test, agent, setupOnly = false) {
+async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null) {
   console.log(`\nRunning test: ${test.name}`);
   console.log(`  Path: ${test._relativePath}`);
   console.log(`  Agent: ${agent}`);
+
+  // Use provided timestamp or create new one
+  if (!timestamp) {
+    timestamp = new Date().toISOString();
+  }
 
   let branchName, worktreePath;
 
@@ -678,7 +681,7 @@ async function runTestWithAgent(test, agent, setupOnly = false) {
 
     if (setupOnly) {
       // Setup-only mode: just show the commands
-      const result = await setupAgentExecution(test, agent, worktreePath);
+      const result = await setupAgentExecution(test, agent, worktreePath, timestamp);
       console.log(`\n  ✓ Test environment ready!`);
       console.log(`\n  To run the test manually:`);
       console.log(`    cd "${worktreePath}"`);
@@ -702,7 +705,7 @@ async function runTestWithAgent(test, agent, setupOnly = false) {
       };
     } else {
       // Execute agent
-      const result = await executeAgent(test, agent, worktreePath);
+      const result = await executeAgent(test, agent, worktreePath, timestamp);
 
       console.log(`  Result: ${result.success ? 'SUCCESS' : 'PENDING'}`);
       console.log(`  Output: ${result.outputDir}`);
@@ -758,8 +761,12 @@ async function main() {
   // Run each test with each agent
   const results = [];
   for (const test of testsToRun) {
+    // Create a single timestamp for all agents in this test run
+    const timestamp = new Date().toISOString();
+    console.log(`\nTest run timestamp: ${timestamp}`);
+
     for (const agent of options.agents) {
-      const result = await runTestWithAgent(test, agent, options.setupOnly);
+      const result = await runTestWithAgent(test, agent, options.setupOnly, timestamp);
       results.push({
         test: test.name,
         agent,
