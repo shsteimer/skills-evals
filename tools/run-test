@@ -1,0 +1,487 @@
+#!/usr/bin/env node
+
+/**
+ * Test Runner for Agent Skills Evaluation Framework
+ *
+ * Usage:
+ *   ./tools/run-test --test <test-name>
+ *   ./tools/run-test --tags <tag1,tag2>
+ *   ./tools/run-test --skills <skill1,skill2>
+ *
+ * Options:
+ *   --test <name>         Run specific test(s) by name (supports wildcards)
+ *   --tags <tags>         Run tests matching these tags (comma-separated)
+ *   --skills <skills>     Run tests using these skills (comma-separated)
+ *   --agents <agents>     Agent(s) to test with (default: claude-code)
+ *                         Options: claude-code, cursor-cli, codex-cli
+ */
+
+import { readFileSync, readdirSync, statSync, mkdirSync, existsSync } from 'fs';
+import { join, dirname, relative } from 'path';
+import { fileURLToPath } from 'url';
+import { parse as parseYaml } from 'yaml';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ROOT_DIR = join(__dirname, '..');
+const TESTS_DIR = join(ROOT_DIR, 'tests');
+const RESULTS_DIR = join(ROOT_DIR, 'test-results');
+
+// Parse command line arguments
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const options = {
+    test: null,
+    tags: [],
+    skills: [],
+    agents: ['claude-code']
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const next = args[i + 1];
+
+    switch (arg) {
+      case '--test':
+        options.test = next;
+        i++;
+        break;
+      case '--tags':
+        options.tags = next ? next.split(',').map(t => t.trim()) : [];
+        i++;
+        break;
+      case '--skills':
+        options.skills = next ? next.split(',').map(s => s.trim()) : [];
+        i++;
+        break;
+      case '--agents':
+        options.agents = next ? next.split(',').map(a => a.trim()) : ['claude-code'];
+        i++;
+        break;
+      case '--help':
+      case '-h':
+        printUsage();
+        process.exit(0);
+      default:
+        if (arg.startsWith('--')) {
+          console.error(`Unknown option: ${arg}`);
+          printUsage();
+          process.exit(1);
+        }
+    }
+  }
+
+  return options;
+}
+
+function printUsage() {
+  console.log(`
+Test Runner for Agent Skills Evaluation Framework
+
+Usage:
+  ./tools/run-test --test <test-name>
+  ./tools/run-test --tags <tag1,tag2>
+  ./tools/run-test --skills <skill1,skill2>
+
+Options:
+  --test <name>         Run specific test(s) by name (path to test directory)
+  --tags <tags>         Run tests matching these tags (comma-separated)
+  --skills <skills>     Run tests using these skills (comma-separated)
+  --agents <agents>     Agent(s) to test with (default: claude-code)
+                        Options: claude-code, cursor-cli, codex-cli
+
+Examples:
+  ./tools/run-test --test tests/unit/building-blocks/create-simple-block
+  ./tools/run-test --tags blocks,basic
+  ./tools/run-test --skills building-blocks
+  ./tools/run-test --tags blocks --agents claude-code,cursor-cli
+
+At least one of --test, --tags, or --skills is required.
+`);
+}
+
+// Validate arguments
+function validateArgs(options) {
+  const errors = [];
+
+  // Must have at least one selector
+  if (!options.test && options.tags.length === 0 && options.skills.length === 0) {
+    errors.push('Must specify at least one of: --test, --tags, or --skills');
+  }
+
+  // Validate agent names
+  const validAgents = ['claude-code', 'cursor-cli', 'codex-cli'];
+  for (const agent of options.agents) {
+    if (!validAgents.includes(agent)) {
+      errors.push(`Invalid agent: ${agent}. Valid options: ${validAgents.join(', ')}`);
+    }
+  }
+
+  // Check for conflicting combinations
+  // (currently none, but could add later)
+
+  if (errors.length > 0) {
+    console.error('Validation errors:');
+    errors.forEach(err => console.error(`  - ${err}`));
+    console.error('\nRun --help for usage information.');
+    process.exit(1);
+  }
+}
+
+// Find all test.yaml files recursively
+function findAllTests(dir = TESTS_DIR) {
+  const tests = [];
+
+  function walk(currentDir) {
+    const entries = readdirSync(currentDir);
+
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry);
+      const stat = statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        walk(fullPath);
+      } else if (entry === 'test.yaml') {
+        tests.push(dirname(fullPath));
+      }
+    }
+  }
+
+  walk(dir);
+  return tests;
+}
+
+// Load and parse a test.yaml file
+function loadTest(testDir) {
+  const testYamlPath = join(testDir, 'test.yaml');
+
+  if (!existsSync(testYamlPath)) {
+    throw new Error(`test.yaml not found in ${testDir}`);
+  }
+
+  const content = readFileSync(testYamlPath, 'utf8');
+  const test = parseYaml(content);
+
+  // Add metadata
+  test._path = testDir;
+  test._relativePath = relative(ROOT_DIR, testDir);
+
+  return test;
+}
+
+// Filter tests based on options
+function filterTests(tests, options) {
+  let filtered = tests;
+
+  // Filter by test name/path
+  if (options.test) {
+    const testPattern = options.test;
+    filtered = filtered.filter(test => {
+      // Support exact match or path contains
+      return test._path.includes(testPattern) || test._relativePath.includes(testPattern);
+    });
+  }
+
+  // Filter by tags
+  if (options.tags.length > 0) {
+    filtered = filtered.filter(test => {
+      if (!test.tags || test.tags.length === 0) return false;
+      // Test must have at least one of the specified tags
+      return options.tags.some(tag => test.tags.includes(tag));
+    });
+  }
+
+  // Filter by skills
+  if (options.skills.length > 0) {
+    filtered = filtered.filter(test => {
+      if (!test.skills || test.skills.length === 0) return false;
+      // Test must have at least one of the specified skills
+      return options.skills.some(skill => test.skills.includes(skill));
+    });
+  }
+
+  return filtered;
+}
+
+
+// Create a branch for this test run
+async function createTestBranch(test, agent) {
+  // Generate a short unique ID (last 6 chars of timestamp-based)
+  const uniqueId = Date.now().toString(36).slice(-6);
+
+  // Simple, realistic branch name like: quote-block-a1b2c3
+  const testBaseName = test.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 30); // Keep it reasonable length
+
+  const branchName = `${testBaseName}-${uniqueId}`;
+
+  const initialState = test.initial_state || 'main';
+
+  console.log(`  Creating branch: ${branchName} from ${initialState}`);
+
+  try {
+    await execAsync(`git branch ${branchName} ${initialState}`);
+    return branchName;
+  } catch (error) {
+    throw new Error(`Failed to create branch: ${error.message}`);
+  }
+}
+
+// Create worktree for test execution
+async function createWorktree(branchName) {
+  // Worktrees must be outside the repository's working tree
+  // Use temp directory or parent directory
+  const worktreeBase = process.env.TMPDIR || '/tmp';
+  const worktreePath = join(worktreeBase, 'skills-eval-worktrees', branchName);
+
+  console.log(`  Creating worktree: ${worktreePath}`);
+
+  // Ensure parent directory exists
+  mkdirSync(dirname(worktreePath), { recursive: true });
+
+  try {
+    await execAsync(`git worktree add "${worktreePath}" ${branchName}`);
+    return worktreePath;
+  } catch (error) {
+    throw new Error(`Failed to create worktree: ${error.message}`);
+  }
+}
+
+// Remove test artifacts from the branch (tests/, tools/, EVALUATION_PLAN.md, etc.)
+async function cleanupTestArtifacts(worktreePath) {
+  console.log(`  Cleaning up test artifacts from worktree`);
+
+  const artifactsToRemove = [
+    'tests',
+    'tools',
+    'test-results',
+    'EVALUATION_PLAN.md',
+    '.test-worktrees'
+  ];
+
+  // Check which artifacts actually exist in git
+  const filesToRemove = [];
+  for (const artifact of artifactsToRemove) {
+    try {
+      const { stdout } = await execAsync(`cd "${worktreePath}" && git ls-files ${artifact}`, {
+        shell: '/bin/bash'
+      });
+      const files = stdout.trim().split('\n').filter(f => f);
+      if (files.length > 0) {
+        filesToRemove.push(artifact);
+      }
+    } catch (error) {
+      // Artifact doesn't exist in git, skip it
+    }
+  }
+
+  if (filesToRemove.length > 0) {
+    await execAsync(`cd "${worktreePath}" && git rm -rf ${filesToRemove.join(' ')}`, {
+      shell: '/bin/bash'
+    });
+    await execAsync(`cd "${worktreePath}" && git commit -m "test: remove evaluation framework artifacts"`, {
+      shell: '/bin/bash'
+    });
+    console.log(`  Removed: ${filesToRemove.join(', ')}`);
+  } else {
+    console.log(`  No test artifacts to remove`);
+  }
+}
+
+// Execute the agent with the test task
+async function executeAgent(test, agent, worktreePath) {
+  console.log(`  Executing ${agent} with task...`);
+
+  const timestamp = new Date().toISOString();
+  const outputDir = join(RESULTS_DIR, test._relativePath, timestamp, agent);
+
+  // Create output directory
+  mkdirSync(outputDir, { recursive: true });
+
+  // Prepare the task prompt
+  const taskPrompt = test.task;
+
+  // Build agent command based on agent type
+  let agentCommand;
+  switch (agent) {
+    case 'claude-code':
+      // TODO: Determine exact claude-code CLI command for yolo/skip-permissions mode
+      agentCommand = `claude-code --yolo "${taskPrompt}"`;
+      break;
+    case 'cursor-cli':
+      // TODO: Determine exact cursor-cli command
+      agentCommand = `cursor-cli --auto-approve "${taskPrompt}"`;
+      break;
+    case 'codex-cli':
+      // TODO: Determine exact codex-cli command
+      agentCommand = `codex-cli --auto "${taskPrompt}"`;
+      break;
+    default:
+      throw new Error(`Unknown agent: ${agent}`);
+  }
+
+  console.log(`  Command: ${agentCommand}`);
+  console.log(`  Working directory: ${worktreePath}`);
+  console.log(`  Output directory: ${outputDir}`);
+
+  // Save test info
+  const testInfo = {
+    test_name: test.name,
+    test_path: test._relativePath,
+    agent,
+    timestamp,
+    task: taskPrompt,
+    initial_state: test.initial_state || 'main',
+    skills_expected: test.skills, // Skills the test expects to use
+    tags: test.tags || [],
+    worktree_path: worktreePath, // Full path where test was executed
+    output_dir: outputDir
+  };
+
+  const { writeFileSync } = await import('fs');
+  writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+
+  // TODO: Execute agent and capture output
+  // For now, just placeholder
+  console.log('  [NOT IMPLEMENTED] Would execute agent here');
+  console.log('  [NOT IMPLEMENTED] Would capture:');
+  console.log('    - Conversation transcript');
+  console.log('    - Tool usage log');
+  console.log('    - Final code state (diff from initial)');
+  console.log('    - Skills actually used (from transcript)');
+  console.log('    - PR link (if agent opened one)');
+  console.log('    - Metrics (tokens, time, interventions)');
+
+  // TODO: After execution, parse transcript and outputs
+  // const skillsUsed = extractSkillsFromTranscript(transcript);
+  // const prLink = extractPRLink(transcript); // Look for gh pr create output
+  // testInfo.skills_used = skillsUsed;
+  // testInfo.pr_link = prLink || null;
+  // writeFileSync(join(outputDir, 'test-info.json'), JSON.stringify(testInfo, null, 2));
+
+  return {
+    outputDir,
+    success: false, // placeholder
+    message: 'Agent execution not yet implemented'
+  };
+}
+
+// Cleanup worktree after test
+async function cleanupWorktree(worktreePath, branchName) {
+  console.log(`  Cleaning up worktree and branch`);
+
+  try {
+    await execAsync(`git worktree remove "${worktreePath}" --force`);
+    await execAsync(`git branch -D ${branchName}`);
+  } catch (error) {
+    console.warn(`Warning: Cleanup failed: ${error.message}`);
+  }
+}
+
+// Run a single test with a single agent
+async function runTestWithAgent(test, agent) {
+  console.log(`\nRunning test: ${test.name}`);
+  console.log(`  Path: ${test._relativePath}`);
+  console.log(`  Agent: ${agent}`);
+
+  let branchName, worktreePath;
+
+  try {
+    // Create branch
+    branchName = await createTestBranch(test, agent);
+
+    // Create worktree
+    worktreePath = await createWorktree(branchName);
+
+    // Remove test artifacts from the branch
+    await cleanupTestArtifacts(worktreePath);
+
+    // Execute agent
+    const result = await executeAgent(test, agent, worktreePath);
+
+    console.log(`  Result: ${result.success ? 'SUCCESS' : 'PENDING'}`);
+    console.log(`  Output: ${result.outputDir}`);
+
+    return result;
+
+  } catch (error) {
+    console.error(`  ERROR: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  } finally {
+    // Cleanup
+    if (worktreePath && branchName) {
+      await cleanupWorktree(worktreePath, branchName);
+    }
+  }
+}
+
+// Main execution
+async function main() {
+  console.log('Agent Skills Evaluation Framework - Test Runner\n');
+
+  const options = parseArgs();
+  validateArgs(options);
+
+  console.log('Configuration:');
+  if (options.test) console.log(`  Test: ${options.test}`);
+  if (options.tags.length > 0) console.log(`  Tags: ${options.tags.join(', ')}`);
+  if (options.skills.length > 0) console.log(`  Skills: ${options.skills.join(', ')}`);
+  console.log(`  Agents: ${options.agents.join(', ')}`);
+  console.log('');
+
+  // Discover all tests
+  console.log('Discovering tests...');
+  const allTestDirs = findAllTests();
+  console.log(`  Found ${allTestDirs.length} test(s)`);
+
+  // Load all tests
+  const allTests = allTestDirs.map(loadTest);
+
+  // Filter tests
+  const testsToRun = filterTests(allTests, options);
+  console.log(`  ${testsToRun.length} test(s) match criteria`);
+
+  if (testsToRun.length === 0) {
+    console.log('\nNo tests to run.');
+    process.exit(0);
+  }
+
+  // Run each test with each agent
+  const results = [];
+  for (const test of testsToRun) {
+    for (const agent of options.agents) {
+      const result = await runTestWithAgent(test, agent);
+      results.push({
+        test: test.name,
+        agent,
+        ...result
+      });
+    }
+  }
+
+  // Summary
+  console.log('\n=== Summary ===');
+  console.log(`Total test runs: ${results.length}`);
+  console.log(`Successful: ${results.filter(r => r.success).length}`);
+  console.log(`Failed/Pending: ${results.filter(r => !r.success).length}`);
+
+  console.log('\nNext steps:');
+  console.log('  1. Review test outputs in test-results/');
+  console.log('  2. Run evaluation: ./tools/evaluate <output-dir>');
+  console.log('     Options: --eval-agent <agent>, --skip-flexible');
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});

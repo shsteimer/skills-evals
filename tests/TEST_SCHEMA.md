@@ -43,6 +43,28 @@ skills:
   - building-blocks
 ```
 
+#### `tags` (array of strings)
+Optional tags for categorizing and filtering tests. Use tags to group tests by functionality, complexity, or other characteristics.
+
+**Example:**
+```yaml
+tags:
+  - blocks
+  - basic
+  - css
+  - accessibility
+```
+
+**Common tags:**
+- `blocks` - Tests related to block creation/modification
+- `content-modeling` - Tests focused on content structure
+- `basic` - Simple, foundational tests
+- `advanced` - Complex or edge case tests
+- `workflow` - Tests full development workflows
+- `migration` - Tests migration-related functionality
+- `accessibility` - Tests with accessibility focus
+- `performance` - Tests with performance considerations
+
 #### `task` (string)
 The prompt/task given to the agent. Should be clear and complete, but represent a realistic prompt a lazy human would write.
 
@@ -137,9 +159,39 @@ optional_deterministic_checks:
 - Script should exit 0 for pass, non-zero for fail
 - Script receives test directory as first argument
 
+
 ##### Optional Deterministic Check Types
 
 Same types as deterministic checks (lint_passes, files_exist, files_not_exist, required_workflow_steps, forbidden_patterns, required_patterns, custom_scripts), but failures are reported without failing the test.
+
+**Pull Request Checks** (special handling):
+
+PR-related checks are always optional (nice to have), but if a PR is opened, all PR checks must pass or it counts as a failure.
+
+**`pr_quality`** (object)
+- Evaluates PR quality if agent opened one
+- If no PR opened: optional check is skipped (no penalty)
+- If PR opened: all sub-checks must pass or test fails
+- Properties:
+  - `checks_pass` (boolean): Requires all PR checks (CI/CD) to pass
+  - `has_preview_link` (boolean): Requires preview link in PR description
+  - `preview_no_404` (boolean): Preview link must not return 404
+  - `preview_correct_branch` (boolean): Preview link must be for the working branch
+
+**Example:**
+```yaml
+optional_deterministic_checks:
+  pr_quality:
+    checks_pass: true
+    has_preview_link: true
+    preview_no_404: true
+    preview_correct_branch: true
+```
+
+**Logic:**
+- No PR opened → no penalty, just informational
+- PR opened → all enabled checks must pass or test fails
+- This ensures: opening a broken PR is worse than not opening one at all
 
 #### `flexible_criteria` (array of objects)
 Quality criteria evaluated by LLM, can vary across runs.
@@ -177,6 +229,9 @@ flexible_criteria:
 
 ### Optional Fields
 
+#### `tags` (array of strings)
+Tags for categorizing and filtering tests. See the `tags` field in Required Fields section for details.
+
 #### `initial_state` (string)
 Git branch name to use as starting point for the test.
 
@@ -187,7 +242,9 @@ initial_state: test/hero-block-base
 
 If not specified, uses `main` branch as starting point.
 
-## Complete Example
+## Complete Examples
+
+### Example 1: Simple Block Creation (No PR Required)
 
 ```yaml
 name: "Create simple quote block"
@@ -196,6 +253,10 @@ type: unit
 skills:
   - content-driven-development
   - building-blocks
+tags:
+  - blocks
+  - basic
+  - css
 
 task: |
   Create a 'quote' block that displays a blockquote with optional attribution.
@@ -264,11 +325,12 @@ flexible_criteria:
 ## Validation Rules
 
 A valid test.yaml must:
-1. Include all required fields
+1. Include all required fields (name, description, type, skills, task, deterministic_checks, flexible_criteria)
 2. Have `type` be either "unit" or "integration"
 3. Reference skills that exist in `.claude/skills/`
 4. Have flexible criteria priorities be "high", "medium", or "low"
 5. If `initial_state` is specified, the branch must exist
+6. If `tags` is specified, it must be an array of strings
 
 ## Best Practices
 

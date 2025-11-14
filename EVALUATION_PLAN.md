@@ -1,26 +1,48 @@
 # Agent Skills Evaluation Framework
 
+## Implementation Phases
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| **Phase 1: Foundation** | ✅ Complete | Test structure, schema, documentation |
+| **Phase 2: Test Runner** | 🚧 In Progress | Core infrastructure done, need agent execution |
+| **Phase 3: Evaluator** | 📋 Next Up | Build evaluation script (deterministic + flexible) |
+| **Phase 4: Write Tests** | 🧪 Planned | Create real tests, validate framework |
+| **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
+
+---
+
 ## Current Status
 
 **Phase 1: Foundation - ✅ COMPLETE**
 
 We have established the evaluation framework foundation with a simplified, empirical approach.
 
+**Phase 2: Test Runner - 🚧 IN PROGRESS**
+
+Core infrastructure is complete. Test discovery, filtering, isolation, and cleanup all work.
+
 **What's Done:**
-- ✅ Test structure defined (unit/ and integration/)
-- ✅ Test schema created (test.yaml with three-tier evaluation)
-- ✅ Example test created (create-simple-block)
-- ✅ Comprehensive documentation (TEST_SCHEMA.md, CREATING_TESTS.md)
-- ✅ Empirical test creation workflow documented
+- ✅ Phase 1: Test structure, schema, docs, example test
+- ✅ Tags support added to test schema
+- ✅ `./tools/run-test` script with full CLI interface
+- ✅ Test discovery and filtering (--test, --tags, --skills)
+- ✅ Multi-agent support (--agents flag)
+- ✅ Branch/worktree isolation for each test run
+- ✅ Automatic cleanup of test artifacts from execution environment
+- ✅ Output directory structure creation
 
-**What's Next: Phase 2 - Test Runner**
+**What's Next:**
 
-Build the tooling to actually run tests and capture results. See "Implementation Phases" below for details.
+**Phase 2 completion:** Agent execution and artifact capture
+**Phase 3:** Build evaluation scripts (deterministic + flexible)
+**Phase 4:** Write and run real tests, validate framework works
+**Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Review Phase 2 tasks below
-2. Start with building `./tools/run-test` script
-3. Focus on: checkout branch → run agent → capture artifacts
+1. Determine exact CLI commands for Claude Code, Cursor, etc.
+2. Update `executeAgent()` function in tools/run-test:308
+3. Implement artifact capture (transcript, tool logs, final code)
 
 ---
 
@@ -73,7 +95,11 @@ These are evaluated for quality by an LLM evaluator:
 - ~ PR description wording
 - ~ Alternative valid approaches
 
-**Scoring:** Each criterion has a priority (high/medium/low) that guides overall assessment
+**Output:** Qualitative findings organized by priority (high/medium/low):
+- What went well (strengths)
+- What didn't go well (issues)
+- Observations and notes
+- Human evaluates if this is better/worse than previous runs
 
 ## Test Artifacts Captured
 
@@ -155,7 +181,7 @@ flexible_criteria:
 {
   "test_name": "create-hero-block",
   "timestamp": "2025-01-14T10:00:00Z",
-  "skills_version": "abc123",  // git commit hash
+  "agent": "claude-code",
 
   "deterministic_results": {
     "passed": true,
@@ -163,42 +189,54 @@ flexible_criteria:
     "optional_failures": [
       "blocks/quote/README.md does not exist",
       "No ARIA attributes found (consider for accessibility)"
-    ]
-  },
-
-  "flexible_assessment": {
-    "overall": "pass",
-    "score": 85,
-
-    "by_priority": {
-      "high": {
-        "code_quality": {"score": 87, "issues": []},
-        "process_adherence": {"score": 82, "issues": ["Didn't announce skill usage"]}
-      },
-      "medium": {
-        "completeness": {"score": 88, "issues": []}
-      },
-      "low": {
-        "autonomy": {"score": 95, "issues": []}
-      }
+    ],
+    "pr_opened": true,
+    "pr_quality": {
+      "checks_pass": true,
+      "has_preview_link": true,
+      "preview_valid": true
     }
   },
 
-  "findings": {
-    "strengths": [
-      "Followed mobile-first approach",
-      "Created test content before writing code (content-driven)"
-    ],
-    "issues": [
-      "Didn't announce skill usage explicitly",
-      "Could improve PR description clarity"
-    ],
-    "recommendations": [
-      "Emphasize skill announcement requirement in AGENTS.md"
+  "flexible_assessment": {
+    "by_priority": {
+      "high": {
+        "code_quality": {
+          "strengths": [
+            "JavaScript uses proper decoration patterns",
+            "CSS is mobile-first with correct breakpoints"
+          ],
+          "issues": [],
+          "notes": ["All selectors properly scoped to .hero"]
+        },
+        "process_adherence": {
+          "strengths": ["Followed content-driven development workflow"],
+          "issues": ["Didn't explicitly announce skill usage"],
+          "notes": ["Used building-blocks skill but announcement was implicit"]
+        }
+      },
+      "medium": {
+        "completeness": {
+          "strengths": ["Handles all content fields", "Responsive across breakpoints"],
+          "issues": [],
+          "notes": []
+        }
+      },
+      "low": {
+        "autonomy": {
+          "strengths": ["Completed without unnecessary questions"],
+          "issues": [],
+          "notes": ["Made reasonable decisions independently"]
+        }
+      }
+    },
+    "overall_notes": [
+      "Strong implementation following established patterns",
+      "Minor process improvement needed for skill announcements"
     ]
   },
 
-  "artifacts_path": "./test-results/create-hero-block/2025-01-14T10:00:00Z/"
+  "artifacts_path": "./test-results/create-hero-block/2025-01-14T10:00:00Z/claude-code/"
 }
 ```
 
@@ -222,50 +260,52 @@ Tasks:
 - Empirical approach: run test 5+ times, document patterns, then write criteria
 - No "runs" parameter - tests run once, humans repeat manually if needed
 
-### Phase 2: Test Runner 📋
-**Status:** Not Started - NEXT UP
+### Phase 2: Test Runner 🚧
+**Status:** In Progress
 
 **Goal:** Build tooling to execute tests and capture results.
 
 **Core Script:** `./tools/run-test`
 
-**What it needs to do:**
-1. **Setup test environment**
-   - Read test.yaml
-   - Checkout `initial_state` branch (or `main` if not specified)
-   - Create temporary working directory for the test run
+**Completed:**
+- [x] Add tags support to test schema
+- [x] Command-line argument parsing with validation
+- [x] Test discovery (find all test.yaml files)
+- [x] Filter tests by `--test`, `--tags`, or `--skills`
+- [x] Support multiple agents via `--agents` flag
+- [x] Create isolated branch for each test/agent combo
+- [x] Create worktree in `.test-worktrees/` for test execution
+- [x] Remove test artifacts from branch (tests/, tools/, EVALUATION_PLAN.md)
+- [x] Create output directory structure in `test-results/`
+- [x] Cleanup worktrees and branches after test
 
-2. **Execute agent**
-   - Run agent with the task from test.yaml
-   - Capture conversation transcript
-   - Track tool usage (what tools, when, with what params)
-   - Note workflow steps completed/skipped
-   - Record any human interventions
-
-3. **Capture artifacts**
-   - Final code state (all files created/modified)
-   - Conversation transcript with reasoning
-   - Tool usage log
-   - What the agent would put in a PR description
-   - Metrics (tokens used, time elapsed)
-
-4. **Store results**
-   - Save to `test-results/{test-name}/{timestamp}/`
-   - Structure: code/, transcript.txt, tool-usage.json, metrics.json
+**Still TODO:**
+- [ ] Implement actual agent CLI execution
+  - [ ] Claude Code with `--yolo` or equivalent flag
+  - [ ] Cursor CLI support
+  - [ ] Codex CLI support
+- [ ] Capture artifacts:
+  - [ ] Conversation transcript
+  - [ ] Tool usage log
+  - [ ] Final code state (diff from initial state)
+  - [ ] Skills that were actually used during execution
+  - [ ] PR link (if agent opened one)
+  - [ ] Metrics (tokens, time, interventions)
 
 **Implementation Notes:**
-- Start simple - manual agent invocation is fine initially
-- Can automate more later (Phase 5)
+- Core infrastructure complete - branch/worktree isolation works
+- Need to determine exact CLI commands for each agent
 - Focus on capturing good data for evaluation
 
 ### Phase 3: Evaluator 🤖
-**Status:** Not Started
+**Status:** Not Started - NEXT UP
 
 **Goal:** Automatically evaluate test results against criteria.
 
-**Core Script:** `./tools/evaluate-test`
+**Core Script:** `./tools/evaluate`
 
 **What it needs to do:**
+
 1. **Run deterministic checks (required)**
    - Check if required files exist
    - Run linting (`npm run lint`)
@@ -275,96 +315,154 @@ Tasks:
 
 2. **Run optional deterministic checks**
    - Same types as required checks
-   - **Result:** List of warnings (don't block test)
+   - Special handling for PR quality (see below)
+   - **Result:** List of warnings (don't block test unless PR opened)
 
-3. **Run flexible criteria evaluation (LLM)**
-   - Invoke evaluation agent with:
-     - Test criteria (from test.yaml)
-     - Captured artifacts (code, transcript, etc.)
-   - Agent scores each criterion
-   - Agent identifies strengths/issues
-   - **Result:** Assessment with score and findings
+3. **PR Quality Checks (special logic)**
+   - If no PR opened: skip, no penalty
+   - If PR opened: all enabled pr_quality checks must pass or test fails
+   - Checks: CI/CD status, preview link presence, preview link validity
+   - **Logic:** A broken PR is worse than no PR
 
-4. **Generate reports**
-   - JSON output (structured data)
-   - Markdown report (human-readable)
-   - Save to test results directory
+4. **Run flexible criteria evaluation (LLM)**
+   - Accept `--eval-agent` flag (default: claude-code)
+   - Load test criteria from test.yaml
+   - Load captured artifacts (code, transcript, etc.)
+   - Invoke evaluation agent with detailed prompt
+   - For each criterion (organized by priority), agent identifies:
+     - **Strengths:** What went well
+     - **Issues:** What didn't go well
+     - **Notes:** Observations and context
+   - Agent provides overall notes (no numeric scores)
+
+5. **Generate evaluation outputs**
+   - `evaluation-results.json` - Structured data with deterministic + flexible results
+   - `evaluation-report.md` - Human-readable findings
+   - Save both to test results directory
+
+**Flags:**
+- `--eval-agent <agent>` - Agent to use for flexible evaluation (default: claude-code)
+- `--skip-flexible` - Only run deterministic checks (faster, for quick validation)
 
 **Implementation Notes:**
-- Deterministic checks can use simple scripts/regex
-- Flexible evaluation needs separate LLM agent with specific prompts
+- Deterministic checks use simple scripts/regex/file operations
+- PR checks use `gh` CLI to inspect PR status and content
+- Flexible evaluation needs LLM agent with specific prompts
 - Keep evaluation agent prompts in separate files for easy iteration
+- Script takes test output directory as input
 
-### Phase 4: Comparison & Baselines 📊
+### Phase 4: Write and Run Initial Tests 🧪
+**Status:** Not Started - NEXT AFTER PHASE 3
+
+**Goal:** Create real tests and validate the framework works end-to-end.
+
+**What to do:**
+1. **Create 3-5 initial tests**
+   - Pick real scenarios from actual skill usage
+   - Mix of unit and integration tests
+   - Cover different skills (building-blocks, content-modeling, etc.)
+   - Use empirical approach: run 5+ times, document, then add criteria
+
+2. **Run tests with framework**
+   - Use `./tools/run-test` to execute
+   - Use `./tools/evaluate-*` to assess
+   - Identify what works, what doesn't
+
+3. **Iterate on framework**
+   - Fix bugs discovered during real usage
+   - Improve test schema if needed
+   - Refine evaluation criteria based on what matters
+
+4. **Document learnings**
+   - What test patterns work well?
+   - What criteria are useful vs. noise?
+   - How to write better tests?
+
+**Success criteria:**
+- Can run a test end-to-end without manual intervention
+- Evaluation results are useful and actionable
+- Framework helps identify skill improvements/regressions
+
+### Phase 5: TBD 🤷
 **Status:** Not Started
 
-**Goal:** Compare test results across skill versions to detect regressions/improvements.
+**Goal:** Decide next steps based on Phase 4 learnings.
 
-**What it needs to do:**
-1. **Store baselines**
-   - Save evaluation results as named baselines
-   - Associate with git commit hash of skills
+**Potential directions:**
+- Comparison & baselines (if we need to track over time)
+- More automation (run all tests, CI/CD integration)
+- Better tooling (validation, dashboards, etc.)
+- More tests (expand coverage)
+- Framework improvements (based on pain points)
 
-2. **Compare results**
-   - Compare current run to baseline
-   - Identify score changes
-   - Flag new failures or fixed issues
-   - Highlight changes in patterns
-
-3. **Generate comparison reports**
-   - Show what improved/regressed
-   - Explain why (based on findings)
-   - Recommend actions
-
-**Implementation Notes:**
-- Since tests run once (not multiple times), comparison is straightforward
-- Focus on clear diff of evaluation results
-- Can expand later if needed
-
-### Phase 5: Tooling & Automation 🛠️
-**Status:** Not Started (Optional - Add as Needed)
-
-**Goal:** Make the framework easier to use at scale.
-
-**Potential additions:**
-- Run all tests in a suite
-- CI/CD integration (auto-run on skill changes)
-- Dashboard/visualization for results over time
-- Test validation tool (`./tools/validate-test`)
-- Helper scripts for common tasks
-
-**Implementation Notes:**
-- Build these as pain points emerge
-- Don't over-engineer upfront
-- Keep scripts simple and composable
+**Implementation approach:**
+- See where we are after Phase 4
+- Build what we actually need, not what we think we might need
+- Keep it simple and focused
 
 ## Usage Examples
 
 ### Running a Single Test
 ```bash
-./tools/run-test tests/unit/building-blocks/create-simple-block
+./tools/run-test --test create-simple-block
+# or with full path
+./tools/run-test --test tests/unit/building-blocks/create-simple-block
 ```
 
-### Running All Tests
+### Running Tests by Tags
 ```bash
-./tools/run-all-tests
+./tools/run-test --tags blocks,basic
 ```
 
-### Comparing Skill Versions
+### Running Tests by Skills
 ```bash
-# Run tests with current skills
-./tools/run-all-tests --save-baseline current
+./tools/run-test --skills building-blocks
+./tools/run-test --skills content-driven-development,building-blocks
+```
 
-# Make changes to skills
+### Running with Multiple Agents
+```bash
+./tools/run-test --tags blocks --agents claude-code,cursor-cli
+```
+
+### Evaluating Test Results
+```bash
+# After running tests, evaluate the results
+OUTPUT_DIR="test-results/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code"
+
+# Run full evaluation (deterministic + flexible)
+./tools/evaluate "$OUTPUT_DIR"
+
+# Use specific eval agent for flexible criteria
+./tools/evaluate "$OUTPUT_DIR" --eval-agent claude-code
+
+# Skip flexible evaluation (faster, deterministic only)
+./tools/evaluate "$OUTPUT_DIR" --skip-flexible
+```
+
+### Full Workflow Example
+```bash
+# 1. Run a test with current skills
+./tools/run-test --test create-simple-block
+
+# 2. Evaluate results
+OUTPUT_DIR=$(ls -td test-results/tests/unit/building-blocks/create-simple-block/*/claude-code | head -1)
+./tools/evaluate "$OUTPUT_DIR"
+
+# 3. Review results
+cat "$OUTPUT_DIR/evaluation-report.md"
+cat "$OUTPUT_DIR/evaluation-results.json"
+
+# 4. Make skill changes
 vim .claude/skills/building-blocks/SKILL.md
 
-# Run tests and compare
-./tools/run-all-tests --compare-to current
-```
+# 5. Re-run test and compare
+./tools/run-test --test create-simple-block
+OUTPUT_DIR_NEW=$(ls -td test-results/tests/unit/building-blocks/create-simple-block/*/claude-code | head -1)
+./tools/evaluate "$OUTPUT_DIR_NEW"
 
-### Viewing Results
-```bash
-./tools/show-results tests/unit/building-blocks/create-simple-block
+# 6. Compare results manually (or with diff tools)
+diff "$OUTPUT_DIR/evaluation-results.json" "$OUTPUT_DIR_NEW/evaluation-results.json"
 ```
 
 ## Success Criteria

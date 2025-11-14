@@ -4,6 +4,10 @@ type: unit
 skills:
   - content-driven-development
   - building-blocks
+tags:
+  - blocks
+  - basic
+  - css
 
 task: |
   Create a 'quote' block that displays a blockquote with optional attribution.

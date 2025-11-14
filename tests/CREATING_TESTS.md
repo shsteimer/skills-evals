@@ -54,12 +54,26 @@ description: "Brief description"
 type: unit  # or integration
 skills:
   - skill-name
+tags:  # Optional but recommended
+  - relevant-tag-1
+  - relevant-tag-2
 
 task: |
   Your realistic task prompt here
 ```
 
 That's it! No checks, no criteria yet. See `tests/TEST_SCHEMA.md` for complete schema.
+
+**About tags:**
+Tags help organize and filter tests. Common tags include:
+- `blocks` - Block creation/modification tests
+- `basic` / `advanced` - Complexity level
+- `workflow` - Full development workflow tests
+- `accessibility` - Accessibility-focused tests
+- `performance` - Performance-focused tests
+- `migration` - Migration-related tests
+
+Choose tags that make your test easy to find later!
 
 ### Step 3: Set Up Initial State Branch (Optional)
 
@@ -460,6 +474,9 @@ description: "Test basic block creation"
 type: unit
 skills:
   - building-blocks
+tags:
+  - blocks
+  - basic
 
 task: |
   Create a quote block with optional attribution.
