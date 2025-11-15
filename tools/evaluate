@@ -10,8 +10,8 @@
  *   <output-dir>          Path to test results directory
  *
  * Options:
- *   --eval-agent <agent>  Agent to use for flexible evaluation (default: claude-code)
- *   --skip-flexible       Only run deterministic checks (faster)
+ *   --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
+ *   --skip-non-deterministic       Only run deterministic checks (faster)
  *   --help                Show this help message
  */
 
@@ -39,7 +39,7 @@ function parseArgs() {
   const options = {
     outputDir: null,
     evalAgent: 'claude-code',
-    skipFlexible: false
+    skipNonDeterministic: false
   };
 
   let i = 0;
@@ -52,8 +52,9 @@ function parseArgs() {
         options.evalAgent = next || 'claude-code';
         i++;
         break;
-      case '--skip-flexible':
-        options.skipFlexible = true;
+      case '--skip-non-deterministic':
+      case '--skip-flexible': // Backward compatibility
+        options.skipNonDeterministic = true;
         break;
       default:
         if (!options.outputDir && !arg.startsWith('--')) {
@@ -92,18 +93,18 @@ Arguments:
   <output-dir>          Path to test results directory
 
 Options:
-  --eval-agent <agent>  Agent to use for flexible evaluation (default: claude-code)
-  --skip-flexible       Only run deterministic checks (faster)
+  --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
+  --skip-non-deterministic  Only run deterministic checks (faster)
   --help                Show this help message
 
 Examples:
   # Run full evaluation
   ./tools/evaluate test-results/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code
 
-  # Skip flexible evaluation (deterministic only)
-  ./tools/evaluate <output-dir> --skip-flexible
+  # Skip non-deterministic evaluation (deterministic only)
+  ./tools/evaluate <output-dir> --skip-non-deterministic
 
-  # Use specific agent for flexible evaluation
+  # Use specific agent for non-deterministic evaluation
   ./tools/evaluate <output-dir> --eval-agent cursor-cli
 `);
 }
@@ -112,7 +113,9 @@ Examples:
  * Load test definition from test.yaml
  */
 function loadTestDefinition(outputDir) {
-  // Output dir structure: test-results/<test-path>/<timestamp>/<agent>/
+  // Output dir structure can be:
+  // - test-results/<test-path>/<timestamp>/<agent>/  (specific agent)
+  // - test-results/<test-path>/<timestamp>/          (all agents)
   // We need to find the test.yaml in tests/<test-path>/test.yaml
 
   const parts = outputDir.split('/');
@@ -123,8 +126,12 @@ function loadTestDefinition(outputDir) {
   }
 
   // Extract test path (everything between test-results and timestamp)
+  // If path ends with timestamp (not agent), it's 1 fewer part
+  const isTimestampDir = outputDir.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\/?$/);
+  const offset = isTimestampDir ? 1 : 2;
+
   const testPathParts = [];
-  for (let i = testResultsIndex + 1; i < parts.length - 2; i++) {
+  for (let i = testResultsIndex + 1; i < parts.length - offset; i++) {
     testPathParts.push(parts[i]);
   }
 
@@ -136,6 +143,33 @@ function loadTestDefinition(outputDir) {
 
   const content = readFileSync(testPath, 'utf8');
   return parseYaml(content);
+}
+
+/**
+ * Detect if path is a timestamp directory (contains agent subdirs) or specific agent directory
+ */
+function detectPathType(outputDir) {
+  // Check if path ends with timestamp pattern
+  if (outputDir.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\/?$/)) {
+    return 'timestamp';
+  }
+  return 'agent';
+}
+
+/**
+ * Get all agent directories in a timestamp directory
+ */
+function getAgentDirectories(timestampDir) {
+  try {
+    const entries = readdirSync(timestampDir);
+    return entries.filter(entry => {
+      const fullPath = join(timestampDir, entry);
+      const stat = statSync(fullPath);
+      return stat.isDirectory();
+    }).map(dir => join(timestampDir, dir));
+  } catch (error) {
+    throw new Error(`Failed to read agent directories: ${error.message}`);
+  }
 }
 
 /**
@@ -444,10 +478,10 @@ async function checkPRQuality(outputDir, testDef) {
 }
 
 /**
- * Run flexible criteria evaluation with LLM
+ * Run non-deterministic criteria evaluation with LLM
  */
-async function runFlexibleEvaluation(outputDir, testDef, evalAgent) {
-  console.log('\n=== Running Flexible Criteria Evaluation ===\n');
+async function runNonDeterministicEvaluation(outputDir, testDef, evalAgent) {
+  console.log('\n=== Running Non-Deterministic Criteria Evaluation ===\n');
   console.log(`Using agent: ${evalAgent}\n`);
 
   const results = {
@@ -459,10 +493,10 @@ async function runFlexibleEvaluation(outputDir, testDef, evalAgent) {
     overall_notes: []
   };
 
-  const criteria = testDef.flexible_criteria || [];
+  const criteria = testDef.non_deterministic_criteria || testDef.flexible_criteria || []; // Support old name
 
   if (criteria.length === 0) {
-    console.log('  ℹ No flexible criteria defined');
+    console.log('  ℹ No non-deterministic criteria defined');
     return results;
   }
 
@@ -508,7 +542,7 @@ Do not include any other text before or after the JSON. The response must be val
 
     // For now, we'll use a simple approach: create the structure manually
     // In the future, we could invoke the actual agent CLI
-    console.log('  ℹ Flexible evaluation with live agent not yet implemented');
+    console.log('  ℹ Non-deterministic evaluation with live agent not yet implemented');
     console.log('  ℹ Creating placeholder evaluation results\n');
 
     // Create placeholder results organized by priority
@@ -526,10 +560,10 @@ Do not include any other text before or after the JSON. The response must be val
       };
     }
 
-    results.overall_notes.push('Note: Flexible evaluation requires manual review or agent implementation');
+    results.overall_notes.push('Note: Non-deterministic evaluation requires manual review or agent implementation');
 
   } catch (error) {
-    console.log(`  ✗ Error in flexible evaluation: ${error.message}`);
+    console.log(`  ✗ Error in non-deterministic evaluation: ${error.message}`);
     results.overall_notes.push(`Error during evaluation: ${error.message}`);
   }
 
@@ -542,7 +576,7 @@ Do not include any other text before or after the JSON. The response must be val
 function buildEvaluationPrompt(outputDir, testDef, criteria) {
   let prompt = `# Agent Skills Test Evaluation
 
-You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the flexible criteria defined for this test.
+You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the non-deterministic criteria defined for this test.
 
 ## Test Information
 
@@ -667,10 +701,32 @@ function generateMarkdownReport(results) {
   md += '## Deterministic Results\n\n';
   md += `**Status:** ${results.deterministic_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
 
+  // Show all checks that were run
+  if (results.deterministic_results?.checks) {
+    md += '### Checks Run\n\n';
+    const checks = results.deterministic_results.checks;
+    for (const [checkName, passed] of Object.entries(checks)) {
+      const icon = passed ? '✅' : '❌';
+      md += `- ${icon} ${checkName}\n`;
+    }
+    md += '\n';
+  }
+
   if (results.deterministic_results?.failures?.length > 0) {
     md += '### Failures\n\n';
     for (const failure of results.deterministic_results.failures) {
       md += `- ❌ ${failure}\n`;
+    }
+    md += '\n';
+  }
+
+  // Show optional checks that were run
+  if (results.optional_results?.checks && Object.keys(results.optional_results.checks).length > 0) {
+    md += '### Optional Checks\n\n';
+    const checks = results.optional_results.checks;
+    for (const [checkName, passed] of Object.entries(checks)) {
+      const icon = passed ? '✅' : '⚠️';
+      md += `- ${icon} ${checkName}\n`;
     }
     md += '\n';
   }
@@ -683,10 +739,85 @@ function generateMarkdownReport(results) {
     md += '\n';
   }
 
-  md += '## Flexible Criteria Assessment\n\n';
+  // Show PR results if PR was opened
+  if (results.pr_results?.pr_opened) {
+    md += '### Pull Request\n\n';
+    md += `**URL:** ${results.pr_results.pr_url}\n\n`;
+    if (results.pr_results.pr_quality && Object.keys(results.pr_results.pr_quality).length > 0) {
+      md += '**Quality Checks:**\n\n';
+      for (const [check, result] of Object.entries(results.pr_results.pr_quality)) {
+        if (typeof result === 'boolean') {
+          const icon = result ? '✅' : '❌';
+          md += `- ${icon} ${check}\n`;
+        } else if (check === 'preview_url') {
+          md += `- Preview URL: ${result}\n`;
+        }
+      }
+      md += '\n';
+    }
+    if (results.pr_results.failures?.length > 0) {
+      md += '**PR Failures:**\n\n';
+      for (const failure of results.pr_results.failures) {
+        md += `- ❌ ${failure}\n`;
+      }
+      md += '\n';
+    }
+  }
+
+  md += '## Non-Deterministic Criteria Assessment\n\n';
   md += '_(Not yet implemented)_\n\n';
 
   return md;
+}
+
+/**
+ * Evaluate a single agent's results
+ */
+async function evaluateSingleAgent(agentDir, testDef, options) {
+  const pathParts = agentDir.split('/');
+  const agent = pathParts[pathParts.length - 1];
+  const testPath = pathParts.slice(pathParts.indexOf('test-results') + 1, -2).join('/');
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Evaluating: ${agent}`);
+  console.log('='.repeat(60));
+
+  // Run evaluations
+  const deterministic = await runDeterministicChecks(agentDir, testDef);
+  const optional = await runOptionalChecks(agentDir, testDef);
+  const prQuality = await checkPRQuality(agentDir, testDef);
+
+  let nonDeterministic = null;
+  if (!options.skipNonDeterministic) {
+    nonDeterministic = await runNonDeterministicEvaluation(agentDir, testDef, options.evalAgent);
+  } else {
+    console.log('\n=== Skipping Non-Deterministic Evaluation ===\n');
+  }
+
+  // Combine results
+  const evaluationResults = {
+    test_name: testPath,
+    test_definition_name: testDef.name,
+    agent,
+    deterministic_results: deterministic,
+    optional_results: optional,
+    pr_results: prQuality,
+    non_deterministic_assessment: nonDeterministic
+  };
+
+  // Generate outputs
+  const { jsonPath, mdPath } = generateOutputs(agentDir, evaluationResults);
+
+  console.log(`\nStatus: ${deterministic.passed ? '✅ PASSED' : '❌ FAILED'}`);
+  console.log(`Results saved to:`);
+  console.log(`  - ${jsonPath}`);
+  console.log(`  - ${mdPath}`);
+
+  return {
+    agent,
+    passed: deterministic.passed,
+    results: evaluationResults
+  };
 }
 
 /**
@@ -701,55 +832,53 @@ async function main() {
     console.log('='.repeat(60));
     console.log(`\nOutput Directory: ${options.outputDir}`);
     console.log(`Eval Agent: ${options.evalAgent}`);
-    console.log(`Skip Flexible: ${options.skipFlexible}`);
+    console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
 
     // Load test definition
     console.log('\nLoading test definition...');
     const testDef = loadTestDefinition(options.outputDir);
     console.log(`Test: ${testDef.name}`);
 
-    // Extract test name and agent from output dir path
-    const pathParts = options.outputDir.split('/');
-    const agent = pathParts[pathParts.length - 1];
-    const testPath = pathParts.slice(pathParts.indexOf('test-results') + 1, -2).join('/');
+    // Detect if we're evaluating one agent or all agents
+    const pathType = detectPathType(options.outputDir);
 
-    // Run evaluations
-    const deterministic = await runDeterministicChecks(options.outputDir, testDef);
-    const optional = await runOptionalChecks(options.outputDir, testDef);
-    const prQuality = await checkPRQuality(options.outputDir, testDef);
+    let agentResults = [];
 
-    let flexible = null;
-    if (!options.skipFlexible) {
-      flexible = await runFlexibleEvaluation(options.outputDir, testDef, options.evalAgent);
+    if (pathType === 'timestamp') {
+      // Evaluate all agents in the timestamp directory
+      const agentDirs = getAgentDirectories(options.outputDir);
+      console.log(`\nFound ${agentDirs.length} agent(s) to evaluate`);
+
+      for (const agentDir of agentDirs) {
+        const result = await evaluateSingleAgent(agentDir, testDef, options);
+        agentResults.push(result);
+      }
+
+      // Print summary
+      console.log('\n' + '='.repeat(60));
+      console.log('Evaluation Summary');
+      console.log('='.repeat(60));
+      for (const result of agentResults) {
+        const status = result.passed ? '✅ PASSED' : '❌ FAILED';
+        console.log(`  ${result.agent}: ${status}`);
+      }
+
+      // Exit with failure if any agent failed
+      const allPassed = agentResults.every(r => r.passed);
+      process.exit(allPassed ? 0 : 1);
+
     } else {
-      console.log('\n=== Skipping Flexible Evaluation ===\n');
+      // Evaluate single agent
+      const result = await evaluateSingleAgent(options.outputDir, testDef, options);
+
+      // Final summary
+      console.log('\n' + '='.repeat(60));
+      console.log('Evaluation Complete');
+      console.log('='.repeat(60));
+
+      // Exit with appropriate code
+      process.exit(result.passed ? 0 : 1);
     }
-
-    // Combine results
-    const evaluationResults = {
-      test_name: testPath,
-      test_definition_name: testDef.name,
-      agent,
-      deterministic_results: deterministic,
-      optional_results: optional,
-      pr_results: prQuality,
-      flexible_assessment: flexible
-    };
-
-    // Generate outputs
-    const { jsonPath, mdPath } = generateOutputs(options.outputDir, evaluationResults);
-
-    // Final summary
-    console.log('\n' + '='.repeat(60));
-    console.log('Evaluation Complete');
-    console.log('='.repeat(60));
-    console.log(`\nStatus: ${deterministic.passed ? '✅ PASSED' : '❌ FAILED'}`);
-    console.log(`\nResults saved to:`);
-    console.log(`  - ${jsonPath}`);
-    console.log(`  - ${mdPath}`);
-
-    // Exit with appropriate code
-    process.exit(deterministic.passed ? 0 : 1);
 
   } catch (error) {
     console.error('\n❌ Error:', error.message);

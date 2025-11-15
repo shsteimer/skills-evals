@@ -14,7 +14,7 @@ deterministic_checks:
   files_exist:
     - test-output.txt
 
-flexible_criteria:
+non_deterministic_criteria:
   - name: task_completion
     description: |
       - File was created with correct content

@@ -47,7 +47,7 @@ Basic evaluation script working with deterministic checks. Successfully tested o
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Test evaluate script: `./tools/evaluate <output-dir> --skip-flexible`
+1. Test evaluate script: `./tools/evaluate <output-dir> --skip-non-deterministic`
 2. Implement missing deterministic checks (linting, patterns)
 3. Build flexible LLM evaluation feature
 
@@ -94,7 +94,7 @@ Automatically verified but don't cause test failure:
 
 **Scoring:** Reported as warnings/suggestions, no impact on pass/fail
 
-### Flexible Criteria (Can Vary)
+### Non-Deterministic Criteria (Can Vary)
 These are evaluated for quality by an LLM evaluator:
 - ~ Exact code implementation
 - ~ Order of tool usage
@@ -167,7 +167,7 @@ deterministic_checks:
     - pattern: "var "  # Should use const/let
       in_files: ["**/*.js"]
 
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable
     priority: high
@@ -205,7 +205,7 @@ flexible_criteria:
     }
   },
 
-  "flexible_assessment": {
+  "non_deterministic_assessment": {
     "by_priority": {
       "high": {
         "code_quality": {
@@ -314,7 +314,7 @@ Tasks:
 **Core Script:** `./tools/evaluate`
 
 **Completed:**
-- [x] Argument parsing (--eval-agent, --skip-flexible)
+- [x] Argument parsing (--eval-agent, --skip-non-deterministic)
 - [x] Test definition loading from test.yaml
 - [x] File existence checks (parse git diff)
 - [x] File non-existence checks (parse git diff)
@@ -366,13 +366,13 @@ Tasks:
    - Save both to test results directory
 
 **Flags:**
-- `--eval-agent <agent>` - Agent to use for flexible evaluation (default: claude-code)
-- `--skip-flexible` - Only run deterministic checks (faster, for quick validation)
+- `--eval-agent <agent>` - Agent to use for non-deterministic evaluation (default: claude-code)
+- `--skip-non-deterministic` - Only run deterministic checks (faster, for quick validation)
 
 **Implementation Notes:**
 - Deterministic checks use simple scripts/regex/file operations
 - PR checks use `gh` CLI to inspect PR status and content
-- Flexible evaluation needs LLM agent with specific prompts
+- Non-deterministic evaluation needs LLM agent with specific prompts
 - Keep evaluation agent prompts in separate files for easy iteration
 - Script takes test output directory as input
 
@@ -461,8 +461,8 @@ OUTPUT_DIR="test-results/tests/unit/building-blocks/create-simple-block/2025-01-
 # Use specific eval agent for flexible criteria
 ./tools/evaluate "$OUTPUT_DIR" --eval-agent claude-code
 
-# Skip flexible evaluation (faster, deterministic only)
-./tools/evaluate "$OUTPUT_DIR" --skip-flexible
+# Skip non-deterministic evaluation (faster, deterministic only)
+./tools/evaluate "$OUTPUT_DIR" --skip-non-deterministic
 ```
 
 ### Full Workflow Example

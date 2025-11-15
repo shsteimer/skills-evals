@@ -145,11 +145,11 @@ initial_state: test/my-test-setup
 - Sometimes uses `var` instead of `const/let`
 - Sometimes skips linting entirely
 
-### Inconsistent but not critical (optional checks or flexible):
+### Inconsistent but not critical (optional checks or non-deterministic):
 - Sometimes creates test files (not needed)
 - Skill announcement varies
 
-### Quality issues (flexible criteria):
+### Quality issues (non-deterministic criteria):
 - CSS scoping varies in quality
 - Code structure varies
 ```
@@ -180,7 +180,7 @@ optional_deterministic_checks:
 
 **Flexible criteria** - Quality that varies but should be evaluated:
 ```yaml
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: |
       - CSS selectors properly scoped (saw issues in run 4)
@@ -344,7 +344,7 @@ optional_deterministic_checks:
 
 **Flexible** - LLM evaluates with priorities:
 ```yaml
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: Clean, maintainable code following guidelines
     priority: high
@@ -357,7 +357,7 @@ flexible_criteria:
 
 ❌ **Bad:**
 ```yaml
-flexible_criteria:
+non_deterministic_criteria:
   - name: quality
     description: Code is good quality
     priority: high
@@ -365,7 +365,7 @@ flexible_criteria:
 
 ✅ **Good:**
 ```yaml
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: |
       - JavaScript uses proper decoration patterns
@@ -380,7 +380,7 @@ flexible_criteria:
 
 ```yaml
 # For a test focused on following process:
-flexible_criteria:
+non_deterministic_criteria:
   - name: process_adherence
     priority: high  # Most important for this test
   - name: code_quality
@@ -391,7 +391,7 @@ flexible_criteria:
     priority: low
 
 # For a test focused on code quality:
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     priority: high  # Most important for this test
   - name: completeness
@@ -456,7 +456,7 @@ Before considering a test complete:
 - [ ] **Identified patterns in failures/successes**
 - [ ] Added deterministic_checks based on hard failures
 - [ ] Added optional_deterministic_checks for nice-to-haves
-- [ ] Added flexible_criteria for quality variations
+- [ ] Added non_deterministic_criteria for quality variations
 - [ ] Set priorities based on impact observed in runs
 - [ ] Test README.md explains purpose and expectations
 - [ ] Test validated: `./tools/validate-test path/to/test`

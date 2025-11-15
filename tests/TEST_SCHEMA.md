@@ -193,12 +193,12 @@ optional_deterministic_checks:
 - PR opened → all enabled checks must pass or test fails
 - This ensures: opening a broken PR is worse than not opening one at all
 
-#### `flexible_criteria` (array of objects)
+#### `non_deterministic_criteria` (array of objects)
 Quality criteria evaluated by LLM, can vary across runs.
 
 **Example:**
 ```yaml
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable and well-structured
     priority: high
@@ -288,7 +288,7 @@ optional_deterministic_checks:
       in_files: ["blocks/quote/quote.js"]
       message: "Consider adding ARIA attributes for better accessibility"
 
-flexible_criteria:
+non_deterministic_criteria:
   - name: code_quality
     description: |
       - JavaScript uses proper decoration patterns
@@ -325,7 +325,7 @@ flexible_criteria:
 ## Validation Rules
 
 A valid test.yaml must:
-1. Include all required fields (name, description, type, skills, task, deterministic_checks, flexible_criteria)
+1. Include all required fields (name, description, type, skills, task, deterministic_checks, non_deterministic_criteria)
 2. Have `type` be either "unit" or "integration"
 3. Reference skills that exist in `.claude/skills/`
 4. Have flexible criteria priorities be "high", "medium", or "low"
@@ -338,7 +338,7 @@ A valid test.yaml must:
 
 2. **Deterministic checks**: Focus on objective, measurable criteria that catch real problems.
 
-3. **Flexible criteria**: Keep descriptions specific so evaluation agent knows what to look for.
+3. **Non-deterministic criteria**: Keep descriptions specific so evaluation agent knows what to look for.
 
 4. **Priorities**: Use "high" for must-haves, "medium" for important, "low" for nice-to-haves.
 
