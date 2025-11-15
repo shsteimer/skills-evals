@@ -1,0 +1,761 @@
+#!/usr/bin/env node
+
+/**
+ * Evaluation Script for Agent Skills Tests
+ *
+ * Usage:
+ *   ./tools/evaluate <output-dir> [options]
+ *
+ * Arguments:
+ *   <output-dir>          Path to test results directory
+ *
+ * Options:
+ *   --eval-agent <agent>  Agent to use for flexible evaluation (default: claude-code)
+ *   --skip-flexible       Only run deterministic checks (faster)
+ *   --help                Show this help message
+ */
+
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join, dirname, basename, relative } from 'path';
+import { fileURLToPath } from 'url';
+import { execSync, spawnSync } from 'child_process';
+import { parse as parseYaml } from 'yaml';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, '..');
+
+/**
+ * Parse command line arguments
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('--help') || args.length === 0) {
+    showHelp();
+    process.exit(0);
+  }
+
+  const options = {
+    outputDir: null,
+    evalAgent: 'claude-code',
+    skipFlexible: false
+  };
+
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    const next = args[i + 1];
+
+    switch (arg) {
+      case '--eval-agent':
+        options.evalAgent = next || 'claude-code';
+        i++;
+        break;
+      case '--skip-flexible':
+        options.skipFlexible = true;
+        break;
+      default:
+        if (!options.outputDir && !arg.startsWith('--')) {
+          options.outputDir = arg;
+        }
+        break;
+    }
+    i++;
+  }
+
+  if (!options.outputDir) {
+    console.error('Error: Output directory is required');
+    showHelp();
+    process.exit(1);
+  }
+
+  if (!existsSync(options.outputDir)) {
+    console.error(`Error: Output directory does not exist: ${options.outputDir}`);
+    process.exit(1);
+  }
+
+  return options;
+}
+
+/**
+ * Show help message
+ */
+function showHelp() {
+  console.log(`
+Evaluation Script for Agent Skills Tests
+
+Usage:
+  ./tools/evaluate <output-dir> [options]
+
+Arguments:
+  <output-dir>          Path to test results directory
+
+Options:
+  --eval-agent <agent>  Agent to use for flexible evaluation (default: claude-code)
+  --skip-flexible       Only run deterministic checks (faster)
+  --help                Show this help message
+
+Examples:
+  # Run full evaluation
+  ./tools/evaluate test-results/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code
+
+  # Skip flexible evaluation (deterministic only)
+  ./tools/evaluate <output-dir> --skip-flexible
+
+  # Use specific agent for flexible evaluation
+  ./tools/evaluate <output-dir> --eval-agent cursor-cli
+`);
+}
+
+/**
+ * Load test definition from test.yaml
+ */
+function loadTestDefinition(outputDir) {
+  // Output dir structure: test-results/<test-path>/<timestamp>/<agent>/
+  // We need to find the test.yaml in tests/<test-path>/test.yaml
+
+  const parts = outputDir.split('/');
+  const testResultsIndex = parts.indexOf('test-results');
+
+  if (testResultsIndex === -1) {
+    throw new Error('Output directory must be under test-results/');
+  }
+
+  // Extract test path (everything between test-results and timestamp)
+  const testPathParts = [];
+  for (let i = testResultsIndex + 1; i < parts.length - 2; i++) {
+    testPathParts.push(parts[i]);
+  }
+
+  const testPath = join(PROJECT_ROOT, ...testPathParts, 'test.yaml');
+
+  if (!existsSync(testPath)) {
+    throw new Error(`Test definition not found: ${testPath}`);
+  }
+
+  const content = readFileSync(testPath, 'utf8');
+  return parseYaml(content);
+}
+
+/**
+ * Run deterministic checks (required)
+ */
+async function runDeterministicChecks(outputDir, testDef) {
+  console.log('\n=== Running Deterministic Checks ===\n');
+
+  const results = {
+    passed: true,
+    failures: [],
+    checks: {}
+  };
+
+  const checks = testDef.deterministic_checks || {};
+
+  // Check if required files exist (check in git diff)
+  if (checks.files_exist) {
+    console.log('Checking required files...');
+
+    // Read the code diff to see what files were created/modified
+    const diffPath = join(outputDir, 'code-diff.patch');
+    let diffContent = '';
+    if (existsSync(diffPath)) {
+      diffContent = readFileSync(diffPath, 'utf8');
+    }
+
+    for (const file of checks.files_exist) {
+      // Check if file appears in the diff (as a new or modified file)
+      const fileInDiff = diffContent.includes(`+++ b/${file}`) || diffContent.includes(`diff --git a/${file}`);
+      results.checks[`file_exists:${file}`] = fileInDiff;
+
+      if (!fileInDiff) {
+        results.passed = false;
+        results.failures.push(`Required file does not exist: ${file}`);
+        console.log(`  ✗ ${file} (MISSING)`);
+      } else {
+        console.log(`  ✓ ${file}`);
+      }
+    }
+  }
+
+  // Check if files should NOT exist
+  if (checks.files_not_exist) {
+    console.log('\nChecking files that should not exist...');
+
+    // Read the code diff to see what files were created/modified
+    const diffPath = join(outputDir, 'code-diff.patch');
+    let diffContent = '';
+    if (existsSync(diffPath)) {
+      diffContent = readFileSync(diffPath, 'utf8');
+    }
+
+    for (const file of checks.files_not_exist) {
+      // Check if file appears in the diff
+      const fileInDiff = diffContent.includes(`+++ b/${file}`) || diffContent.includes(`diff --git a/${file}`);
+      results.checks[`file_not_exists:${file}`] = !fileInDiff;
+
+      if (fileInDiff) {
+        results.passed = false;
+        results.failures.push(`File should not exist: ${file}`);
+        console.log(`  ✗ ${file} (EXISTS)`);
+      } else {
+        console.log(`  ✓ ${file} (correctly absent)`);
+      }
+    }
+  }
+
+  // Run linting if required
+  if (checks.lint_passes) {
+    console.log('\nRunning linting...');
+    try {
+      execSync('npm run lint', {
+        cwd: outputDir,
+        stdio: 'pipe',
+        encoding: 'utf8'
+      });
+      results.checks['lint_passes'] = true;
+      console.log('  ✓ Linting passed');
+    } catch (error) {
+      results.checks['lint_passes'] = false;
+      results.passed = false;
+      results.failures.push('Linting failed');
+      console.log('  ✗ Linting failed');
+      console.log(error.stdout || error.message);
+    }
+  }
+
+  // Check for forbidden patterns
+  if (checks.forbidden_patterns) {
+    console.log('\nChecking for forbidden patterns...');
+    for (const check of checks.forbidden_patterns) {
+      const pattern = check.pattern;
+      const inFiles = check.in_files || ['**/*'];
+
+      // Use grep to search for pattern
+      let found = false;
+      for (const glob of inFiles) {
+        try {
+          const result = spawnSync('grep', ['-r', '-l', pattern, outputDir], {
+            encoding: 'utf8',
+            stdio: 'pipe'
+          });
+
+          if (result.stdout && result.stdout.trim()) {
+            found = true;
+            results.passed = false;
+            results.failures.push(`Forbidden pattern found: "${pattern}" in ${glob}`);
+            console.log(`  ✗ Pattern "${pattern}" found in files:`);
+            console.log(result.stdout.split('\n').map(f => `    - ${f}`).join('\n'));
+          }
+        } catch (error) {
+          // grep returns non-zero if pattern not found, which is good
+        }
+      }
+
+      if (!found) {
+        results.checks[`forbidden_pattern:${pattern}`] = true;
+        console.log(`  ✓ Pattern "${pattern}" not found`);
+      } else {
+        results.checks[`forbidden_pattern:${pattern}`] = false;
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Run optional deterministic checks
+ */
+async function runOptionalChecks(outputDir, testDef) {
+  console.log('\n=== Running Optional Checks ===\n');
+
+  const results = {
+    warnings: [],
+    checks: {}
+  };
+
+  const checks = testDef.optional_checks || {};
+
+  // Optional file checks
+  if (checks.files_exist) {
+    console.log('Checking optional files...');
+    for (const file of checks.files_exist) {
+      const filePath = join(outputDir, file);
+      const exists = existsSync(filePath);
+      results.checks[`optional_file:${file}`] = exists;
+
+      if (!exists) {
+        results.warnings.push(`Optional file does not exist: ${file}`);
+        console.log(`  ⚠ ${file} (missing but optional)`);
+      } else {
+        console.log(`  ✓ ${file}`);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Check PR quality if PR was opened
+ */
+async function checkPRQuality(outputDir, testDef) {
+  console.log('\n=== Checking PR Quality ===\n');
+
+  const results = {
+    pr_opened: false,
+    pr_url: null,
+    pr_quality: {},
+    failures: []
+  };
+
+  // Try to detect PR from git branch
+  try {
+    // Get the branch name from the output directory
+    // The test was run in an isolated branch
+    const agentInfoPath = join(outputDir, 'agent-info.json');
+    let branchName = null;
+
+    if (existsSync(agentInfoPath)) {
+      const agentInfo = JSON.parse(readFileSync(agentInfoPath, 'utf8'));
+      branchName = agentInfo.branch;
+    }
+
+    if (!branchName) {
+      console.log('  ℹ Could not determine branch name');
+      console.log('  ℹ No PR opened (no penalty)');
+      return results;
+    }
+
+    // Check if a PR exists for this branch using gh CLI
+    try {
+      const prListResult = spawnSync('gh', ['pr', 'list', '--head', branchName, '--json', 'url,number,state'], {
+        cwd: PROJECT_ROOT,
+        encoding: 'utf8',
+        stdio: 'pipe'
+      });
+
+      if (prListResult.status === 0 && prListResult.stdout.trim()) {
+        const prs = JSON.parse(prListResult.stdout);
+        if (prs && prs.length > 0) {
+          const pr = prs[0];
+          results.pr_opened = true;
+          results.pr_url = pr.url;
+          console.log(`  ✓ PR detected: ${pr.url}`);
+
+          // Run quality checks if PR was opened
+          const checks = testDef.pr_quality_checks || {};
+
+          // Check CI/CD status
+          if (checks.checks_pass !== false) {
+            console.log('\n  Checking CI/CD status...');
+            const checksResult = spawnSync('gh', ['pr', 'checks', pr.number.toString()], {
+              cwd: PROJECT_ROOT,
+              encoding: 'utf8',
+              stdio: 'pipe'
+            });
+
+            if (checksResult.status === 0) {
+              const output = checksResult.stdout;
+              // Parse check results - if any failed, mark as failure
+              const failedChecks = output.split('\n').filter(line => line.includes('fail'));
+              if (failedChecks.length > 0) {
+                results.pr_quality.checks_pass = false;
+                results.failures.push('PR has failing checks');
+                console.log('    ✗ Some checks failed');
+                failedChecks.forEach(check => console.log(`      - ${check.trim()}`));
+              } else {
+                results.pr_quality.checks_pass = true;
+                console.log('    ✓ All checks passing');
+              }
+            }
+          }
+
+          // Check for preview link in PR body
+          if (checks.has_preview_link !== false) {
+            console.log('\n  Checking for preview link...');
+            const prViewResult = spawnSync('gh', ['pr', 'view', pr.number.toString(), '--json', 'body'], {
+              cwd: PROJECT_ROOT,
+              encoding: 'utf8',
+              stdio: 'pipe'
+            });
+
+            if (prViewResult.status === 0) {
+              const prData = JSON.parse(prViewResult.stdout);
+              const body = prData.body || '';
+
+              // Look for preview links (*.aem.page URLs)
+              const previewLinkMatch = body.match(/https?:\/\/[a-zA-Z0-9-]+--[a-zA-Z0-9-]+--[a-zA-Z0-9-]+\.aem\.(page|live)/);
+              if (previewLinkMatch) {
+                results.pr_quality.has_preview_link = true;
+                results.pr_quality.preview_url = previewLinkMatch[0];
+                console.log(`    ✓ Preview link found: ${previewLinkMatch[0]}`);
+              } else {
+                results.pr_quality.has_preview_link = false;
+                results.failures.push('PR missing preview link');
+                console.log('    ✗ No preview link found');
+              }
+            }
+          }
+
+          // Check if preview link is valid (optional, can be slow)
+          if (checks.preview_valid !== false && results.pr_quality.preview_url) {
+            console.log('\n  Checking preview link validity...');
+            try {
+              const curlResult = spawnSync('curl', ['-I', '-s', '-o', '/dev/null', '-w', '%{http_code}', results.pr_quality.preview_url], {
+                encoding: 'utf8',
+                stdio: 'pipe',
+                timeout: 10000
+              });
+
+              const statusCode = parseInt(curlResult.stdout.trim());
+              if (statusCode >= 200 && statusCode < 400) {
+                results.pr_quality.preview_valid = true;
+                console.log(`    ✓ Preview link returns ${statusCode}`);
+              } else {
+                results.pr_quality.preview_valid = false;
+                results.failures.push(`Preview link returns ${statusCode}`);
+                console.log(`    ✗ Preview link returns ${statusCode}`);
+              }
+            } catch (error) {
+              results.pr_quality.preview_valid = false;
+              results.failures.push('Preview link check timed out or failed');
+              console.log('    ✗ Could not validate preview link');
+            }
+          }
+
+        } else {
+          console.log('  ℹ No PR found for this branch');
+          console.log('  ℹ No PR opened (no penalty)');
+        }
+      }
+    } catch (error) {
+      console.log('  ℹ Error checking for PR (gh CLI might not be available)');
+      console.log(`  ℹ ${error.message}`);
+    }
+
+  } catch (error) {
+    console.log('  ℹ Error in PR quality check');
+    console.log(`  ℹ ${error.message}`);
+  }
+
+  return results;
+}
+
+/**
+ * Run flexible criteria evaluation with LLM
+ */
+async function runFlexibleEvaluation(outputDir, testDef, evalAgent) {
+  console.log('\n=== Running Flexible Criteria Evaluation ===\n');
+  console.log(`Using agent: ${evalAgent}\n`);
+
+  const results = {
+    by_priority: {
+      high: {},
+      medium: {},
+      low: {}
+    },
+    overall_notes: []
+  };
+
+  const criteria = testDef.flexible_criteria || [];
+
+  if (criteria.length === 0) {
+    console.log('  ℹ No flexible criteria defined');
+    return results;
+  }
+
+  console.log(`Evaluating ${criteria.length} criteria...\n`);
+
+  try {
+    // Build evaluation prompt
+    const prompt = buildEvaluationPrompt(outputDir, testDef, criteria);
+
+    // Save prompt to file for reference
+    const promptPath = join(outputDir, 'evaluation-prompt.txt');
+    writeFileSync(promptPath, prompt);
+    console.log(`  ℹ Saved evaluation prompt: ${promptPath}`);
+
+    // Run evaluation agent
+    console.log(`  ℹ Running ${evalAgent} for evaluation...\n`);
+
+    const evalResultPath = join(outputDir, 'evaluation-response.json');
+    const evalPromptFile = join(outputDir, 'eval-task.txt');
+
+    // Create a structured task for the agent
+    const agentTask = `${prompt}
+
+IMPORTANT: You must respond with ONLY a valid JSON object matching this schema:
+{
+  "by_priority": {
+    "high": {
+      "<criterion_name>": {
+        "strengths": ["string"],
+        "issues": ["string"],
+        "notes": ["string"]
+      }
+    },
+    "medium": { /* same structure */ },
+    "low": { /* same structure */ }
+  },
+  "overall_notes": ["string"]
+}
+
+Do not include any other text before or after the JSON. The response must be valid JSON.`;
+
+    writeFileSync(evalPromptFile, agentTask);
+
+    // For now, we'll use a simple approach: create the structure manually
+    // In the future, we could invoke the actual agent CLI
+    console.log('  ℹ Flexible evaluation with live agent not yet implemented');
+    console.log('  ℹ Creating placeholder evaluation results\n');
+
+    // Create placeholder results organized by priority
+    for (const criterion of criteria) {
+      const priority = criterion.priority || 'medium';
+
+      if (!results.by_priority[priority]) {
+        results.by_priority[priority] = {};
+      }
+
+      results.by_priority[priority][criterion.name] = {
+        strengths: ['[Evaluation not yet implemented]'],
+        issues: [],
+        notes: [`Criterion: ${criterion.description}`]
+      };
+    }
+
+    results.overall_notes.push('Note: Flexible evaluation requires manual review or agent implementation');
+
+  } catch (error) {
+    console.log(`  ✗ Error in flexible evaluation: ${error.message}`);
+    results.overall_notes.push(`Error during evaluation: ${error.message}`);
+  }
+
+  return results;
+}
+
+/**
+ * Build evaluation prompt for LLM
+ */
+function buildEvaluationPrompt(outputDir, testDef, criteria) {
+  let prompt = `# Agent Skills Test Evaluation
+
+You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the flexible criteria defined for this test.
+
+## Test Information
+
+**Test Name:** ${testDef.name}
+**Description:** ${testDef.description || 'N/A'}
+**Task:** ${testDef.task}
+
+## Evaluation Criteria
+
+You will evaluate the following criteria, organized by priority:
+
+`;
+
+  // Group criteria by priority
+  const byPriority = { high: [], medium: [], low: [] };
+  for (const criterion of criteria) {
+    const priority = criterion.priority || 'medium';
+    byPriority[priority].push(criterion);
+  }
+
+  for (const priority of ['high', 'medium', 'low']) {
+    if (byPriority[priority].length > 0) {
+      prompt += `### ${priority.toUpperCase()} Priority\n\n`;
+      for (const criterion of byPriority[priority]) {
+        prompt += `- **${criterion.name}**: ${criterion.description}\n`;
+      }
+      prompt += '\n';
+    }
+  }
+
+  prompt += `## Artifacts to Review
+
+The following artifacts are available in the output directory:
+
+`;
+
+  // List available artifacts
+  try {
+    const files = readdirSync(outputDir);
+    const relevantFiles = files.filter(f => {
+      return f.endsWith('.js') || f.endsWith('.css') || f.endsWith('.json') ||
+             f.endsWith('.md') || f.endsWith('.diff') || f === 'agent-info.json';
+    });
+
+    for (const file of relevantFiles) {
+      prompt += `- ${file}\n`;
+    }
+  } catch (error) {
+    prompt += '- (Error listing files)\n';
+  }
+
+  prompt += `
+## Your Task
+
+For each criterion, provide:
+
+1. **Strengths**: What went well? What did the agent do correctly?
+2. **Issues**: What didn't go well? What could be improved?
+3. **Notes**: Additional observations or context
+
+Also provide **Overall Notes** with general observations about the agent's performance.
+
+## Important Guidelines
+
+- Focus on qualitative assessment, not scores
+- Consider the specific task and context
+- Acknowledge that there may be multiple valid approaches
+- Note both successes and areas for improvement
+- Be constructive and specific in your feedback
+
+## Output Format
+
+Organize your findings by priority (high/medium/low), with each criterion having:
+- strengths: array of strings
+- issues: array of strings
+- notes: array of strings
+
+Plus overall_notes as an array of general observations.
+`;
+
+  return prompt;
+}
+
+/**
+ * Generate evaluation outputs
+ */
+function generateOutputs(outputDir, evaluationResults) {
+  console.log('\n=== Generating Evaluation Outputs ===\n');
+
+  const timestamp = new Date().toISOString();
+
+  // Generate JSON output
+  const jsonOutput = {
+    ...evaluationResults,
+    timestamp,
+    version: '1.0.0'
+  };
+
+  const jsonPath = join(outputDir, 'evaluation-results.json');
+  writeFileSync(jsonPath, JSON.stringify(jsonOutput, null, 2));
+  console.log(`  ✓ Saved JSON: ${jsonPath}`);
+
+  // Generate Markdown report
+  const mdContent = generateMarkdownReport(evaluationResults);
+  const mdPath = join(outputDir, 'evaluation-report.md');
+  writeFileSync(mdPath, mdContent);
+  console.log(`  ✓ Saved report: ${mdPath}`);
+
+  return { jsonPath, mdPath };
+}
+
+/**
+ * Generate markdown report
+ */
+function generateMarkdownReport(results) {
+  let md = '# Evaluation Report\n\n';
+
+  md += `**Timestamp:** ${new Date().toISOString()}\n\n`;
+  md += `**Test:** ${results.test_name || 'Unknown'}\n\n`;
+  md += `**Agent:** ${results.agent || 'Unknown'}\n\n`;
+
+  md += '## Deterministic Results\n\n';
+  md += `**Status:** ${results.deterministic_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
+
+  if (results.deterministic_results?.failures?.length > 0) {
+    md += '### Failures\n\n';
+    for (const failure of results.deterministic_results.failures) {
+      md += `- ❌ ${failure}\n`;
+    }
+    md += '\n';
+  }
+
+  if (results.optional_results?.warnings?.length > 0) {
+    md += '### Warnings\n\n';
+    for (const warning of results.optional_results.warnings) {
+      md += `- ⚠️ ${warning}\n`;
+    }
+    md += '\n';
+  }
+
+  md += '## Flexible Criteria Assessment\n\n';
+  md += '_(Not yet implemented)_\n\n';
+
+  return md;
+}
+
+/**
+ * Main execution
+ */
+async function main() {
+  try {
+    const options = parseArgs();
+
+    console.log('='.repeat(60));
+    console.log('Agent Skills Test Evaluation');
+    console.log('='.repeat(60));
+    console.log(`\nOutput Directory: ${options.outputDir}`);
+    console.log(`Eval Agent: ${options.evalAgent}`);
+    console.log(`Skip Flexible: ${options.skipFlexible}`);
+
+    // Load test definition
+    console.log('\nLoading test definition...');
+    const testDef = loadTestDefinition(options.outputDir);
+    console.log(`Test: ${testDef.name}`);
+
+    // Extract test name and agent from output dir path
+    const pathParts = options.outputDir.split('/');
+    const agent = pathParts[pathParts.length - 1];
+    const testPath = pathParts.slice(pathParts.indexOf('test-results') + 1, -2).join('/');
+
+    // Run evaluations
+    const deterministic = await runDeterministicChecks(options.outputDir, testDef);
+    const optional = await runOptionalChecks(options.outputDir, testDef);
+    const prQuality = await checkPRQuality(options.outputDir, testDef);
+
+    let flexible = null;
+    if (!options.skipFlexible) {
+      flexible = await runFlexibleEvaluation(options.outputDir, testDef, options.evalAgent);
+    } else {
+      console.log('\n=== Skipping Flexible Evaluation ===\n');
+    }
+
+    // Combine results
+    const evaluationResults = {
+      test_name: testPath,
+      test_definition_name: testDef.name,
+      agent,
+      deterministic_results: deterministic,
+      optional_results: optional,
+      pr_results: prQuality,
+      flexible_assessment: flexible
+    };
+
+    // Generate outputs
+    const { jsonPath, mdPath } = generateOutputs(options.outputDir, evaluationResults);
+
+    // Final summary
+    console.log('\n' + '='.repeat(60));
+    console.log('Evaluation Complete');
+    console.log('='.repeat(60));
+    console.log(`\nStatus: ${deterministic.passed ? '✅ PASSED' : '❌ FAILED'}`);
+    console.log(`\nResults saved to:`);
+    console.log(`  - ${jsonPath}`);
+    console.log(`  - ${mdPath}`);
+
+    // Exit with appropriate code
+    process.exit(deterministic.passed ? 0 : 1);
+
+  } catch (error) {
+    console.error('\n❌ Error:', error.message);
+    console.error(error.stack);
+    process.exit(1);
+  }
+}
+
+main();
