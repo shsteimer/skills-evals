@@ -6,8 +6,8 @@
 |-------|--------|-------------|
 | **Phase 1: Foundation** | ✅ Complete | Test structure, schema, documentation |
 | **Phase 2: Test Runner** | ✅ Complete | Agent execution working for all 3 agents |
-| **Phase 3: Evaluator** | 🚧 In Progress | Basic deterministic checks working, LLM evaluation pending |
-| **Phase 4: Write Tests** | 🧪 Planned | Create real tests, validate framework |
+| **Phase 3: Evaluator** | ✅ Complete | Full evaluation with deterministic + non-deterministic (LLM) |
+| **Phase 4: Write Tests** | 📋 Next Up | Create real tests, validate framework |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
 
 ---
@@ -22,34 +22,33 @@ We have established the evaluation framework foundation with a simplified, empir
 
 All infrastructure complete. Agent execution working for Claude Code, Cursor CLI, and Windsurf CLI.
 
-**Phase 3: Evaluator - 🚧 IN PROGRESS**
+**Phase 3: Evaluator - ✅ COMPLETE**
 
-Basic evaluation script working with deterministic checks. Successfully tested on simple-file-creation test.
+Full evaluation framework working end-to-end with both deterministic and non-deterministic (LLM) evaluation!
 
 **What's Done:**
 - ✅ Phase 1 & 2: Complete
-- ✅ `./tools/evaluate` script with CLI interface
+- ✅ `./tools/evaluate` script with full CLI interface
 - ✅ Test definition loading
-- ✅ File existence checks (via git diff parsing)
-- ✅ File non-existence checks (via git diff parsing)
+- ✅ File existence/non-existence checks (via git diff parsing)
+- ✅ Forbidden/required pattern checks (regex in git diff)
+- ✅ Linting checks (run in test-runner, results saved)
+- ✅ Custom script execution for specialized validation
 - ✅ PR quality checks (using gh CLI)
-- ✅ Evaluation output generation (JSON + Markdown)
+- ✅ **Non-deterministic LLM evaluation** (invokes agent for quality assessment)
+- ✅ Multi-agent evaluation (evaluates all agents in one run)
+- ✅ Comprehensive reports (JSON + Markdown with all criteria)
 - ✅ Exit codes (0 for pass, 1 for fail)
 
 **What's Next:**
 
-**Phase 3 completion:**
-1. Implement linting checks (run in test-runner before cleanup)
-2. Implement forbidden pattern checks (grep in git diff)
-3. Implement flexible LLM evaluation (invoke agent with prompt)
-
-**Phase 4:** Write and run real tests, validate framework works
+**Phase 4:** Write real tests, validate framework end-to-end
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Test evaluate script: `./tools/evaluate <output-dir> --skip-non-deterministic`
-2. Implement missing deterministic checks (linting, patterns)
-3. Build flexible LLM evaluation feature
+1. Run full framework: `./tools/run-test --test <name> && ./tools/evaluate <output-dir>`
+2. Write real tests for actual skills (Phase 4)
+3. Validate framework catches regressions and improvements
 
 ---
 
@@ -307,7 +306,7 @@ Tasks:
 - Ready for evaluation script development (Phase 3)
 
 ### Phase 3: Evaluator 🤖
-**Status:** In Progress
+**Status:** COMPLETE ✅
 
 **Goal:** Automatically evaluate test results against criteria.
 
@@ -318,16 +317,16 @@ Tasks:
 - [x] Test definition loading from test.yaml
 - [x] File existence checks (parse git diff)
 - [x] File non-existence checks (parse git diff)
-- [x] PR quality checks structure (gh CLI integration)
-- [x] Output generation (JSON + Markdown)
+- [x] Forbidden pattern checks (regex search in git diff with glob filtering)
+- [x] Required pattern checks (regex search in git diff with glob filtering)
+- [x] Linting checks (run in test-runner before cleanup, results saved)
+- [x] Custom script execution (arbitrary bash scripts with timeout)
+- [x] PR quality checks (gh CLI integration)
+- [x] Non-deterministic LLM evaluation (invoke agent with detailed prompt)
+- [x] Multi-agent evaluation (evaluate all agents in one run)
+- [x] Output generation (JSON + Markdown with full assessment)
 - [x] Proper exit codes
-
-**Still TODO:**
-- [ ] Linting checks (needs to run in test-runner before cleanup)
-- [ ] Forbidden pattern checks (grep through git diff)
-- [ ] Required pattern checks
-- [ ] Custom script execution
-- [ ] Flexible LLM evaluation (invoke agent with detailed prompt)
+- [x] Agent response parsing (handles claude-code, cursor-cli, codex-cli formats)
 
 **What it does:
 
