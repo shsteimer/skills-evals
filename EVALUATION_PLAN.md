@@ -506,6 +506,13 @@ The framework is successful if:
   - Potential: Significant time savings when testing with multiple agents
   - Implementation: Would need to handle concurrent worktrees and output directories
 
+### Evaluation
+- **Random evaluator selection**: Option to use a random/different agent for each evaluation
+  - `--eval-agent random` - Randomly selects evaluator for each agent being tested
+  - `--eval-agent round-robin` - Cycles through available evaluators
+  - Benefits: Diverse evaluation perspectives, reduces bias from single evaluator
+  - Use case: Get multiple viewpoints on agent performance
+
 ### Analysis & Optimization
 - A/B testing between skill versions
 - Automatic skill optimization suggestions
