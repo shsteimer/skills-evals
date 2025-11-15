@@ -16,7 +16,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname, basename, relative } from 'path';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync, spawnSync } from 'child_process';
 import { parse as parseYaml } from 'yaml';
@@ -38,7 +38,7 @@ function parseArgs() {
 
   const options = {
     outputDir: null,
-    evalAgent: 'claude-code',
+    evalAgent: null,  // Will be auto-selected if not specified
     skipNonDeterministic: false
   };
 
@@ -93,7 +93,8 @@ Arguments:
   <output-dir>          Path to test results directory
 
 Options:
-  --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
+  --eval-agent <agent>  Agent to use for non-deterministic evaluation
+                        (default: auto-select a different agent than the one being tested)
   --skip-non-deterministic  Only run deterministic checks (faster)
   --help                Show this help message
 
@@ -154,6 +155,43 @@ function detectPathType(outputDir) {
     return 'timestamp';
   }
   return 'agent';
+}
+
+/**
+ * Auto-select an eval agent different from the agent(s) being tested
+ */
+function autoSelectEvalAgent(outputDir) {
+  const availableAgents = ['claude-code', 'cursor-cli', 'codex-cli'];
+  const pathType = detectPathType(outputDir);
+
+  let testedAgents = [];
+
+  if (pathType === 'timestamp') {
+    // Get all agents that were tested
+    try {
+      const agentDirs = getAgentDirectories(outputDir);
+      testedAgents = agentDirs.map(dir => basename(dir));
+    } catch (e) {
+      // If we can't read directories, fall back to claude-code
+      return 'claude-code';
+    }
+  } else {
+    // Single agent directory
+    const pathParts = outputDir.split('/');
+    const agent = pathParts[pathParts.length - 1];
+    testedAgents = [agent];
+  }
+
+  // Find an agent that wasn't tested
+  const untested = availableAgents.filter(a => !testedAgents.includes(a));
+
+  if (untested.length > 0) {
+    // Use the first untested agent
+    return untested[0];
+  }
+
+  // All agents were tested, use claude-code as default
+  return 'claude-code';
 }
 
 /**
@@ -739,12 +777,38 @@ Do not include any other text before or after the JSON. The response must be val
         // For other agents, might need to extract from different places
         const output = evalResult.stdout.trim();
 
-        // Try to find JSON in the output (might have other text around it)
-        const jsonMatch = output.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          evaluationData = JSON.parse(jsonMatch[0]);
+        // First, try to parse as JSON (might be wrapped format from claude-code)
+        let parsedOutput;
+        try {
+          parsedOutput = JSON.parse(output);
+        } catch (e) {
+          // If that fails, try to extract JSON from text
+          const jsonMatch = output.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            parsedOutput = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error('Could not find JSON in output');
+          }
+        }
+
+        // Check if this is claude-code wrapped format (has 'result' field)
+        if (parsedOutput.result && typeof parsedOutput.result === 'string') {
+          // Extract JSON from markdown code block in result
+          const codeBlockMatch = parsedOutput.result.match(/```json\s*([\s\S]*?)\s*```/);
+          if (codeBlockMatch) {
+            evaluationData = JSON.parse(codeBlockMatch[1]);
+          } else {
+            // Try to find JSON directly in result
+            const jsonMatch = parsedOutput.result.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              evaluationData = JSON.parse(jsonMatch[0]);
+            } else {
+              evaluationData = parsedOutput; // Use the parsed output as-is
+            }
+          }
         } else {
-          evaluationData = JSON.parse(output);
+          // Direct format (cursor-cli, codex-cli, etc.)
+          evaluationData = parsedOutput;
         }
 
         console.log('  ✓ Received evaluation from agent\n');
@@ -1112,7 +1176,15 @@ async function main() {
     console.log('Agent Skills Test Evaluation');
     console.log('='.repeat(60));
     console.log(`\nOutput Directory: ${options.outputDir}`);
-    console.log(`Eval Agent: ${options.evalAgent}`);
+
+    // Auto-select eval agent if not specified
+    if (!options.evalAgent) {
+      options.evalAgent = autoSelectEvalAgent(options.outputDir);
+      console.log(`Eval Agent: ${options.evalAgent} (auto-selected)`);
+    } else {
+      console.log(`Eval Agent: ${options.evalAgent}`);
+    }
+
     console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
 
     // Load test definition
