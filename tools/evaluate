@@ -98,14 +98,20 @@ Options:
   --help                Show this help message
 
 Examples:
-  # Run full evaluation
-  ./tools/evaluate evaluations/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code
+  # Evaluate all tasks and agents from a run
+  ./tools/evaluate evaluations/2025-01-14T10:00:00Z
 
-  # Skip dynamic evaluation (deterministic only)
-  ./tools/evaluate <output-dir> --skip-dynamic
+  # Evaluate specific task across all agents
+  ./tools/evaluate evaluations/2025-01-14T10:00:00Z/create-simple-block
+
+  # Evaluate specific agent for specific task
+  ./tools/evaluate evaluations/2025-01-14T10:00:00Z/create-simple-block/claude-code
+
+  # Skip dynamic evaluation (static only, faster)
+  ./tools/evaluate evaluations/2025-01-14T10:00:00Z --skip-dynamic
 
   # Use specific agent for dynamic evaluation
-  ./tools/evaluate <output-dir> --eval-agent cursor-cli
+  ./tools/evaluate evaluations/2025-01-14T10:00:00Z --eval-agent cursor-cli
 `);
 }
 
@@ -113,36 +119,91 @@ Examples:
  * Load task definition from task.yaml
  */
 function loadTestDefinition(outputDir) {
-  // Output dir structure can be:
-  // - evaluations/<test-path>/<timestamp>/<agent>/  (specific agent)
-  // - evaluations/<test-path>/<timestamp>/          (all agents)
-  // We need to find the task.yaml in tests/<test-path>/task.yaml
+  // New structure: evaluations/{timestamp}/{task-name}/{agent}/
+  // We need to find the task.yaml by searching tasks/ directory for matching task name
 
-  const parts = outputDir.split('/');
-  const testResultsIndex = parts.indexOf('test-results');
+  const parts = outputDir.split('/').filter(p => p);
+  const evaluationsIndex = parts.indexOf('evaluations');
 
-  if (testResultsIndex === -1) {
+  if (evaluationsIndex === -1) {
     throw new Error('Output directory must be under evaluations/');
   }
 
-  // Extract test path (everything between test-results and timestamp)
-  // If path ends with timestamp (not agent), it's 1 fewer part
-  const isTimestampDir = outputDir.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\/?$/);
-  const offset = isTimestampDir ? 1 : 2;
-
-  const testPathParts = [];
-  for (let i = testResultsIndex + 1; i < parts.length - offset; i++) {
-    testPathParts.push(parts[i]);
+  // Extract task name from path
+  // Structure: evaluations/{timestamp}/{task-name}[/{agent}]
+  const taskNameIndex = evaluationsIndex + 2;
+  if (taskNameIndex >= parts.length) {
+    throw new Error('Invalid output directory structure');
   }
 
-  const testPath = join(PROJECT_ROOT, ...testPathParts, 'task.yaml');
+  const taskDirName = parts[taskNameIndex];
 
-  if (!existsSync(testPath)) {
-    throw new Error(`Test definition not found: ${testPath}`);
+  // Search for task.yaml file with matching sanitized name
+  const taskYamlPath = findTaskYamlByName(taskDirName);
+
+  if (!taskYamlPath) {
+    throw new Error(`Task definition not found for: ${taskDirName}`);
   }
 
-  const content = readFileSync(testPath, 'utf8');
+  const content = readFileSync(taskYamlPath, 'utf8');
   return parseYaml(content);
+}
+
+/**
+ * Find task.yaml file by searching for task with matching sanitized name
+ */
+function findTaskYamlByName(taskDirName) {
+  const tasksDir = join(PROJECT_ROOT, 'tasks');
+
+  // Recursively search for all task.yaml files
+  function findTaskYamls(dir) {
+    const results = [];
+    const entries = readdirSync(dir);
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry);
+      const stat = statSync(fullPath);
+
+      if (stat.isDirectory()) {
+        results.push(...findTaskYamls(fullPath));
+      } else if (entry === 'task.yaml') {
+        results.push(fullPath);
+      }
+    }
+
+    return results;
+  }
+
+  // Find all task.yaml files
+  const allTaskYamls = findTaskYamls(tasksDir);
+
+  // Check each one to see if the sanitized name matches
+  for (const yamlPath of allTaskYamls) {
+    try {
+      const content = readFileSync(yamlPath, 'utf8');
+      const task = parseYaml(content);
+      const sanitized = sanitizeTestName(task.name);
+
+      if (sanitized === taskDirName) {
+        return yamlPath;
+      }
+    } catch (e) {
+      // Skip invalid yaml files
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sanitize test name for use as directory name (same logic as run_tasks)
+ */
+function sanitizeTestName(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 50);
 }
 
 /**
