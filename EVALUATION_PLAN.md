@@ -501,6 +501,13 @@ The framework is successful if:
 
 ## Future Enhancements
 
+### Performance
+- **Parallel execution**: Run multiple agents in parallel during both test execution and evaluation
+  - Currently: Sequential execution (one agent at a time)
+  - Potential: Significant time savings when testing with multiple agents
+  - Implementation: Would need to handle concurrent worktrees and output directories
+
+### Analysis & Optimization
 - A/B testing between skill versions
 - Automatic skill optimization suggestions
 - Integration with human feedback loop
