@@ -358,6 +358,30 @@ async function cleanupTestArtifacts(worktreePath) {
   }
 }
 
+// Install dependencies in the worktree
+async function installDependencies(worktreePath) {
+  console.log(`  Installing dependencies...`);
+
+  try {
+    // Check if package.json exists
+    const packageJsonPath = join(worktreePath, 'package.json');
+    if (!existsSync(packageJsonPath)) {
+      console.log(`  No package.json found, skipping npm install`);
+      return;
+    }
+
+    // Run npm install
+    await execAsync('npm install --silent', {
+      cwd: worktreePath,
+      shell: '/bin/bash'
+    });
+    console.log(`  ✓ Dependencies installed`);
+  } catch (error) {
+    console.warn(`  Warning: npm install failed: ${error.message}`);
+    // Don't fail the entire test run if npm install fails
+  }
+}
+
 // Setup agent execution (for --setup-only mode)
 async function setupAgentExecution(test, agent, worktreePath, timestamp) {
   const outputDir = join(RESULTS_DIR, test._relativePath, timestamp, agent);
@@ -726,6 +750,9 @@ async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null
 
     // Remove test artifacts from the branch
     await cleanupTestArtifacts(worktreePath);
+
+    // Install dependencies
+    await installDependencies(worktreePath);
 
     if (setupOnly) {
       // Setup-only mode: just show the commands
