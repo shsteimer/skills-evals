@@ -383,7 +383,7 @@ async function setupAgentExecution(test, agent, worktreePath, timestamp) {
       break;
     case 'codex-cli':
       agentBinary = 'codex';
-      agentCommand = `codex --search --dangerously-bypass-approvals-and-sandbox "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `codex exec --dangerously-bypass-approvals-and-sandbox --json -c 'features.web_search=true' "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     default:
       throw new Error(`Unknown agent: ${agent}`);
@@ -444,7 +444,7 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
       break;
     case 'codex-cli':
       agentBinary = 'codex';
-      agentCommand = `codex --search --dangerously-bypass-approvals-and-sandbox "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `codex exec --dangerously-bypass-approvals-and-sandbox --json -c 'features.web_search=true' "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     default:
       throw new Error(`Unknown agent: ${agent}`);
@@ -555,19 +555,28 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
 
     // Capture final code state (git diff from initial state)
     try {
-      const { stdout: diffOutput } = await execAsync('git diff HEAD', {
-        cwd: worktreePath,
-        shell: '/bin/bash'
-      });
-      writeFileSync(join(outputDir, 'code-diff.patch'), diffOutput);
-
+      // First capture status before adding files
       const { stdout: statusOutput } = await execAsync('git status --porcelain', {
         cwd: worktreePath,
         shell: '/bin/bash'
       });
       writeFileSync(join(outputDir, 'git-status.txt'), statusOutput);
+
+      // Add all changes (tracked and untracked) to staging
+      await execAsync('git add -A', {
+        cwd: worktreePath,
+        shell: '/bin/bash'
+      });
+
+      // Create diff of all staged changes (includes new files)
+      const { stdout: diffOutput } = await execAsync('git diff --cached HEAD', {
+        cwd: worktreePath,
+        shell: '/bin/bash'
+      });
+      writeFileSync(join(outputDir, 'code-diff.patch'), diffOutput);
     } catch (e) {
       console.log('  Warning: Could not capture git diff');
+      console.log(`  ${e.message}`);
     }
 
     // Extract skills used and PR link from output
