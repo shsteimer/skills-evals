@@ -8,5 +8,8 @@ helix-importer-ui
 *.bak
 .idea
 
-# Test runner artifacts
-test-results/*
+# Task runner artifacts
+evaluations/*
+
+# skill caches
+.cache/

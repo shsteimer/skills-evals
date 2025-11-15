@@ -1,55 +1,55 @@
-# Creating Tests Guide
+# Creating Tasks Guide
 
 ## Overview
 
-This guide explains how to create new test cases for the Agent Skills Evaluation Framework.
+This guide explains how to create new tasks for the Agent Skills Evaluation Framework.
 
-## Test Types
+## Task Types
 
-### Unit Tests
-- **Location**: `tests/unit/`
-- **Purpose**: Test individual skills or focused capabilities
+### Unit Tasks
+- **Location**: `tasks/unit/`
+- **Purpose**: Evaluate individual skills or focused capabilities
 - **Scope**: Single skill or small set of related skills
 - **Duration**: Should complete in < 5 minutes
 - **Example**: "Create a simple block", "Model content for a carousel"
 
-### Integration Tests
-- **Location**: `tests/integration/`
-- **Purpose**: Test complete workflows involving multiple skills
+### Integration Tasks
+- **Location**: `tasks/integration/`
+- **Purpose**: Evaluate complete workflows involving multiple skills
 - **Scope**: Full development workflows (design → implement → test)
 - **Duration**: May take 10-15 minutes
 - **Example**: "Build new feature end-to-end", "Fix bug workflow"
 
 ## Recommended Workflow
 
-**The best way to write tests is empirically:**
+**The best way to write tasks is empirically:**
 
-1. Create initial state branch (if needed) and basic test.yaml with just the task
+1. Create initial state branch (if needed) and basic task.yaml with just the task
 2. Run the test 5+ times, documenting what happens
 3. Identify patterns: What fails? What varies? What's consistently good/bad?
 4. Use those real observations to write your criteria
 
 **Don't try to predict everything upfront** - let the agent show you what needs to be checked!
 
-## Creating a New Test
+## Creating a New Task
 
-### Step 1: Choose Test Location
+### Step 1: Choose Task Location
 
 ```bash
-# Unit test example
-mkdir -p tests/unit/{skill-name}/{test-name}
+# Unit task example
+mkdir -p tasks/unit/{skill-name}/{task-name}
 
-# Integration test example
-mkdir -p tests/integration/{workflow-name}
+# Integration task example
+mkdir -p tasks/integration/{workflow-name}
 ```
 
-### Step 2: Create Minimal test.yaml
+### Step 2: Create Minimal task.yaml
 
 Start with just the essentials - you'll add criteria after running it.
 
-**Initial test.yaml template:**
+**Initial task.yaml template:**
 ```yaml
-name: "Your test name"
+name: "Your task name"
 description: "Brief description"
 type: unit  # or integration
 skills:
@@ -62,18 +62,18 @@ task: |
   Your realistic task prompt here
 ```
 
-That's it! No checks, no criteria yet. See `tests/TEST_SCHEMA.md` for complete schema.
+That's it! No checks, no criteria yet. See `tasks/TASK_SCHEMA.md` for complete schema.
 
 **About tags:**
-Tags help organize and filter tests. Common tags include:
-- `blocks` - Block creation/modification tests
+Tags help organize and filter tasks. Common tags include:
+- `blocks` - Block creation/modification tasks
 - `basic` / `advanced` - Complexity level
-- `workflow` - Full development workflow tests
-- `accessibility` - Accessibility-focused tests
-- `performance` - Performance-focused tests
-- `migration` - Migration-related tests
+- `workflow` - Full development workflow tasks
+- `accessibility` - Accessibility-focused tasks
+- `performance` - Performance-focused tasks
+- `migration` - Migration-related tasks
 
-Choose tags that make your test easy to find later!
+Choose tags that make your task easy to find later!
 
 ### Step 3: Set Up Initial State Branch (Optional)
 
@@ -81,32 +81,32 @@ If starting from `main` isn't appropriate:
 
 ```bash
 # Create a branch with minimal setup
-git checkout -b test/my-test-setup main
+git checkout -b task/my-task-setup main
 
 # Add only what's needed
 # Example: package.json, basic scripts, linting config
 
 git add package.json .eslintrc.js scripts/ styles/
-git commit -m "test: initial state for my-test"
-git push -u origin test/my-test-setup
+git commit -m "test: initial state for my-task"
+git push -u origin task/my-task-setup
 git checkout main
 ```
 
-Reference in test.yaml:
+Reference in task.yaml:
 ```yaml
-initial_state: test/my-test-setup
+initial_state: task/my-task-setup
 ```
 
-### Step 4: Run Test 5+ Times
+### Step 4: Run Task 5+ Times
 
-**This is the key step!** Run your minimal test multiple times and observe:
+**This is the key step!** Run your minimal task multiple times and observe:
 
 ```bash
 # Run 1
-./tools/run-test tests/unit/my-skill/my-test > results/run-1.txt
+./tools/run-task tasks/unit/my-skill/my-task > results/run-1.txt
 
 # Run 2
-./tools/run-test tests/unit/my-skill/my-test > results/run-2.txt
+./tools/run-task tasks/unit/my-skill/my-task > results/run-2.txt
 
 # ... continue for runs 3, 4, 5+
 ```
@@ -121,7 +121,7 @@ initial_state: test/my-test-setup
 
 **Create a notes file:**
 ```markdown
-# Test Run Observations
+# Task Run Observations
 
 ## Run 1
 - Created blocks/quote/quote.js ✅
@@ -141,15 +141,15 @@ initial_state: test/my-test-setup
 ...
 
 ## Patterns Identified
-### Hard failures (should be deterministic checks):
+### Hard failures (should be static evaluation criteria):
 - Sometimes uses `var` instead of `const/let`
 - Sometimes skips linting entirely
 
-### Inconsistent but not critical (optional checks or non-deterministic):
+### Inconsistent but not critical (optional checks or dynamic evaluation):
 - Sometimes creates test files (not needed)
 - Skill announcement varies
 
-### Quality issues (non-deterministic criteria):
+### Quality issues (dynamic evaluation criteria):
 - CSS scoping varies in quality
 - Code structure varies
 ```
@@ -158,9 +158,9 @@ initial_state: test/my-test-setup
 
 Now use your real-world data to inform the test:
 
-**Deterministic checks (required)** - Things that MUST be true:
+**Static evaluation criteria (required)** - Things that MUST be true:
 ```yaml
-deterministic_checks:
+static_criteria:
   lint_passes: true  # Failed in run 3
   files_exist:
     - blocks/quote/quote.js  # Present in all runs
@@ -171,16 +171,16 @@ deterministic_checks:
       message: "Should use const/let instead of var"
 ```
 
-**Optional deterministic checks** - Nice to have, but seen valid exceptions:
+**Optional static evaluation criteria** - Nice to have, but seen valid exceptions:
 ```yaml
-optional_deterministic_checks:
+optional_static_criteria:
   files_not_exist:
     - blocks/quote/quote.test.js  # Sometimes created, not needed
 ```
 
-**Flexible criteria** - Quality that varies but should be evaluated:
+**Dynamic evaluation criteria** - Quality that varies but should be evaluated:
 ```yaml
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: |
       - CSS selectors properly scoped (saw issues in run 4)
@@ -194,18 +194,18 @@ non_deterministic_criteria:
     priority: high
 ```
 
-### Step 6: Write Test README
+### Step 6: Write Task README
 
 Create `README.md` explaining the test:
 
 ```markdown
-# [Test Name]
+# [Task Name]
 
 ## Purpose
-[What does this test evaluate?]
+[What does this task evaluate?]
 
 ## What It Tests
-### Skills Under Test
+### Skills Under Evaluation
 - skill-name - [what aspect]
 
 ### Key Behaviors
@@ -215,7 +215,7 @@ Create `README.md` explaining the test:
 ## Expected Outcome
 [What should happen when test passes?]
 
-## Deterministic Pass Criteria
+## Static Evaluation Pass Criteria
 - ✅ [Required check 1]
 - ✅ [Required check 2]
 
@@ -223,7 +223,7 @@ Create `README.md` explaining the test:
 - ⚠️ [Nice-to-have 1]
 - ⚠️ [Nice-to-have 2]
 
-## Flexible Quality Criteria
+## Dynamic Evaluation Criteria
 **High priority:**
 - [High priority criterion]
 
@@ -237,10 +237,10 @@ Create `README.md` explaining the test:
 [What typically goes wrong]
 ```
 
-### Step 7: Validate Test Definition
+### Step 7: Validate Task Definition
 
 ```bash
-./tools/validate-test tests/unit/my-skill/my-test
+./tools/validate-task tasks/unit/my-skill/my-task
 ```
 
 Validates:
@@ -251,7 +251,7 @@ Validates:
 
 ## Why This Workflow Works
 
-### Benefits of Empirical Test Creation
+### Benefits of Empirical Task Creation
 
 1. **Avoid over-specifying** - Only check what actually matters
 2. **Catch real issues** - Find problems you wouldn't predict
@@ -263,7 +263,7 @@ Validates:
 
 **Before running (guessing):**
 ```yaml
-deterministic_checks:
+static_criteria:
   files_exist:
     - blocks/quote/quote.js
     - blocks/quote/quote.css
@@ -276,7 +276,7 @@ deterministic_checks:
 
 **After 5 runs (reality):**
 ```yaml
-deterministic_checks:
+static_criteria:
   files_exist:
     - blocks/quote/quote.js
     - blocks/quote/quote.css
@@ -286,12 +286,12 @@ deterministic_checks:
     - implementation
     # Removed testing - not always applicable for simple blocks
 
-optional_deterministic_checks:
+optional_static_criteria:
   files_exist:
     - blocks/quote/README.md  # Nice to have, moved here
 ```
 
-## Test Design Best Practices
+## Task Design Best Practices
 
 ### 1. Realistic Task Descriptions
 
@@ -322,18 +322,18 @@ The agent should figure out the details using the skills - that's what we're tes
 
 ### 2. Three-Tier Checks
 
-**Deterministic (required)** - Must pass or test fails:
+**Static evaluation (required)** - Must pass or task fails:
 ```yaml
-deterministic_checks:
+static_criteria:
   lint_passes: true
   files_exist:
     - blocks/hero/hero.js
     - blocks/hero/hero.css
 ```
 
-**Optional deterministic** - Checked automatically, reported as warnings:
+**Optional static evaluation** - Checked automatically, reported as warnings:
 ```yaml
-optional_deterministic_checks:
+optional_static_criteria:
   files_exist:
     - blocks/hero/README.md
   required_patterns:
@@ -344,7 +344,7 @@ optional_deterministic_checks:
 
 **Flexible** - LLM evaluates with priorities:
 ```yaml
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: Clean, maintainable code following guidelines
     priority: high
@@ -357,7 +357,7 @@ non_deterministic_criteria:
 
 ❌ **Bad:**
 ```yaml
-non_deterministic_criteria:
+dynamic_criteria:
   - name: quality
     description: Code is good quality
     priority: high
@@ -365,7 +365,7 @@ non_deterministic_criteria:
 
 ✅ **Good:**
 ```yaml
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: |
       - JavaScript uses proper decoration patterns
@@ -380,7 +380,7 @@ non_deterministic_criteria:
 
 ```yaml
 # For a test focused on following process:
-non_deterministic_criteria:
+dynamic_criteria:
   - name: process_adherence
     priority: high  # Most important for this test
   - name: code_quality
@@ -391,7 +391,7 @@ non_deterministic_criteria:
     priority: low
 
 # For a test focused on code quality:
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     priority: high  # Most important for this test
   - name: completeness
@@ -430,7 +430,7 @@ non_deterministic_criteria:
 **Solution**: List specific things to check
 
 ### 4. Wrong Test Type
-**Problem**: Integration test in unit/ or vice versa
+**Problem**: Integration task in unit/ or vice versa
 **Solution**:
 - Unit = focused, single skill, quick
 - Integration = complete workflow, multiple skills
@@ -441,36 +441,36 @@ non_deterministic_criteria:
 
 ## Examples
 
-See these tests for reference:
+See these tasks for reference:
 
-- `tests/unit/building-blocks/create-simple-block/` - Basic unit test
+- `tasks/unit/building-blocks/create-simple-block/` - Basic unit task
 
 ## Checklist
 
-Before considering a test complete:
+Before considering a task complete:
 
-- [ ] Created minimal test.yaml (name, description, type, skills, task)
+- [ ] Created minimal task.yaml (name, description, type, skills, task)
 - [ ] Created initial state branch if needed (minimal setup only)
-- [ ] **Ran test at least 5 times**
+- [ ] **Ran task at least 5 times**
 - [ ] **Documented observations from all runs**
 - [ ] **Identified patterns in failures/successes**
-- [ ] Added deterministic_checks based on hard failures
-- [ ] Added optional_deterministic_checks for nice-to-haves
-- [ ] Added non_deterministic_criteria for quality variations
+- [ ] Added static_criteria based on hard failures
+- [ ] Added optional_static_criteria for nice-to-haves
+- [ ] Added dynamic_criteria for quality variations
 - [ ] Set priorities based on impact observed in runs
-- [ ] Test README.md explains purpose and expectations
-- [ ] Test validated: `./tools/validate-test path/to/test`
+- [ ] Task README.md explains purpose and expectations
+- [ ] Task validated: `./tools/validate-task path/to/task`
 
 ## Quick Start Example
 
 ```bash
-# 1. Create test directory
-mkdir -p tests/unit/building-blocks/simple-test
+# 1. Create task directory
+mkdir -p tasks/unit/building-blocks/simple-task
 
-# 2. Create minimal test.yaml
-cat > tests/unit/building-blocks/simple-test/test.yaml <<EOF
+# 2. Create minimal task.yaml
+cat > tests/unit/building-blocks/simple-test/task.yaml <<EOF
 name: "Create quote block"
-description: "Test basic block creation"
+description: "Evaluate basic block creation"
 type: unit
 skills:
   - building-blocks
@@ -484,21 +484,21 @@ EOF
 
 # 3. Run it 5+ times, document everything
 for i in {1..5}; do
-  ./tools/run-test tests/unit/building-blocks/simple-test > results/run-$i.txt
+  ./tools/run-task tasks/unit/building-blocks/simple-task > results/run-$i.txt
 done
 
 # 4. Review results, identify patterns
 # 5. Add criteria based on what you observed
 # 6. Document in README.md
 # 7. Validate
-./tools/validate-test tests/unit/building-blocks/simple-test
+./tools/validate-task tasks/unit/building-blocks/simple-task
 ```
 
 ## Next Steps
 
-After creating a test:
+After creating a task:
 
-1. Commit the test (even if criteria aren't perfect yet)
-2. Run it periodically as skills evolve
+1. Commit the task (even if criteria aren't perfect yet)
+2. Run tasks periodically as skills evolve
 3. Refine criteria based on ongoing observations
-4. Share patterns with other test creators
+4. Share patterns with other task creators

@@ -10,8 +10,8 @@
  *   <output-dir>          Path to test results directory
  *
  * Options:
- *   --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
- *   --skip-non-deterministic       Only run deterministic checks (faster)
+ *   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
+ *   --skip-dynamic       Only run static evaluation criteria (faster)
  *   --help                Show this help message
  */
 
@@ -52,7 +52,7 @@ function parseArgs() {
         options.evalAgent = next || 'claude-code';
         i++;
         break;
-      case '--skip-non-deterministic':
+      case '--skip-dynamic':
       case '--skip-flexible': // Backward compatibility
         options.skipNonDeterministic = true;
         break;
@@ -93,36 +93,36 @@ Arguments:
   <output-dir>          Path to test results directory
 
 Options:
-  --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
-  --skip-non-deterministic  Only run deterministic checks (faster)
+  --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
+  --skip-dynamic  Only run static evaluation criteria (faster)
   --help                Show this help message
 
 Examples:
   # Run full evaluation
-  ./tools/evaluate test-results/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code
+  ./tools/evaluate evaluations/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code
 
-  # Skip non-deterministic evaluation (deterministic only)
-  ./tools/evaluate <output-dir> --skip-non-deterministic
+  # Skip dynamic evaluation (deterministic only)
+  ./tools/evaluate <output-dir> --skip-dynamic
 
-  # Use specific agent for non-deterministic evaluation
+  # Use specific agent for dynamic evaluation
   ./tools/evaluate <output-dir> --eval-agent cursor-cli
 `);
 }
 
 /**
- * Load test definition from test.yaml
+ * Load task definition from task.yaml
  */
 function loadTestDefinition(outputDir) {
   // Output dir structure can be:
-  // - test-results/<test-path>/<timestamp>/<agent>/  (specific agent)
-  // - test-results/<test-path>/<timestamp>/          (all agents)
-  // We need to find the test.yaml in tests/<test-path>/test.yaml
+  // - evaluations/<test-path>/<timestamp>/<agent>/  (specific agent)
+  // - evaluations/<test-path>/<timestamp>/          (all agents)
+  // We need to find the task.yaml in tests/<test-path>/task.yaml
 
   const parts = outputDir.split('/');
   const testResultsIndex = parts.indexOf('test-results');
 
   if (testResultsIndex === -1) {
-    throw new Error('Output directory must be under test-results/');
+    throw new Error('Output directory must be under evaluations/');
   }
 
   // Extract test path (everything between test-results and timestamp)
@@ -135,7 +135,7 @@ function loadTestDefinition(outputDir) {
     testPathParts.push(parts[i]);
   }
 
-  const testPath = join(PROJECT_ROOT, ...testPathParts, 'test.yaml');
+  const testPath = join(PROJECT_ROOT, ...testPathParts, 'task.yaml');
 
   if (!existsSync(testPath)) {
     throw new Error(`Test definition not found: ${testPath}`);
@@ -210,7 +210,7 @@ function getAgentDirectories(timestampDir) {
 }
 
 /**
- * Run deterministic checks (required)
+ * Run static evaluation criteria (required)
  */
 async function runDeterministicChecks(outputDir, testDef) {
   console.log('\n=== Running Deterministic Checks ===\n');
@@ -221,7 +221,7 @@ async function runDeterministicChecks(outputDir, testDef) {
     checks: {}
   };
 
-  const checks = testDef.deterministic_checks || {};
+  const checks = testDef.static_criteria || {};
 
   // Check if required files exist (check in git diff)
   if (checks.files_exist) {
@@ -484,7 +484,7 @@ async function runDeterministicChecks(outputDir, testDef) {
 }
 
 /**
- * Run optional deterministic checks
+ * Run optional static evaluation criteria
  */
 async function runOptionalChecks(outputDir, testDef) {
   console.log('\n=== Running Optional Checks ===\n');
@@ -663,7 +663,7 @@ async function checkPRQuality(outputDir, testDef) {
 }
 
 /**
- * Run non-deterministic criteria evaluation with LLM
+ * Run dynamic criteria evaluation with LLM
  */
 async function runNonDeterministicEvaluation(outputDir, testDef, evalAgent) {
   console.log('\n=== Running Non-Deterministic Criteria Evaluation ===\n');
@@ -678,10 +678,10 @@ async function runNonDeterministicEvaluation(outputDir, testDef, evalAgent) {
     overall_notes: []
   };
 
-  const criteria = testDef.non_deterministic_criteria || testDef.flexible_criteria || []; // Support old name
+  const criteria = testDef.dynamic_criteria || testDef.flexible_criteria || []; // Support old name
 
   if (criteria.length === 0) {
-    console.log('  ℹ No non-deterministic criteria defined');
+    console.log('  ℹ No dynamic criteria defined');
     return results;
   }
 
@@ -867,7 +867,7 @@ Do not include any other text before or after the JSON. The response must be val
     }
 
   } catch (error) {
-    console.log(`  ✗ Error in non-deterministic evaluation: ${error.message}`);
+    console.log(`  ✗ Error in dynamic evaluation: ${error.message}`);
     results.overall_notes.push(`Error during evaluation: ${error.message}`);
   }
 
@@ -880,7 +880,7 @@ Do not include any other text before or after the JSON. The response must be val
 function buildEvaluationPrompt(outputDir, testDef, criteria) {
   let prompt = `# Agent Skills Test Evaluation
 
-You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the non-deterministic criteria defined for this test.
+You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the dynamic criteria defined for this test.
 
 ## Test Information
 
@@ -999,17 +999,17 @@ function generateMarkdownReport(results) {
   let md = '# Evaluation Report\n\n';
 
   md += `**Timestamp:** ${new Date().toISOString()}\n\n`;
-  md += `**Test:** ${results.test_name || 'Unknown'}\n\n`;
+  md += `**Test:** ${results.task_name || 'Unknown'}\n\n`;
   md += `**Agent (tested):** ${results.agent || 'Unknown'}\n\n`;
   md += `**Evaluator:** ${results.evaluator || 'Unknown'}\n\n`;
 
   md += '## Deterministic Results\n\n';
-  md += `**Status:** ${results.deterministic_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
+  md += `**Status:** ${results.static_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
 
   // Show all checks that were run
-  if (results.deterministic_results?.checks) {
+  if (results.static_results?.checks) {
     md += '### Checks Run\n\n';
-    const checks = results.deterministic_results.checks;
+    const checks = results.static_results.checks;
     for (const [checkName, passed] of Object.entries(checks)) {
       const icon = passed ? '✅' : '❌';
       md += `- ${icon} ${checkName}\n`;
@@ -1017,9 +1017,9 @@ function generateMarkdownReport(results) {
     md += '\n';
   }
 
-  if (results.deterministic_results?.failures?.length > 0) {
+  if (results.static_results?.failures?.length > 0) {
     md += '### Failures\n\n';
-    for (const failure of results.deterministic_results.failures) {
+    for (const failure of results.static_results.failures) {
       md += `- ❌ ${failure}\n`;
     }
     md += '\n';
@@ -1071,8 +1071,8 @@ function generateMarkdownReport(results) {
 
   md += '## Non-Deterministic Criteria Assessment\n\n';
 
-  if (results.non_deterministic_assessment && results.non_deterministic_assessment.by_priority) {
-    const assessment = results.non_deterministic_assessment;
+  if (results.dynamic_assessment && results.dynamic_assessment.by_priority) {
+    const assessment = results.dynamic_assessment;
 
     for (const priority of ['high', 'medium', 'low']) {
       if (assessment.by_priority[priority] && Object.keys(assessment.by_priority[priority]).length > 0) {
@@ -1141,14 +1141,14 @@ async function evaluateSingleAgent(agentDir, testDef, options) {
 
   // Combine results
   const evaluationResults = {
-    test_name: testPath,
+    task_name: testPath,
     test_definition_name: testDef.name,
     agent,
     evaluator: options.evalAgent,
-    deterministic_results: deterministic,
+    static_results: deterministic,
     optional_results: optional,
     pr_results: prQuality,
-    non_deterministic_assessment: nonDeterministic
+    dynamic_assessment: nonDeterministic
   };
 
   // Generate outputs
@@ -1180,7 +1180,7 @@ async function main() {
     console.log(`Eval Agent: ${options.evalAgent}`);
     console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
 
-    // Load test definition
+    // Load task definition
     console.log('\nLoading test definition...');
     const testDef = loadTestDefinition(options.outputDir);
     console.log(`Test: ${testDef.name}`);

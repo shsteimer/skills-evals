@@ -1,0 +1,67 @@
+name: "Docs search - Basic feature lookup"
+description: "Evaluates if agent can use docs-search skill to find information about AEM features"
+type: unit
+skills:
+  - docs-search
+tags:
+  - docs
+  - search
+  - skill-usage
+
+task: |
+  I need to understand how blocks work in AEM Edge Delivery Services.
+  Please explain:
+  1. What blocks are
+  2. How to create a basic block
+  3. What files are needed
+
+static_criteria:
+  forbidden_patterns:
+    - pattern: "I don't have access"
+      in_files: ["**/*"]
+    - pattern: "I cannot search"
+      in_files: ["**/*"]
+
+  # Custom script to check if docs-search was mentioned in output
+  custom_scripts:
+    - name: "verify-docs-search-used"
+      script: |
+        # Check if agent mentioned using docs-search or searching documentation
+        if grep -qi "docs-search\|searching.*documentation\|aem.live.*documentation" stdout.txt stderr.txt agent-output.json 2>/dev/null; then
+          exit 0
+        else
+          echo "Agent did not appear to use docs-search skill"
+          exit 1
+        fi
+
+dynamic_criteria:
+  - name: skill_usage
+    description: |
+      - if Agent isn't claude, they ran discover_skills script first to find the docs-search skill
+      - Agent correctly invoked the docs-search skill
+      - Agent searched for relevant terms (blocks, Edge Delivery, etc.)
+      - Agent acknowledged using the skill in its response
+    priority: high
+
+  - name: information_quality
+    description: |
+      - Found relevant documentation about blocks
+      - Explanation covers what blocks are
+      - Explanation includes how to create blocks
+      - Information is accurate based on aem.live docs
+      - Information is specific to AEM Edge Delivery Services and not AEM Classic (6.5, cloud service, etc.)
+    priority: high
+
+  - name: response_structure
+    description: |
+      - Response is well-organized and easy to understand
+      - Key points are clearly identified
+      - Appropriate level of detail (not too brief, not overwhelming)
+    priority: medium
+
+  - name: completeness
+    description: |
+      - Addressed all three parts of the question
+      - Provided URLs or references to documentation
+      - Explained concepts in a helpful way
+    priority: medium

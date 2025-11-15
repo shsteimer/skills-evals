@@ -4,10 +4,10 @@
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| **Phase 1: Foundation** | ✅ Complete | Test structure, schema, documentation |
-| **Phase 2: Test Runner** | ✅ Complete | Agent execution working for all 3 agents |
-| **Phase 3: Evaluator** | ✅ Complete | Full evaluation with deterministic + non-deterministic (LLM) |
-| **Phase 4: Write Tests** | 📋 Next Up | Create real tests, validate framework |
+| **Phase 1: Foundation** | ✅ Complete | Task structure, schema, documentation |
+| **Phase 2: Task Runner** | ✅ Complete | Agent execution working for all 3 agents |
+| **Phase 3: Evaluator** | ✅ Complete | Full evaluation with static + dynamic (LLM) |
+| **Phase 4: Write Tasks** | 📋 Next Up | Create real tasks, validate framework |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
 
 ---
@@ -18,24 +18,24 @@
 
 We have established the evaluation framework foundation with a simplified, empirical approach.
 
-**Phase 2: Test Runner - ✅ COMPLETE**
+**Phase 2: Task Runner - ✅ COMPLETE**
 
 All infrastructure complete. Agent execution working for Claude Code, Cursor CLI, and Windsurf CLI.
 
 **Phase 3: Evaluator - ✅ COMPLETE**
 
-Full evaluation framework working end-to-end with both deterministic and non-deterministic (LLM) evaluation!
+Full evaluation framework working end-to-end with both static and dynamic (LLM) evaluation!
 
 **What's Done:**
 - ✅ Phase 1 & 2: Complete
 - ✅ `./tools/evaluate` script with full CLI interface
-- ✅ Test definition loading
+- ✅ Task definition loading
 - ✅ File existence/non-existence checks (via git diff parsing)
 - ✅ Forbidden/required pattern checks (regex in git diff)
-- ✅ Linting checks (run in test-runner, results saved)
+- ✅ Linting checks (run in task-runner, results saved)
 - ✅ Custom script execution for specialized validation
 - ✅ PR quality checks (using gh CLI)
-- ✅ **Non-deterministic LLM evaluation** (invokes agent for quality assessment)
+- ✅ **Dynamic LLM evaluation** (invokes agent for quality assessment)
 - ✅ Multi-agent evaluation (evaluates all agents in one run)
 - ✅ Comprehensive reports (JSON + Markdown with all criteria)
 - ✅ Exit codes (0 for pass, 1 for fail)
@@ -46,7 +46,7 @@ Full evaluation framework working end-to-end with both deterministic and non-det
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Run full framework: `./tools/run-test --test <name> && ./tools/evaluate <output-dir>`
+1. Run full framework: `./tools/run-task --task <name> && ./tools/evaluate <output-dir>`
 2. Write real tests for actual skills (Phase 4)
 3. Validate framework catches regressions and improvements
 
@@ -73,8 +73,8 @@ Create a framework to evaluate the impact of changes to agent skills and context
 
 ## Three-Tier Evaluation Strategy
 
-### Deterministic Checks (Must Pass)
-These must be correct every time - failure = test fails:
+### Static Evaluation Criteria (Must Pass)
+These must be correct every time - failure = task fails:
 - ✅ Linting passes (yes/no)
 - ✅ Required files exist (yes/no)
 - ✅ Code runs without errors (yes/no)
@@ -82,10 +82,10 @@ These must be correct every time - failure = test fails:
 - ✅ Required workflow steps completed (yes/no)
 - ✅ Custom scripts pass (bash/node scripts for specialized checks)
 
-**Scoring:** Deterministic failures = hard failures (test fails)
+**Scoring:** Static criteria failures = hard failures (task fails)
 
-### Optional Deterministic Checks (Nice to Have)
-Automatically verified but don't cause test failure:
+### Optional Static Evaluation Criteria (Nice to Have)
+Automatically verified but don't cause task failure:
 - ⚠️ Optional files (README, docs, etc.)
 - ⚠️ Best practice patterns
 - ⚠️ Performance checks
@@ -93,8 +93,8 @@ Automatically verified but don't cause test failure:
 
 **Scoring:** Reported as warnings/suggestions, no impact on pass/fail
 
-### Non-Deterministic Criteria (Can Vary)
-These are evaluated for quality by an LLM evaluator:
+### Dynamic Evaluation Criteria (Can Vary)
+These are evaluated for quality by an LLM using dynamic evaluation:
 - ~ Exact code implementation
 - ~ Order of tool usage
 - ~ Specific variable names
@@ -107,9 +107,9 @@ These are evaluated for quality by an LLM evaluator:
 - Observations and notes
 - Human evaluates if this is better/worse than previous runs
 
-## Test Artifacts Captured
+## Task Artifacts Captured
 
-For each test run, capture:
+For each task run, capture:
 1. **Final code** - all files created/modified
 2. **PR body** - what the agent would write for a pull request
 3. **Tool usage** - what tools used, when, with what parameters
@@ -117,28 +117,28 @@ For each test run, capture:
 5. **Steps skipped** - which workflow steps skipped and why
 6. **Metrics** - token usage, time, human interventions needed
 
-## Test Structure
+## Task Structure
 
 ```
 tests/
-├── unit/                           # Individual skill tests
+├── unit/                           # Individual skill evaluation tasks
 │   ├── building-blocks/
 │   │   ├── create-simple-block/
-│   │   │   ├── test.yaml          # Test definition
-│   │   │   └── README.md          # Test documentation
+│   │   │   ├── task.yaml          # Task definition
+│   │   │   └── README.md          # Task documentation
 │   │   └── modify-existing-block/
 │   ├── content-modeling/
 │   └── testing-blocks/
-└── integration/                    # Full workflow tests
+└── integration/                    # Full workflow evaluation tasks
     ├── new-feature-end-to-end/
-    │   ├── test.yaml
+    │   ├── task.yaml
     │   └── README.md
     └── fix-bug-workflow/
 ```
 
-**Initial State:** Tests specify a git branch as their starting point. If not specified, uses `main` branch.
+**Initial State:** Tasks specify a git branch as their starting point. If not specified, uses `main` branch.
 
-## Test Definition Schema (test.yaml)
+## Test Definition Schema (task.yaml)
 
 ```yaml
 name: "Create hero block from scratch"
@@ -151,7 +151,7 @@ task: |
 
 initial_state: test/basic-setup  # Git branch name (optional, defaults to main)
 
-deterministic_checks:
+static_criteria:
   lint_passes: true
   files_exist:
     - blocks/hero/hero.js
@@ -166,7 +166,7 @@ deterministic_checks:
     - pattern: "var "  # Should use const/let
       in_files: ["**/*.js"]
 
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable
     priority: high
@@ -185,14 +185,14 @@ non_deterministic_criteria:
 
 ```json
 {
-  "test_name": "create-hero-block",
+  "task_name": "create-hero-block-task",
   "timestamp": "2025-01-14T10:00:00Z",
   "agent": "claude-code",
 
-  "deterministic_results": {
+  "static_results": {
     "passed": true,
     "failures": [],
-    "optional_failures": [
+    "optional_warnings": [
       "blocks/quote/README.md does not exist",
       "No ARIA attributes found (consider for accessibility)"
     ],
@@ -204,7 +204,7 @@ non_deterministic_criteria:
     }
   },
 
-  "non_deterministic_assessment": {
+  "dynamic_assessment": {
     "by_priority": {
       "high": {
         "code_quality": {
@@ -242,7 +242,7 @@ non_deterministic_criteria:
     ]
   },
 
-  "artifacts_path": "./test-results/create-hero-block/2025-01-14T10:00:00Z/claude-code/"
+  "artifacts_path": "./evaluations/create-hero-block/2025-01-14T10:00:00Z/claude-code/"
 }
 ```
 
@@ -252,38 +252,38 @@ non_deterministic_criteria:
 **Status:** COMPLETE
 
 Tasks:
-- [x] Create test directory structure (`tests/unit/`, `tests/integration/`)
-- [x] Define test.yaml schema formally (tests/TEST_SCHEMA.md)
-- [x] Create first example unit test case (create-simple-block)
-- [x] Document test case creation guidelines (tests/CREATING_TESTS.md)
+- [x] Create test directory structure (`tasks/unit/`, `tasks/integration/`)
+- [x] Define task.yaml schema formally (tests/TEST_SCHEMA.md)
+- [x] Create first example unit task (create-simple-block)
+- [x] Document task creation guidelines (tests/CREATING_TESTS.md)
 - [x] Simplify approach (branches not directories, priorities not weights)
 - [x] Add empirical test creation workflow (run first, then add criteria)
 
 **Key Decisions Made:**
 - Use git branches for initial state (defaults to `main`)
-- Three-tier checks: deterministic (required), optional deterministic (warnings), flexible (LLM-evaluated)
+- Three-tier checks: static (required), optional static (warnings), dynamic (LLM-evaluated)
 - Priority buckets (high/medium/low) instead of weighted scoring
 - Empirical approach: run test 5+ times, document patterns, then write criteria
 - No "runs" parameter - tests run once, humans repeat manually if needed
 
-### Phase 2: Test Runner ✅
+### Phase 2: Task Runner ✅
 **Status:** COMPLETE
 
-**Goal:** Build tooling to execute tests and capture results.
+**Goal:** Build tooling to execute tasks and capture results.
 
-**Core Script:** `./tools/run-test`
+**Core Script:** `./tools/run-task`
 
 **Completed:**
 - [x] Add tags support to test schema
 - [x] Command-line argument parsing with validation
-- [x] Test discovery (find all test.yaml files)
-- [x] Filter tests by `--test`, `--tags`, or `--skills`
+- [x] Test discovery (find all task.yaml files)
+- [x] Filter tasks by `--test`, `--tags`, or `--skills`
 - [x] Support multiple agents via `--agents` flag
-- [x] Create isolated branch for each test/agent combo
-- [x] Create worktree in `.test-worktrees/` for test execution
-- [x] Remove test artifacts from branch (tests/, tools/, EVALUATION_PLAN.md)
-- [x] Create output directory structure in `test-results/`
-- [x] Cleanup worktrees and branches after test
+- [x] Create isolated branch for each task/agent combo
+- [x] Create worktree in `.test-worktrees/` for task execution
+- [x] Remove task artifacts from branch (tasks/, tools/, EVALUATION_PLAN.md)
+- [x] Create output directory structure in `evaluations/`
+- [x] Cleanup worktrees and branches after task
 - [x] Implement actual agent CLI execution
   - [x] Claude Code with `claude` command
   - [x] Cursor CLI with `cursor-cli` command
@@ -308,21 +308,21 @@ Tasks:
 ### Phase 3: Evaluator 🤖
 **Status:** COMPLETE ✅
 
-**Goal:** Automatically evaluate test results against criteria.
+**Goal:** Automatically evaluate task results against criteria.
 
 **Core Script:** `./tools/evaluate`
 
 **Completed:**
-- [x] Argument parsing (--eval-agent, --skip-non-deterministic)
-- [x] Test definition loading from test.yaml
+- [x] Argument parsing (--eval-agent, --skip-dynamic)
+- [x] Task definition loading from task.yaml
 - [x] File existence checks (parse git diff)
 - [x] File non-existence checks (parse git diff)
 - [x] Forbidden pattern checks (regex search in git diff with glob filtering)
 - [x] Required pattern checks (regex search in git diff with glob filtering)
-- [x] Linting checks (run in test-runner before cleanup, results saved)
+- [x] Linting checks (run in task-runner before cleanup, results saved)
 - [x] Custom script execution (arbitrary bash scripts with timeout)
 - [x] PR quality checks (gh CLI integration)
-- [x] Non-deterministic LLM evaluation (invoke agent with detailed prompt)
+- [x] Dynamic LLM evaluation (invoke agent with detailed prompt)
 - [x] Multi-agent evaluation (evaluate all agents in one run)
 - [x] Output generation (JSON + Markdown with full assessment)
 - [x] Proper exit codes
@@ -330,14 +330,14 @@ Tasks:
 
 **What it does:
 
-1. **Run deterministic checks (required)**
+1. **Run static evaluation criteria (required)**
    - Check if required files exist
    - Run linting (`npm run lint`)
    - Check for forbidden/required patterns
    - Run custom scripts if specified
    - **Result:** PASS or FAIL (failures block test)
 
-2. **Run optional deterministic checks**
+2. **Run optional static evaluation criteria**
    - Same types as required checks
    - Special handling for PR quality (see below)
    - **Result:** List of warnings (don't block test unless PR opened)
@@ -348,9 +348,9 @@ Tasks:
    - Checks: CI/CD status, preview link presence, preview link validity
    - **Logic:** A broken PR is worse than no PR
 
-4. **Run flexible criteria evaluation (LLM)**
+4. **Run dynamic criteria evaluation (LLM)**
    - Accept `--eval-agent` flag (default: claude-code)
-   - Load test criteria from test.yaml
+   - Load test criteria from task.yaml
    - Load captured artifacts (code, transcript, etc.)
    - Invoke evaluation agent with detailed prompt
    - For each criterion (organized by priority), agent identifies:
@@ -360,35 +360,35 @@ Tasks:
    - Agent provides overall notes (no numeric scores)
 
 5. **Generate evaluation outputs**
-   - `evaluation-results.json` - Structured data with deterministic + flexible results
+   - `evaluation-results.json` - Structured data with static + dynamic results
    - `evaluation-report.md` - Human-readable findings
-   - Save both to test results directory
+   - Save both to task results directory
 
 **Flags:**
-- `--eval-agent <agent>` - Agent to use for non-deterministic evaluation (default: claude-code)
-- `--skip-non-deterministic` - Only run deterministic checks (faster, for quick validation)
+- `--eval-agent <agent>` - Agent to use for dynamic evaluation (default: claude-code)
+- `--skip-dynamic` - Only run static evaluation criteria (faster, for quick validation)
 
 **Implementation Notes:**
-- Deterministic checks use simple scripts/regex/file operations
+- Static evaluation criteria use simple scripts/regex/file operations
 - PR checks use `gh` CLI to inspect PR status and content
-- Non-deterministic evaluation needs LLM agent with specific prompts
+- Dynamic evaluation needs LLM agent with specific prompts
 - Keep evaluation agent prompts in separate files for easy iteration
 - Script takes test output directory as input
 
-### Phase 4: Write and Run Initial Tests 🧪
+### Phase 4: Write and Run Initial Tasks 🧪
 **Status:** Not Started - NEXT AFTER PHASE 3
 
-**Goal:** Create real tests and validate the framework works end-to-end.
+**Goal:** Create real tasks and validate the framework works end-to-end.
 
 **What to do:**
-1. **Create 3-5 initial tests**
+1. **Create 3-5 initial tasks**
    - Pick real scenarios from actual skill usage
-   - Mix of unit and integration tests
+   - Mix of unit and integration tasks
    - Cover different skills (building-blocks, content-modeling, etc.)
    - Use empirical approach: run 5+ times, document, then add criteria
 
-2. **Run tests with framework**
-   - Use `./tools/run-test` to execute
+2. **Run tasks with framework**
+   - Use `./tools/run-task` to execute
    - Use `./tools/evaluate-*` to assess
    - Identify what works, what doesn't
 
@@ -398,12 +398,12 @@ Tasks:
    - Refine evaluation criteria based on what matters
 
 4. **Document learnings**
-   - What test patterns work well?
+   - What task patterns work well?
    - What criteria are useful vs. noise?
-   - How to write better tests?
+   - How to write better tasks?
 
 **Success criteria:**
-- Can run a test end-to-end without manual intervention
+- Can run a task end-to-end without manual intervention
 - Evaluation results are useful and actionable
 - Framework helps identify skill improvements/regressions
 
@@ -416,7 +416,7 @@ Tasks:
 - Comparison & baselines (if we need to track over time)
 - More automation (run all tests, CI/CD integration)
 - Better tooling (validation, dashboards, etc.)
-- More tests (expand coverage)
+- More tasks (expand coverage)
 - Framework improvements (based on pain points)
 
 **Implementation approach:**
@@ -426,51 +426,51 @@ Tasks:
 
 ## Usage Examples
 
-### Running a Single Test
+### Running a Single Task
 ```bash
-./tools/run-test --test create-simple-block
+./tools/run-task --task create-simple-block
 # or with full path
-./tools/run-test --test tests/unit/building-blocks/create-simple-block
+./tools/run-task --task tasks/unit/building-blocks/create-simple-block
 ```
 
-### Running Tests by Tags
+### Running Tasks by Tags
 ```bash
-./tools/run-test --tags blocks,basic
+./tools/run-task --tags blocks,basic
 ```
 
-### Running Tests by Skills
+### Running Tasks by Skills
 ```bash
-./tools/run-test --skills building-blocks
-./tools/run-test --skills content-driven-development,building-blocks
+./tools/run-task --skills building-blocks
+./tools/run-task --skills content-driven-development,building-blocks
 ```
 
 ### Running with Multiple Agents
 ```bash
-./tools/run-test --tags blocks --agents claude-code,cursor-cli
+./tools/run-task --tags blocks --agents claude-code,cursor-cli
 ```
 
-### Evaluating Test Results
+### Evaluating Task Results
 ```bash
-# After running tests, evaluate the results
-OUTPUT_DIR="test-results/tests/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code"
+# After running tasks, evaluate the results
+OUTPUT_DIR="evaluations/tasks/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code"
 
-# Run full evaluation (deterministic + flexible)
+# Run full evaluation (static + dynamic)
 ./tools/evaluate "$OUTPUT_DIR"
 
-# Use specific eval agent for flexible criteria
+# Use specific eval agent for dynamic criteria
 ./tools/evaluate "$OUTPUT_DIR" --eval-agent claude-code
 
-# Skip non-deterministic evaluation (faster, deterministic only)
-./tools/evaluate "$OUTPUT_DIR" --skip-non-deterministic
+# Skip dynamic evaluation (faster, static only)
+./tools/evaluate "$OUTPUT_DIR" --skip-dynamic
 ```
 
 ### Full Workflow Example
 ```bash
-# 1. Run a test with current skills
-./tools/run-test --test create-simple-block
+# 1. Run a task with current skills
+./tools/run-task --task create-simple-block
 
 # 2. Evaluate results
-OUTPUT_DIR=$(ls -td test-results/tests/unit/building-blocks/create-simple-block/*/claude-code | head -1)
+OUTPUT_DIR=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
 ./tools/evaluate "$OUTPUT_DIR"
 
 # 3. Review results
@@ -480,9 +480,9 @@ cat "$OUTPUT_DIR/evaluation-results.json"
 # 4. Make skill changes
 vim .claude/skills/building-blocks/SKILL.md
 
-# 5. Re-run test and compare
-./tools/run-test --test create-simple-block
-OUTPUT_DIR_NEW=$(ls -td test-results/tests/unit/building-blocks/create-simple-block/*/claude-code | head -1)
+# 5. Re-run task and compare
+./tools/run-task --task create-simple-block
+OUTPUT_DIR_NEW=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
 ./tools/evaluate "$OUTPUT_DIR_NEW"
 
 # 6. Compare results manually (or with diff tools)
@@ -492,11 +492,11 @@ diff "$OUTPUT_DIR/evaluation-results.json" "$OUTPUT_DIR_NEW/evaluation-results.j
 ## Success Criteria
 
 The framework is successful if:
-1. ✅ Can detect regressions when skills are changed
-2. ✅ Can identify improvements when skills are enhanced
+1. ✅ Detects regressions when skills are changed
+2. ✅ Identifies improvements when skills are enhanced
 3. ✅ Provides actionable feedback on what changed and why
-4. ✅ Handles non-determinism gracefully
-5. ✅ Minimal maintenance overhead for adding new tests
+4. ✅ Handles dynamic variation gracefully
+5. ✅ Minimal maintenance overhead for adding new tasks
 
 ## Future Enhancements
 

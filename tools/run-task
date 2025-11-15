@@ -4,12 +4,12 @@
  * Test Runner for Agent Skills Evaluation Framework
  *
  * Usage:
- *   ./tools/run-test --test <test-name>
- *   ./tools/run-test --tags <tag1,tag2>
- *   ./tools/run-test --skills <skill1,skill2>
+ *   ./tools/run-task --task <task-name>
+ *   ./tools/run-task --tags <tag1,tag2>
+ *   ./tools/run-task --skills <skill1,skill2>
  *
  * Options:
- *   --test <name>         Run specific test(s) by name (supports wildcards)
+ *   --task <name>         Run specific test(s) by name (supports wildcards)
  *   --tags <tags>         Run tests matching these tags (comma-separated)
  *   --skills <skills>     Run tests using these skills (comma-separated)
  *   --agents <agents>     Agent(s) to test with (default: all agents)
@@ -88,12 +88,12 @@ function printUsage() {
 Test Runner for Agent Skills Evaluation Framework
 
 Usage:
-  ./tools/run-test --test <test-name>
-  ./tools/run-test --tags <tag1,tag2>
-  ./tools/run-test --skills <skill1,skill2>
+  ./tools/run-task --task <task-name>
+  ./tools/run-task --tags <tag1,tag2>
+  ./tools/run-task --skills <skill1,skill2>
 
 Options:
-  --test <name>         Run specific test(s) by name (path to test directory)
+  --task <name>         Run specific test(s) by name (path to test directory)
   --tags <tags>         Run tests matching these tags (comma-separated)
   --skills <skills>     Run tests using these skills (comma-separated)
   --agents <agents>     Agent(s) to test with (default: all agents)
@@ -102,10 +102,10 @@ Options:
   --dry-run             Alias for --setup-only
 
 Examples:
-  ./tools/run-test --test tests/unit/building-blocks/create-simple-block
-  ./tools/run-test --tags blocks,basic
-  ./tools/run-test --skills building-blocks
-  ./tools/run-test --tags blocks --agents claude-code,cursor-cli
+  ./tools/run-task --task tasks/unit/building-blocks/create-simple-block
+  ./tools/run-task --tags blocks,basic
+  ./tools/run-task --skills building-blocks
+  ./tools/run-task --tags blocks --agents claude-code,cursor-cli
 
 At least one of --test, --tags, or --skills is required.
 `);
@@ -195,7 +195,7 @@ async function validateArgs(options) {
   console.log('');
 }
 
-// Find all test.yaml files recursively
+// Find all task.yaml files recursively
 function findAllTests(dir = TESTS_DIR) {
   const tests = [];
 
@@ -208,7 +208,7 @@ function findAllTests(dir = TESTS_DIR) {
 
       if (stat.isDirectory()) {
         walk(fullPath);
-      } else if (entry === 'test.yaml') {
+      } else if (entry === 'task.yaml') {
         tests.push(dirname(fullPath));
       }
     }
@@ -218,12 +218,12 @@ function findAllTests(dir = TESTS_DIR) {
   return tests;
 }
 
-// Load and parse a test.yaml file
+// Load and parse a task.yaml file
 function loadTest(testDir) {
-  const testYamlPath = join(testDir, 'test.yaml');
+  const testYamlPath = join(testDir, 'task.yaml');
 
   if (!existsSync(testYamlPath)) {
-    throw new Error(`test.yaml not found in ${testDir}`);
+    throw new Error(`task.yaml not found in ${testDir}`);
   }
 
   const content = readFileSync(testYamlPath, 'utf8');
@@ -297,7 +297,7 @@ async function createTestBranch(test, agent) {
   }
 }
 
-// Create worktree for test execution
+// Create worktree for task execution
 async function createWorktree(branchName) {
   // Worktrees must be outside the repository's working tree
   // Use temp directory or parent directory
@@ -317,7 +317,7 @@ async function createWorktree(branchName) {
   }
 }
 
-// Remove test artifacts from the branch (tests/, tools/, EVALUATION_PLAN.md, etc.)
+// Remove test artifacts from the branch (tasks/, tools/, EVALUATION_PLAN.md, etc.)
 async function cleanupTestArtifacts(worktreePath) {
   console.log(`  Cleaning up test artifacts from worktree`);
 
@@ -391,7 +391,7 @@ async function setupAgentExecution(test, agent, worktreePath, timestamp) {
 
   // Save test info
   const testInfo = {
-    test_name: test.name,
+    task_name: test.name,
     test_path: test._relativePath,
     agent,
     timestamp,
@@ -456,7 +456,7 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
 
   // Save test info
   const testInfo = {
-    test_name: test.name,
+    task_name: test.name,
     test_path: test._relativePath,
     agent,
     timestamp,
@@ -706,7 +706,7 @@ async function cleanupWorktree(worktreePath, branchName) {
 
 // Run a single test with a single agent
 async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null) {
-  console.log(`\nRunning test: ${test.name}`);
+  console.log(`\nRunning task: ${test.name}`);
   console.log(`  Path: ${test._relativePath}`);
   console.log(`  Agent: ${agent}`);
 
@@ -838,7 +838,7 @@ async function main() {
   console.log(`Failed/Pending: ${results.filter(r => !r.success).length}`);
 
   console.log('\nNext steps:');
-  console.log('  1. Review test outputs in test-results/');
+  console.log('  1. Review task outputs in evaluations/');
   console.log('  2. Run evaluation: ./tools/evaluate <output-dir>');
   console.log('     Options: --eval-agent <agent>, --skip-flexible');
 }

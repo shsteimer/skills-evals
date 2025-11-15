@@ -10,7 +10,7 @@ tags:
 task: |
   Create a file called test-output.txt with the text "Test completed successfully"
 
-deterministic_checks:
+static_criteria:
   files_exist:
     - test-output.txt
 
@@ -26,7 +26,7 @@ deterministic_checks:
     - name: "verify-file-content"
       script: "test -f code-diff.patch && grep -q 'Test completed successfully' code-diff.patch"
 
-non_deterministic_criteria:
+dynamic_criteria:
   - name: task_completion
     description: |
       - File was created with correct content

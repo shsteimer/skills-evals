@@ -1,15 +1,15 @@
-# Test Definition Schema
+# Task Definition Schema
 
 ## Overview
 
-Each test is defined by a `test.yaml` file that specifies the task, evaluation criteria, and expected outcomes.
+Each task is defined by a `task.yaml` file that specifies the task, evaluation criteria, and expected outcomes.
 
 ## Schema Definition
 
 ### Required Fields
 
 #### `name` (string)
-Short, descriptive name for the test.
+Short, descriptive name for the task.
 
 **Example:**
 ```yaml
@@ -17,16 +17,16 @@ name: "Create hero block from scratch"
 ```
 
 #### `description` (string)
-Detailed description of what this test evaluates.
+Detailed description of what this task evaluates.
 
 **Example:**
 ```yaml
-description: "Tests if agent can create a new block following all AEM guidelines including content-driven development, proper file structure, and code quality standards."
+description: "Evaluates if agent can create a new block following all AEM guidelines content-driven development, proper file structure, and code quality standards."
 ```
 
 #### `type` (enum: "unit" | "integration")
-- `unit`: Tests a single skill or focused capability
-- `integration`: Tests a complete workflow involving multiple skills
+- `unit`: Evaluates a single skill or focused capability
+- `integration`: Evaluates a complete workflow involving multiple skills
 
 **Example:**
 ```yaml
@@ -34,7 +34,7 @@ type: unit
 ```
 
 #### `skills` (array of strings)
-List of skills being tested. Should match directory names in `.claude/skills/`.
+List of skills being evaluated. Should match directory names in `.claude/skills/`.
 
 **Example:**
 ```yaml
@@ -44,7 +44,7 @@ skills:
 ```
 
 #### `tags` (array of strings)
-Optional tags for categorizing and filtering tests. Use tags to group tests by functionality, complexity, or other characteristics.
+Optional tags for categorizing and filtering tasks. Use tags to group tasks by functionality, complexity, or other characteristics.
 
 **Example:**
 ```yaml
@@ -56,14 +56,14 @@ tags:
 ```
 
 **Common tags:**
-- `blocks` - Tests related to block creation/modification
-- `content-modeling` - Tests focused on content structure
-- `basic` - Simple, foundational tests
-- `advanced` - Complex or edge case tests
-- `workflow` - Tests full development workflows
-- `migration` - Tests migration-related functionality
-- `accessibility` - Tests with accessibility focus
-- `performance` - Tests with performance considerations
+- `blocks` - Tasks related to block creation/modification
+- `content-modeling` - Tasks focused on content structure
+- `basic` - Simple, foundational tasks
+- `advanced` - Complex or edge case tasks
+- `workflow` - Tasks full development workflows
+- `migration` - Tasks migration-related functionality
+- `accessibility` - Tasks with accessibility focus
+- `performance` - Tasks with performance considerations
 
 #### `task` (string)
 The prompt/task given to the agent. Should be clear and complete, but represent a realistic prompt a lazy human would write.
@@ -74,12 +74,12 @@ task: |
   Create a simple text block called 'quote' that displays a blockquote with optional attribution.
 ```
 
-#### `deterministic_checks` (object)
-Deterministic checks that must pass every time. Failure = test fails.
+#### `static_criteria` (object)
+Static evaluation criteria that must pass every time. Failure = task fails.
 
 **Example:**
 ```yaml
-deterministic_checks:
+static_criteria:
   lint_passes: true
   files_exist:
     - blocks/quote/quote.js
@@ -99,13 +99,13 @@ deterministic_checks:
       description: "Verify basic accessibility requirements"
 ```
 
-#### `optional_deterministic_checks` (object)
-Optional deterministic checks that are good to follow but don't cause test failure.
+#### `optional_static_criteria` (object)
+Optional static evaluation criteria that are good to follow but don't cause task failure.
 These are automatically verified and reported, but failures are informational only.
 
 **Example:**
 ```yaml
-optional_deterministic_checks:
+optional_static_criteria:
   files_exist:
     - blocks/quote/README.md  # Nice to have, not required
   required_patterns:
@@ -117,7 +117,7 @@ optional_deterministic_checks:
       description: "Check for potential performance issues"
 ```
 
-##### Deterministic Check Types
+##### Static Evaluation Criteria Types
 
 **`lint_passes`** (boolean)
 - If `true`, requires `npm run lint` to pass
@@ -160,9 +160,9 @@ optional_deterministic_checks:
 - Script receives test directory as first argument
 
 
-##### Optional Deterministic Check Types
+##### Optional Static Evaluation Criteria Types
 
-Same types as deterministic checks (lint_passes, files_exist, files_not_exist, required_workflow_steps, forbidden_patterns, required_patterns, custom_scripts), but failures are reported without failing the test.
+Same types as static evaluation criteria (lint_passes, files_exist, files_not_exist, required_workflow_steps, forbidden_patterns, required_patterns, custom_scripts), but failures are reported without failing the task.
 
 **Pull Request Checks** (special handling):
 
@@ -170,7 +170,7 @@ PR-related checks are always optional (nice to have), but if a PR is opened, all
 
 **`pr_quality`** (object)
 - Evaluates PR quality if agent opened one
-- If no PR opened: optional check is skipped (no penalty)
+- If no PR opened: optional criteria is skipped (no penalty)
 - If PR opened: all sub-checks must pass or test fails
 - Properties:
   - `checks_pass` (boolean): Requires all PR checks (CI/CD) to pass
@@ -180,7 +180,7 @@ PR-related checks are always optional (nice to have), but if a PR is opened, all
 
 **Example:**
 ```yaml
-optional_deterministic_checks:
+optional_static_criteria:
   pr_quality:
     checks_pass: true
     has_preview_link: true
@@ -190,15 +190,15 @@ optional_deterministic_checks:
 
 **Logic:**
 - No PR opened → no penalty, just informational
-- PR opened → all enabled checks must pass or test fails
+- PR opened → all enabled checks must pass or task fails
 - This ensures: opening a broken PR is worse than not opening one at all
 
-#### `non_deterministic_criteria` (array of objects)
-Quality criteria evaluated by LLM, can vary across runs.
+#### `dynamic_criteria` (array of objects)
+Quality criteria evaluated by LLM using dynamic evaluation, can vary across runs.
 
 **Example:**
 ```yaml
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: Code follows style guidelines, is maintainable and well-structured
     priority: high
@@ -213,7 +213,7 @@ non_deterministic_criteria:
     priority: low
 ```
 
-##### Flexible Criterion Properties
+##### Dynamic Evaluation Criterion Properties
 
 **`name`** (string)
 - Unique identifier for this criterion
@@ -230,25 +230,25 @@ non_deterministic_criteria:
 ### Optional Fields
 
 #### `tags` (array of strings)
-Tags for categorizing and filtering tests. See the `tags` field in Required Fields section for details.
+Tags for categorizing and filtering tasks. See the `tags` field in Required Fields section for details.
 
 #### `initial_state` (string)
-Git branch name to use as starting point for the test.
+Git branch name to use as starting point for the task.
 
 **Example:**
 ```yaml
-initial_state: test/hero-block-base
+initial_state: task/hero-block-base
 ```
 
 If not specified, uses `main` branch as starting point.
 
 ## Complete Examples
 
-### Example 1: Simple Block Creation (No PR Required)
+### Example 1: Simple Block Creation Task (No PR Required)
 
 ```yaml
 name: "Create simple quote block"
-description: "Tests basic block creation following content-driven development and building-blocks skills. Should create proper file structure, mobile-first CSS, and semantic HTML decoration."
+description: "Evaluates basic block creation following content-driven development and building-blocks skills. Should create proper file structure, mobile-first CSS, and semantic HTML decoration."
 type: unit
 skills:
   - content-driven-development
@@ -261,9 +261,9 @@ tags:
 task: |
   Create a 'quote' block that displays a blockquote with optional attribution.
 
-initial_state: test/basic-setup
+initial_state: task/basic-setup
 
-deterministic_checks:
+static_criteria:
   lint_passes: true
   files_exist:
     - blocks/quote/quote.js
@@ -280,7 +280,7 @@ deterministic_checks:
       in_files: ["blocks/**/*.css"]
       message: "CSS selectors should use actual block name, not template placeholder"
 
-optional_deterministic_checks:
+optional_static_criteria:
   files_exist:
     - blocks/quote/README.md
   required_patterns:
@@ -288,7 +288,7 @@ optional_deterministic_checks:
       in_files: ["blocks/quote/quote.js"]
       message: "Consider adding ARIA attributes for better accessibility"
 
-non_deterministic_criteria:
+dynamic_criteria:
   - name: code_quality
     description: |
       - JavaScript uses proper decoration patterns
@@ -324,7 +324,7 @@ non_deterministic_criteria:
 
 ## Validation Rules
 
-A valid test.yaml must:
+A valid task.yaml must:
 1. Include all required fields (name, description, type, skills, task, deterministic_checks, non_deterministic_criteria)
 2. Have `type` be either "unit" or "integration"
 3. Reference skills that exist in `.claude/skills/`
