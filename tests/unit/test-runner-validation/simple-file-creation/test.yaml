@@ -14,6 +14,18 @@ deterministic_checks:
   files_exist:
     - test-output.txt
 
+  required_patterns:
+    - pattern: "Test completed successfully"
+      in_files: ["test-output.txt"]
+
+  forbidden_patterns:
+    - pattern: "console\\.log"
+      in_files: ["**/*.js"]
+
+  custom_scripts:
+    - name: "verify-file-content"
+      script: "test -f code-diff.patch && grep -q 'Test completed successfully' code-diff.patch"
+
 non_deterministic_criteria:
   - name: task_completion
     description: |
