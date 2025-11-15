@@ -207,14 +207,78 @@ function sanitizeTestName(name) {
 }
 
 /**
- * Detect if path is a timestamp directory (contains agent subdirs) or specific agent directory
+ * Detect path type based on structure
+ * Returns: 'timestamp', 'task', or 'agent'
  */
 function detectPathType(outputDir) {
-  // Check if path ends with timestamp pattern
-  if (outputDir.match(/\d{4}-\d{2}-\d{2}T[\d:.]+Z\/?$/)) {
-    return 'timestamp';
+  const parts = outputDir.split('/').filter(p => p);
+  const evaluationsIndex = parts.indexOf('evaluations');
+
+  if (evaluationsIndex === -1) {
+    return 'unknown';
   }
-  return 'agent';
+
+  // Count parts after 'evaluations'
+  const partsAfterEvaluations = parts.length - evaluationsIndex - 1;
+
+  if (partsAfterEvaluations === 1) {
+    // evaluations/{timestamp}
+    return 'timestamp';
+  } else if (partsAfterEvaluations === 2) {
+    // evaluations/{timestamp}/{task-name}
+    return 'task';
+  } else if (partsAfterEvaluations === 3) {
+    // evaluations/{timestamp}/{task-name}/{agent}
+    return 'agent';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Get all task directories in a timestamp directory
+ */
+function getTaskDirectories(timestampDir) {
+  if (!existsSync(timestampDir)) {
+    return [];
+  }
+
+  const entries = readdirSync(timestampDir);
+  const taskDirs = [];
+
+  for (const entry of entries) {
+    const fullPath = join(timestampDir, entry);
+    const stat = statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      taskDirs.push(fullPath);
+    }
+  }
+
+  return taskDirs;
+}
+
+/**
+ * Get all agent directories in a task directory
+ */
+function getAgentDirectoriesForTask(taskDir) {
+  if (!existsSync(taskDir)) {
+    return [];
+  }
+
+  const entries = readdirSync(taskDir);
+  const agentDirs = [];
+
+  for (const entry of entries) {
+    const fullPath = join(taskDir, entry);
+    const stat = statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      agentDirs.push(fullPath);
+    }
+  }
+
+  return agentDirs;
 }
 
 /**
@@ -1241,51 +1305,92 @@ async function main() {
     console.log(`Eval Agent: ${options.evalAgent}`);
     console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
 
-    // Load task definition
-    console.log('\nLoading test definition...');
-    const testDef = loadTestDefinition(options.outputDir);
-    console.log(`Test: ${testDef.name}`);
-
-    // Detect if we're evaluating one agent or all agents
+    // Detect path type first
     const pathType = detectPathType(options.outputDir);
+    console.log(`\nPath Type: ${pathType}`);
 
-    let agentResults = [];
+    let agentDirsToEvaluate = [];
 
     if (pathType === 'timestamp') {
-      // Evaluate all agents in the timestamp directory
-      const agentDirs = getAgentDirectories(options.outputDir);
-      console.log(`\nFound ${agentDirs.length} agent(s) to evaluate`);
+      // evaluations/{timestamp} - evaluate all tasks and agents
+      const taskDirs = getTaskDirectories(options.outputDir);
+      console.log(`\nFound ${taskDirs.length} task(s)`);
 
-      for (const agentDir of agentDirs) {
-        const result = await evaluateSingleAgent(agentDir, testDef, options);
-        agentResults.push(result);
+      for (const taskDir of taskDirs) {
+        const agentDirs = getAgentDirectoriesForTask(taskDir);
+        agentDirsToEvaluate.push(...agentDirs);
       }
 
-      // Print summary
-      console.log('\n' + '='.repeat(60));
-      console.log('Evaluation Summary');
-      console.log('='.repeat(60));
-      for (const result of agentResults) {
+    } else if (pathType === 'task') {
+      // evaluations/{timestamp}/{task-name} - evaluate all agents for this task
+      agentDirsToEvaluate = getAgentDirectoriesForTask(options.outputDir);
+
+    } else if (pathType === 'agent') {
+      // evaluations/{timestamp}/{task-name}/{agent} - evaluate single agent
+      agentDirsToEvaluate = [options.outputDir];
+
+    } else {
+      throw new Error(`Invalid path type: ${pathType}. Expected timestamp, task, or agent directory.`);
+    }
+
+    console.log(`\nEvaluating ${agentDirsToEvaluate.length} agent result(s)...\n`);
+
+    // Evaluate each agent directory
+    const allResults = [];
+
+    for (const agentDir of agentDirsToEvaluate) {
+      try {
+        // Load test definition for this agent's task
+        const testDef = loadTestDefinition(agentDir);
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`Task: ${testDef.name}`);
+        console.log(`Agent: ${basename(agentDir)}`);
+        console.log('='.repeat(60));
+
+        const result = await evaluateSingleAgent(agentDir, testDef, options);
+        allResults.push(result);
+
+      } catch (error) {
+        console.error(`\n❌ Error evaluating ${agentDir}:`);
+        console.error(`   ${error.message}`);
+        allResults.push({
+          agent: basename(agentDir),
+          task: basename(dirname(agentDir)),
+          passed: false,
+          error: error.message
+        });
+      }
+    }
+
+    // Print summary
+    console.log('\n' + '='.repeat(60));
+    console.log('Evaluation Summary');
+    console.log('='.repeat(60));
+
+    const grouped = {};
+    for (const result of allResults) {
+      const taskName = result.task || 'unknown';
+      if (!grouped[taskName]) {
+        grouped[taskName] = [];
+      }
+      grouped[taskName].push(result);
+    }
+
+    for (const [taskName, results] of Object.entries(grouped)) {
+      console.log(`\n${taskName}:`);
+      for (const result of results) {
         const status = result.passed ? '✅ PASSED' : '❌ FAILED';
         console.log(`  ${result.agent}: ${status}`);
       }
-
-      // Exit with failure if any agent failed
-      const allPassed = agentResults.every(r => r.passed);
-      process.exit(allPassed ? 0 : 1);
-
-    } else {
-      // Evaluate single agent
-      const result = await evaluateSingleAgent(options.outputDir, testDef, options);
-
-      // Final summary
-      console.log('\n' + '='.repeat(60));
-      console.log('Evaluation Complete');
-      console.log('='.repeat(60));
-
-      // Exit with appropriate code
-      process.exit(result.passed ? 0 : 1);
     }
+
+    // Exit with failure if any agent failed
+    const allPassed = allResults.every(r => r.passed);
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`Overall: ${allPassed ? '✅ ALL PASSED' : '❌ SOME FAILED'}`);
+    console.log('='.repeat(60));
+
+    process.exit(allPassed ? 0 : 1);
 
   } catch (error) {
     console.error('\n❌ Error:', error.message);
