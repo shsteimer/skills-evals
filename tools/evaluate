@@ -688,27 +688,120 @@ Do not include any other text before or after the JSON. The response must be val
 
     writeFileSync(evalPromptFile, agentTask);
 
-    // For now, we'll use a simple approach: create the structure manually
-    // In the future, we could invoke the actual agent CLI
-    console.log('  ℹ Non-deterministic evaluation with live agent not yet implemented');
-    console.log('  ℹ Creating placeholder evaluation results\n');
+    // Invoke the evaluation agent
+    console.log(`  Invoking ${evalAgent} for evaluation...\n`);
 
-    // Create placeholder results organized by priority
-    for (const criterion of criteria) {
-      const priority = criterion.priority || 'medium';
+    try {
+      let agentCommand;
+      let agentArgs = [];
 
-      if (!results.by_priority[priority]) {
-        results.by_priority[priority] = {};
+      switch (evalAgent) {
+        case 'claude-code':
+          agentCommand = 'claude';
+          agentArgs = [
+            '--permission-mode', 'bypassPermissions',
+            '--output-format', 'json',
+            '--print', agentTask
+          ];
+          break;
+        case 'cursor-cli':
+          agentCommand = 'cursor-agent';
+          agentArgs = ['--force', agentTask];
+          break;
+        case 'codex-cli':
+          agentCommand = 'codex';
+          agentArgs = ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', agentTask];
+          break;
+        default:
+          throw new Error(`Unknown eval agent: ${evalAgent}`);
       }
 
-      results.by_priority[priority][criterion.name] = {
-        strengths: ['[Evaluation not yet implemented]'],
-        issues: [],
-        notes: [`Criterion: ${criterion.description}`]
-      };
-    }
+      console.log(`  Running: ${agentCommand} ${agentArgs.slice(0, 3).join(' ')}...`);
 
-    results.overall_notes.push('Note: Non-deterministic evaluation requires manual review or agent implementation');
+      const evalResult = spawnSync(agentCommand, agentArgs, {
+        cwd: outputDir,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        timeout: 300000 // 5 minutes
+      });
+
+      if (evalResult.error) {
+        throw new Error(`Failed to run ${evalAgent}: ${evalResult.error.message}`);
+      }
+
+      // Save raw output
+      writeFileSync(join(outputDir, 'eval-agent-output.txt'), evalResult.stdout + '\n\n' + evalResult.stderr);
+
+      // Try to parse JSON from output
+      let evaluationData;
+      try {
+        // For claude-code with --output-format json, response is in stdout
+        // For other agents, might need to extract from different places
+        const output = evalResult.stdout.trim();
+
+        // Try to find JSON in the output (might have other text around it)
+        const jsonMatch = output.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          evaluationData = JSON.parse(jsonMatch[0]);
+        } else {
+          evaluationData = JSON.parse(output);
+        }
+
+        console.log('  ✓ Received evaluation from agent\n');
+
+        // Validate structure
+        if (evaluationData.by_priority) {
+          results.by_priority = evaluationData.by_priority;
+        }
+        if (evaluationData.overall_notes) {
+          results.overall_notes = evaluationData.overall_notes;
+        }
+
+        // Save parsed evaluation
+        writeFileSync(join(outputDir, 'eval-agent-response.json'), JSON.stringify(evaluationData, null, 2));
+
+      } catch (parseError) {
+        console.log(`  ⚠ Could not parse agent response as JSON: ${parseError.message}`);
+        console.log('  Creating placeholder results instead\n');
+
+        // Fall back to placeholder results
+        for (const criterion of criteria) {
+          const priority = criterion.priority || 'medium';
+
+          if (!results.by_priority[priority]) {
+            results.by_priority[priority] = {};
+          }
+
+          results.by_priority[priority][criterion.name] = {
+            strengths: ['[Could not parse agent response]'],
+            issues: [],
+            notes: [`Agent output saved to eval-agent-output.txt`, `Criterion: ${criterion.description}`]
+          };
+        }
+
+        results.overall_notes.push(`Note: Agent response could not be parsed. See eval-agent-output.txt for raw output.`);
+      }
+
+    } catch (error) {
+      console.log(`  ✗ Error running eval agent: ${error.message}\n`);
+
+      // Create placeholder results
+      for (const criterion of criteria) {
+        const priority = criterion.priority || 'medium';
+
+        if (!results.by_priority[priority]) {
+          results.by_priority[priority] = {};
+        }
+
+        results.by_priority[priority][criterion.name] = {
+          strengths: [],
+          issues: [`Evaluation agent failed: ${error.message}`],
+          notes: [`Criterion: ${criterion.description}`]
+        };
+      }
+
+      results.overall_notes.push(`Error: Could not run evaluation agent - ${error.message}`);
+    }
 
   } catch (error) {
     console.log(`  ✗ Error in non-deterministic evaluation: ${error.message}`);
@@ -913,7 +1006,47 @@ function generateMarkdownReport(results) {
   }
 
   md += '## Non-Deterministic Criteria Assessment\n\n';
-  md += '_(Not yet implemented)_\n\n';
+
+  if (results.non_deterministic_assessment && results.non_deterministic_assessment.by_priority) {
+    const assessment = results.non_deterministic_assessment;
+
+    for (const priority of ['high', 'medium', 'low']) {
+      if (assessment.by_priority[priority] && Object.keys(assessment.by_priority[priority]).length > 0) {
+        md += `### ${priority.toUpperCase()} Priority\n\n`;
+
+        for (const [criterionName, criterionResults] of Object.entries(assessment.by_priority[priority])) {
+          md += `#### ${criterionName}\n\n`;
+
+          if (criterionResults.strengths && criterionResults.strengths.length > 0) {
+            md += '**Strengths:**\n\n';
+            criterionResults.strengths.forEach(s => md += `- ✅ ${s}\n`);
+            md += '\n';
+          }
+
+          if (criterionResults.issues && criterionResults.issues.length > 0) {
+            md += '**Issues:**\n\n';
+            criterionResults.issues.forEach(i => md += `- ⚠️ ${i}\n`);
+            md += '\n';
+          }
+
+          if (criterionResults.notes && criterionResults.notes.length > 0) {
+            md += '**Notes:**\n\n';
+            criterionResults.notes.forEach(n => md += `- ${n}\n`);
+            md += '\n';
+          }
+        }
+      }
+    }
+
+    if (assessment.overall_notes && assessment.overall_notes.length > 0) {
+      md += '### Overall Notes\n\n';
+      assessment.overall_notes.forEach(note => md += `- ${note}\n`);
+      md += '\n';
+    }
+
+  } else {
+    md += '_(Not evaluated)_\n\n';
+  }
 
   return md;
 }
