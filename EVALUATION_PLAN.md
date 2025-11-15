@@ -6,7 +6,7 @@
 |-------|--------|-------------|
 | **Phase 1: Foundation** | ✅ Complete | Test structure, schema, documentation |
 | **Phase 2: Test Runner** | ✅ Complete | Agent execution working for all 3 agents |
-| **Phase 3: Evaluator** | 📋 Next Up | Build evaluation script (deterministic + flexible) |
+| **Phase 3: Evaluator** | 🚧 In Progress | Basic deterministic checks working, LLM evaluation pending |
 | **Phase 4: Write Tests** | 🧪 Planned | Create real tests, validate framework |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
 
@@ -22,28 +22,34 @@ We have established the evaluation framework foundation with a simplified, empir
 
 All infrastructure complete. Agent execution working for Claude Code, Cursor CLI, and Windsurf CLI.
 
+**Phase 3: Evaluator - 🚧 IN PROGRESS**
+
+Basic evaluation script working with deterministic checks. Successfully tested on simple-file-creation test.
+
 **What's Done:**
-- ✅ Phase 1: Test structure, schema, docs, example test
-- ✅ Tags support added to test schema
-- ✅ `./tools/run-test` script with full CLI interface
-- ✅ Test discovery and filtering (--test, --tags, --skills)
-- ✅ Multi-agent support (--agents flag)
-- ✅ Branch/worktree isolation for each test run
-- ✅ Automatic cleanup of test artifacts from execution environment
-- ✅ Output directory structure creation
-- ✅ Agent CLI execution for Claude Code, Cursor CLI, Windsurf CLI
-- ✅ Basic artifact capture (final code state, agent-info.json)
+- ✅ Phase 1 & 2: Complete
+- ✅ `./tools/evaluate` script with CLI interface
+- ✅ Test definition loading
+- ✅ File existence checks (via git diff parsing)
+- ✅ File non-existence checks (via git diff parsing)
+- ✅ PR quality checks (using gh CLI)
+- ✅ Evaluation output generation (JSON + Markdown)
+- ✅ Exit codes (0 for pass, 1 for fail)
 
 **What's Next:**
 
-**Phase 3:** Build evaluation scripts (deterministic + flexible)
+**Phase 3 completion:**
+1. Implement linting checks (run in test-runner before cleanup)
+2. Implement forbidden pattern checks (grep in git diff)
+3. Implement flexible LLM evaluation (invoke agent with prompt)
+
 **Phase 4:** Write and run real tests, validate framework works
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Build `./tools/evaluate` script for deterministic checks
-2. Implement flexible criteria evaluation with LLM agent
-3. Test evaluation on captured artifacts from Phase 2
+1. Test evaluate script: `./tools/evaluate <output-dir> --skip-flexible`
+2. Implement missing deterministic checks (linting, patterns)
+3. Build flexible LLM evaluation feature
 
 ---
 
@@ -301,13 +307,29 @@ Tasks:
 - Ready for evaluation script development (Phase 3)
 
 ### Phase 3: Evaluator 🤖
-**Status:** Not Started - NEXT UP
+**Status:** In Progress
 
 **Goal:** Automatically evaluate test results against criteria.
 
 **Core Script:** `./tools/evaluate`
 
-**What it needs to do:**
+**Completed:**
+- [x] Argument parsing (--eval-agent, --skip-flexible)
+- [x] Test definition loading from test.yaml
+- [x] File existence checks (parse git diff)
+- [x] File non-existence checks (parse git diff)
+- [x] PR quality checks structure (gh CLI integration)
+- [x] Output generation (JSON + Markdown)
+- [x] Proper exit codes
+
+**Still TODO:**
+- [ ] Linting checks (needs to run in test-runner before cleanup)
+- [ ] Forbidden pattern checks (grep through git diff)
+- [ ] Required pattern checks
+- [ ] Custom script execution
+- [ ] Flexible LLM evaluation (invoke agent with detailed prompt)
+
+**What it does:
 
 1. **Run deterministic checks (required)**
    - Check if required files exist
