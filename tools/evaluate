@@ -38,7 +38,7 @@ function parseArgs() {
 
   const options = {
     outputDir: null,
-    evalAgent: null,  // Will be auto-selected if not specified
+    evalAgent: 'claude-code',  // Default evaluator
     skipNonDeterministic: false
   };
 
@@ -93,8 +93,7 @@ Arguments:
   <output-dir>          Path to test results directory
 
 Options:
-  --eval-agent <agent>  Agent to use for non-deterministic evaluation
-                        (default: auto-select a different agent than the one being tested)
+  --eval-agent <agent>  Agent to use for non-deterministic evaluation (default: claude-code)
   --skip-non-deterministic  Only run deterministic checks (faster)
   --help                Show this help message
 
@@ -1176,15 +1175,7 @@ async function main() {
     console.log('Agent Skills Test Evaluation');
     console.log('='.repeat(60));
     console.log(`\nOutput Directory: ${options.outputDir}`);
-
-    // Auto-select eval agent if not specified
-    if (!options.evalAgent) {
-      options.evalAgent = autoSelectEvalAgent(options.outputDir);
-      console.log(`Eval Agent: ${options.evalAgent} (auto-selected)`);
-    } else {
-      console.log(`Eval Agent: ${options.evalAgent}`);
-    }
-
+    console.log(`Eval Agent: ${options.evalAgent}`);
     console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
 
     // Load test definition
