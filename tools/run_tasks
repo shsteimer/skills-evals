@@ -4,9 +4,9 @@
  * Test Runner for Agent Skills Evaluation Framework
  *
  * Usage:
- *   ./tools/run-task --task <task-name>
- *   ./tools/run-task --tags <tag1,tag2>
- *   ./tools/run-task --skills <skill1,skill2>
+ *   ./tools/run_tasks --task <task-name>
+ *   ./tools/run_tasks --tags <tag1,tag2>
+ *   ./tools/run_tasks --skills <skill1,skill2>
  *
  * Options:
  *   --task <name>         Run specific test(s) by name (supports wildcards)
@@ -88,9 +88,9 @@ function printUsage() {
 Test Runner for Agent Skills Evaluation Framework
 
 Usage:
-  ./tools/run-task --task <task-name>
-  ./tools/run-task --tags <tag1,tag2>
-  ./tools/run-task --skills <skill1,skill2>
+  ./tools/run_tasks --task <task-name>
+  ./tools/run_tasks --tags <tag1,tag2>
+  ./tools/run_tasks --skills <skill1,skill2>
 
 Options:
   --task <name>         Run specific test(s) by name (path to test directory)
@@ -102,10 +102,10 @@ Options:
   --dry-run             Alias for --setup-only
 
 Examples:
-  ./tools/run-task --task tasks/unit/building-blocks/create-simple-block
-  ./tools/run-task --tags blocks,basic
-  ./tools/run-task --skills building-blocks
-  ./tools/run-task --tags blocks --agents claude-code,cursor-cli
+  ./tools/run_tasks --task tasks/unit/building-blocks/create-simple-block
+  ./tools/run_tasks --tags blocks,basic
+  ./tools/run_tasks --skills building-blocks
+  ./tools/run_tasks --tags blocks --agents claude-code,cursor-cli
 
 At least one of --test, --tags, or --skills is required.
 `);

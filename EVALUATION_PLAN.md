@@ -46,7 +46,7 @@ Full evaluation framework working end-to-end with both static and dynamic (LLM) 
 **Phase 5:** TBD based on learnings
 
 **Quick Start to Resume:**
-1. Run full framework: `./tools/run-task --task <name> && ./tools/evaluate <output-dir>`
+1. Run full framework: `./tools/run_tasks --task <name> && ./tools/evaluate <output-dir>`
 2. Write real tests for actual skills (Phase 4)
 3. Validate framework catches regressions and improvements
 
@@ -271,7 +271,7 @@ Tasks:
 
 **Goal:** Build tooling to execute tasks and capture results.
 
-**Core Script:** `./tools/run-task`
+**Core Script:** `./tools/run_tasks`
 
 **Completed:**
 - [x] Add tags support to test schema
@@ -388,7 +388,7 @@ Tasks:
    - Use empirical approach: run 5+ times, document, then add criteria
 
 2. **Run tasks with framework**
-   - Use `./tools/run-task` to execute
+   - Use `./tools/run_tasks` to execute
    - Use `./tools/evaluate-*` to assess
    - Identify what works, what doesn't
 
@@ -428,25 +428,25 @@ Tasks:
 
 ### Running a Single Task
 ```bash
-./tools/run-task --task create-simple-block
+./tools/run_tasks --task create-simple-block
 # or with full path
-./tools/run-task --task tasks/unit/building-blocks/create-simple-block
+./tools/run_tasks --task tasks/unit/building-blocks/create-simple-block
 ```
 
 ### Running Tasks by Tags
 ```bash
-./tools/run-task --tags blocks,basic
+./tools/run_tasks --tags blocks,basic
 ```
 
 ### Running Tasks by Skills
 ```bash
-./tools/run-task --skills building-blocks
-./tools/run-task --skills content-driven-development,building-blocks
+./tools/run_tasks --skills building-blocks
+./tools/run_tasks --skills content-driven-development,building-blocks
 ```
 
 ### Running with Multiple Agents
 ```bash
-./tools/run-task --tags blocks --agents claude-code,cursor-cli
+./tools/run_tasks --tags blocks --agents claude-code,cursor-cli
 ```
 
 ### Evaluating Task Results
@@ -467,7 +467,7 @@ OUTPUT_DIR="evaluations/tasks/unit/building-blocks/create-simple-block/2025-01-1
 ### Full Workflow Example
 ```bash
 # 1. Run a task with current skills
-./tools/run-task --task create-simple-block
+./tools/run_tasks --task create-simple-block
 
 # 2. Evaluate results
 OUTPUT_DIR=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
@@ -481,7 +481,7 @@ cat "$OUTPUT_DIR/evaluation-results.json"
 vim .claude/skills/building-blocks/SKILL.md
 
 # 5. Re-run task and compare
-./tools/run-task --task create-simple-block
+./tools/run_tasks --task create-simple-block
 OUTPUT_DIR_NEW=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
 ./tools/evaluate "$OUTPUT_DIR_NEW"
 

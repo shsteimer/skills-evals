@@ -103,10 +103,10 @@ initial_state: task/my-task-setup
 
 ```bash
 # Run 1
-./tools/run-task tasks/unit/my-skill/my-task > results/run-1.txt
+./tools/run_tasks tasks/unit/my-skill/my-task > results/run-1.txt
 
 # Run 2
-./tools/run-task tasks/unit/my-skill/my-task > results/run-2.txt
+./tools/run_tasks tasks/unit/my-skill/my-task > results/run-2.txt
 
 # ... continue for runs 3, 4, 5+
 ```
@@ -484,7 +484,7 @@ EOF
 
 # 3. Run it 5+ times, document everything
 for i in {1..5}; do
-  ./tools/run-task tasks/unit/building-blocks/simple-task > results/run-$i.txt
+  ./tools/run_tasks tasks/unit/building-blocks/simple-task > results/run-$i.txt
 done
 
 # 4. Review results, identify patterns
