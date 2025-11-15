@@ -1000,7 +1000,8 @@ function generateMarkdownReport(results) {
 
   md += `**Timestamp:** ${new Date().toISOString()}\n\n`;
   md += `**Test:** ${results.test_name || 'Unknown'}\n\n`;
-  md += `**Agent:** ${results.agent || 'Unknown'}\n\n`;
+  md += `**Agent (tested):** ${results.agent || 'Unknown'}\n\n`;
+  md += `**Evaluator:** ${results.evaluator || 'Unknown'}\n\n`;
 
   md += '## Deterministic Results\n\n';
   md += `**Status:** ${results.deterministic_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
@@ -1143,6 +1144,7 @@ async function evaluateSingleAgent(agentDir, testDef, options) {
     test_name: testPath,
     test_definition_name: testDef.name,
     agent,
+    evaluator: options.evalAgent,
     deterministic_results: deterministic,
     optional_results: optional,
     pr_results: prQuality,
