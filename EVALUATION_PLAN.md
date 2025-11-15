@@ -120,7 +120,7 @@ For each task run, capture:
 ## Task Structure
 
 ```
-tests/
+tasks/
 ├── unit/                           # Individual skill evaluation tasks
 │   ├── building-blocks/
 │   │   ├── create-simple-block/
@@ -138,7 +138,30 @@ tests/
 
 **Initial State:** Tasks specify a git branch as their starting point. If not specified, uses `main` branch.
 
-## Test Definition Schema (task.yaml)
+## Evaluations Directory Structure
+
+```
+evaluations/
+└── {timestamp}/                    # Single timestamp per run_tasks execution
+    ├── {task-name-1}/              # Sanitized task name
+    │   ├── claude-code/            # Agent results
+    │   │   ├── task-info.json
+    │   │   ├── code-diff.patch
+    │   │   ├── evaluation-results.json
+    │   │   └── evaluation-report.md
+    │   ├── cursor-cli/
+    │   └── codex-cli/
+    └── {task-name-2}/
+        └── ...
+```
+
+**Benefits:**
+- All tasks from one run grouped under single timestamp
+- Easy to evaluate entire run: `./tools/evaluate evaluations/{timestamp}`
+- Simple task names (not full paths) for easier navigation
+- Compare results across agents for same task
+
+## Task Definition Schema (task.yaml)
 
 ```yaml
 name: "Create hero block from scratch"
@@ -242,7 +265,7 @@ dynamic_criteria:
     ]
   },
 
-  "artifacts_path": "./evaluations/create-hero-block/2025-01-14T10:00:00Z/claude-code/"
+  "artifacts_path": "./evaluations/2025-01-14T10:00:00Z/create-hero-block-from-scratch/claude-code/"
 }
 ```
 
@@ -252,12 +275,12 @@ dynamic_criteria:
 **Status:** COMPLETE
 
 Tasks:
-- [x] Create test directory structure (`tasks/unit/`, `tasks/integration/`)
-- [x] Define task.yaml schema formally (tests/TEST_SCHEMA.md)
+- [x] Create task directory structure (`tasks/unit/`, `tasks/integration/`)
+- [x] Define task.yaml schema formally (tasks/TASK_SCHEMA.md)
 - [x] Create first example unit task (create-simple-block)
-- [x] Document task creation guidelines (tests/CREATING_TESTS.md)
+- [x] Document task creation guidelines (tasks/CREATING_TASKS.md)
 - [x] Simplify approach (branches not directories, priorities not weights)
-- [x] Add empirical test creation workflow (run first, then add criteria)
+- [x] Add empirical task creation workflow (run first, then add criteria)
 
 **Key Decisions Made:**
 - Use git branches for initial state (defaults to `main`)
@@ -274,13 +297,14 @@ Tasks:
 **Core Script:** `./tools/run_tasks`
 
 **Completed:**
-- [x] Add tags support to test schema
+- [x] Add tags support to task schema
 - [x] Command-line argument parsing with validation
-- [x] Test discovery (find all task.yaml files)
-- [x] Filter tasks by `--test`, `--tags`, or `--skills`
+- [x] Task discovery (find all task.yaml files)
+- [x] Filter tasks by `--task`, `--tags`, or `--skills`
 - [x] Support multiple agents via `--agents` flag
 - [x] Create isolated branch for each task/agent combo
-- [x] Create worktree in `.test-worktrees/` for task execution
+- [x] Create worktree for task execution
+- [x] Install npm dependencies in worktree
 - [x] Remove task artifacts from branch (tasks/, tools/, EVALUATION_PLAN.md)
 - [x] Create output directory structure in `evaluations/`
 - [x] Cleanup worktrees and branches after task
