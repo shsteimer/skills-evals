@@ -399,26 +399,64 @@ Tasks:
 - Keep evaluation agent prompts in separate files for easy iteration
 - Script takes test output directory as input
 
-### Phase 4: Write and Run Initial Tasks 🧪
-**Status:** Not Started - NEXT AFTER PHASE 3
+### Phase 4a: Optimize Evaluation Output 📊
+**Status:** In Progress
 
-**Goal:** Create real tasks and validate the framework works end-to-end.
+**Goal:** Refine evaluation output format to optimize for human review and comparison.
 
 **What to do:**
-1. **Create 3-5 initial tasks**
+1. **Review current output format**
+   - Run sample evaluations with current format
+   - Identify what's helpful vs. noisy
+   - Consider different comparison scenarios (before/after skill changes, agent vs agent)
+
+2. **Optimize for readability**
+   - Improve markdown report formatting
+   - Add summary tables for quick scanning
+   - Highlight key differences and failures
+   - Group related information logically
+
+3. **Optimize for comparison**
+   - Make it easy to compare results across agents
+   - Make it easy to compare results across time (before/after changes)
+   - Consider diff-friendly formats for key metrics
+
+4. **Iterate based on usage**
+   - Try reviewing real evaluation results
+   - Refine format based on what's actually useful
+   - Keep it simple and focused
+
+**Success criteria:**
+- Can quickly identify pass/fail status
+- Easy to spot key issues and strengths
+- Comparison across runs is straightforward
+- Format supports both quick scanning and deep investigation
+
+### Phase 4b: Write Unit Tasks 📝
+**Status:** Not Started - NEXT
+
+**Goal:** Create unit tasks to test individual skills.
+
+**Approach:**
+- Focus on unit tasks first (test one skill at a time)
+- Use empirical approach: run 5+ times, document patterns, then add criteria
+- Start simple, iterate based on learnings
+- See "Planned Unit Tasks" section below for initial list
+
+**What to do:**
+1. **Create initial unit tasks** (see list below)
    - Pick real scenarios from actual skill usage
-   - Mix of unit and integration tasks
-   - Cover different skills (building-blocks, content-modeling, etc.)
+   - Cover key skills individually
    - Use empirical approach: run 5+ times, document, then add criteria
 
 2. **Run tasks with framework**
    - Use `./tools/run_tasks` to execute
-   - Use `./tools/evaluate-*` to assess
+   - Use `./tools/evaluate` to assess
    - Identify what works, what doesn't
 
 3. **Iterate on framework**
    - Fix bugs discovered during real usage
-   - Improve test schema if needed
+   - Improve task schema if needed
    - Refine evaluation criteria based on what matters
 
 4. **Document learnings**
@@ -447,6 +485,71 @@ Tasks:
 - See where we are after Phase 4
 - Build what we actually need, not what we think we might need
 - Keep it simple and focused
+
+## Planned Unit Tasks
+
+Focus on testing individual skills in isolation to understand their strengths and weaknesses.
+
+### Content Modeling Skill
+
+**Task: Model simple carousel**
+- Test ability to design appropriate content structure for a carousel block with images and captions.
+
+**Task: Model complex form**
+- Test ability to design content model for a multi-step form with various field types.
+
+### Building Blocks Skill
+
+**Task: Create simple quote block**
+- Test basic block creation with minimal requirements (blockquote with optional attribution).
+
+**Task: Create hero block**
+- Test block creation with moderate complexity (image, heading, subheading, CTA button).
+
+**Task: Modify existing accordion block**
+- Test ability to understand existing block code and add new feature (e.g., allow multiple panels open).
+
+**Task: Fix styling bug in cards block**
+- Test ability to identify and fix CSS issues in existing block.
+
+### Content-Driven Development Skill
+
+**Task: Create block following CDD workflow**
+- Test whether agent properly follows content-driven development (content model first, then implementation).
+
+**Task: Create block with test content**
+- Test whether agent creates appropriate test content before writing code.
+
+### Testing Blocks Skill
+
+**Task: Write unit tests for utility function**
+- Test ability to create proper unit tests for a JavaScript utility function.
+
+**Task: Write browser tests for interactive block**
+- Test ability to create Playwright/Puppeteer tests for block with user interactions.
+
+### Block Collection and Party Skill
+
+**Task: Find reference implementation**
+- Test ability to search Block Collection/Party for similar patterns and use as reference.
+
+**Task: Adapt existing block pattern**
+- Test ability to find and adapt a pattern from Block Collection to current needs.
+
+### Docs Search Skill
+
+**Task: Research feature implementation**
+- Test ability to search aem.live documentation to understand how to implement a specific feature.
+
+**Task: Find best practices**
+- Test ability to find relevant best practices documentation for a given scenario.
+
+### Integration Tasks (Future)
+
+These will test complete workflows combining multiple skills:
+- **Build new feature end-to-end** - CDD → Building → Testing
+- **Debug and fix production issue** - Docs Search → Analysis → Fix → Testing
+- **Migrate existing component** - Reference Search → Content Modeling → Building
 
 ## Usage Examples
 
