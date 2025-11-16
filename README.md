@@ -7,7 +7,7 @@ AEM Edge Delivery Services project for skills evaluation and testing.
 
 ## Documentation
 
-Before using the aem-block-collection, we recommand you to go through the documentation on https://www.aem.live/docs/ and more specifically:
+Before using the aem-block-collection, we recommend you to go through the documentation on https://www.aem.live/docs/ and more specifically:
 1. [Developer Tutorial](https://www.aem.live/developer/tutorial)
 2. [The Anatomy of a Project](https://www.aem.live/developer/anatomy-of-a-project)
 3. [Web Performance](https://www.aem.live/developer/keeping-it-100)
