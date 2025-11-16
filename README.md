@@ -1,5 +1,5 @@
-# Your Project's Title...
-Your project's description...
+# Skills Evaluation Site
+AEM Edge Delivery Services project for skills evaluation and testing.
 
 ## Environments
 - Preview: https://main--skills-evals--shsteimer.aem.page/
