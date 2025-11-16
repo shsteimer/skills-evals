@@ -34,7 +34,7 @@ Time to run the evaluate script on real results and tune it.
 
 **What's Done:**
 - ✅ Phase 1, 2, 3, 3b: Complete
-- ✅ `./tools/evaluate` script with full CLI interface
+- ✅ `./tools/evaluate.js` script with full CLI interface
 - ✅ Task definition loading
 - ✅ File existence/non-existence checks (via git diff parsing)
 - ✅ Forbidden/required pattern checks (regex in git diff)
@@ -50,7 +50,7 @@ Time to run the evaluate script on real results and tune it.
 **What's Next:**
 
 1. **Phase 3c (Current):** Run evaluate script on existing results and refine
-   - Run `./tools/evaluate` on the docs-search results we already have
+   - Run `./tools/evaluate.js` on the docs-search results we already have
    - Review evaluation reports and JSON output
    - Tune evaluation prompt if needed
    - Adjust output format for better readability
@@ -306,7 +306,7 @@ Tasks:
 
 **Goal:** Build tooling to execute tasks and capture results.
 
-**Core Script:** `./tools/run_tasks`
+**Core Script:** `./tools/run-tasks.js`
 
 **Completed:**
 - [x] Add tags support to task schema
@@ -346,7 +346,7 @@ Tasks:
 
 **Goal:** Automatically evaluate task results against criteria.
 
-**Core Script:** `./tools/evaluate`
+**Core Script:** `./tools/evaluate.js`
 
 **Completed:**
 - [x] Argument parsing (--eval-agent, --skip-dynamic)
@@ -528,7 +528,7 @@ This only shows staged changes relative to HEAD. If the agent makes commits duri
 1. **Run evaluator on existing results**
    ```bash
    # After fixing diff bug, run evaluate on existing docs-search task
-   ./tools/evaluate evaluations/2025-11-16T02:25:38.205Z/docs-search-basic-feature-lookup
+   ./tools/evaluate.js evaluations/2025-11-16T02:25:38.205Z/docs-search-basic-feature-lookup
    ```
 
 2. **Review outputs**
@@ -591,8 +591,8 @@ This only shows staged changes relative to HEAD. If the agent makes commits duri
 2. **Run full evaluation loop for each task**
    ```bash
    # Full workflow
-   ./tools/run_tasks --task <task-name> --agents claude-code,cursor-cli
-   ./tools/evaluate evaluations/{timestamp}/{task-name}
+   ./tools/run-tasks.js --task <task-name> --agents claude-code,cursor-cli
+   ./tools/evaluate.js evaluations/{timestamp}/{task-name}
    
    # Review results
    cat evaluations/{timestamp}/{task-name}/*/evaluation-report.md
@@ -735,25 +735,25 @@ These will test complete workflows combining multiple skills:
 
 ### Running a Single Task
 ```bash
-./tools/run_tasks --task create-simple-block
+./tools/run-tasks.js --task create-simple-block
 # or with full path
-./tools/run_tasks --task tasks/unit/building-blocks/create-simple-block
+./tools/run-tasks.js --task tasks/unit/building-blocks/create-simple-block
 ```
 
 ### Running Tasks by Tags
 ```bash
-./tools/run_tasks --tags blocks,basic
+./tools/run-tasks.js --tags blocks,basic
 ```
 
 ### Running Tasks by Skills
 ```bash
-./tools/run_tasks --skills building-blocks
-./tools/run_tasks --skills content-driven-development,building-blocks
+./tools/run-tasks.js --skills building-blocks
+./tools/run-tasks.js --skills content-driven-development,building-blocks
 ```
 
 ### Running with Multiple Agents
 ```bash
-./tools/run_tasks --tags blocks --agents claude-code,cursor-cli
+./tools/run-tasks.js --tags blocks --agents claude-code,cursor-cli
 ```
 
 ### Evaluating Task Results
@@ -762,23 +762,23 @@ These will test complete workflows combining multiple skills:
 OUTPUT_DIR="evaluations/tasks/unit/building-blocks/create-simple-block/2025-01-14T10:00:00Z/claude-code"
 
 # Run full evaluation (static + dynamic)
-./tools/evaluate "$OUTPUT_DIR"
+./tools/evaluate.js "$OUTPUT_DIR"
 
 # Use specific eval agent for dynamic criteria
-./tools/evaluate "$OUTPUT_DIR" --eval-agent claude-code
+./tools/evaluate.js "$OUTPUT_DIR" --eval-agent claude-code
 
 # Skip dynamic evaluation (faster, static only)
-./tools/evaluate "$OUTPUT_DIR" --skip-dynamic
+./tools/evaluate.js "$OUTPUT_DIR" --skip-dynamic
 ```
 
 ### Full Workflow Example
 ```bash
 # 1. Run a task with current skills
-./tools/run_tasks --task create-simple-block
+./tools/run-tasks.js --task create-simple-block
 
 # 2. Evaluate results
 OUTPUT_DIR=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
-./tools/evaluate "$OUTPUT_DIR"
+./tools/evaluate.js "$OUTPUT_DIR"
 
 # 3. Review results
 cat "$OUTPUT_DIR/evaluation-report.md"
@@ -788,9 +788,9 @@ cat "$OUTPUT_DIR/evaluation-results.json"
 vim .claude/skills/building-blocks/SKILL.md
 
 # 5. Re-run task and compare
-./tools/run_tasks --task create-simple-block
+./tools/run-tasks.js --task create-simple-block
 OUTPUT_DIR_NEW=$(ls -td evaluations/tasks/unit/building-blocks/create-simple-block/*/claude-code | head -1)
-./tools/evaluate "$OUTPUT_DIR_NEW"
+./tools/evaluate.js "$OUTPUT_DIR_NEW"
 
 # 6. Compare results manually (or with diff tools)
 diff "$OUTPUT_DIR/evaluation-results.json" "$OUTPUT_DIR_NEW/evaluation-results.json"
