@@ -293,7 +293,9 @@ async function createTestBranch(test, agent) {
   console.log(`  Creating branch: ${branchName} from ${initialState}`);
 
   try {
+    // Create the branch
     await execAsync(`git branch ${branchName} ${initialState}`);
+    
     return branchName;
   } catch (error) {
     throw new Error(`Failed to create branch: ${error.message}`);
@@ -325,11 +327,10 @@ async function cleanupTestArtifacts(worktreePath) {
   console.log(`  Cleaning up test artifacts from worktree`);
 
   const artifactsToRemove = [
-    'tests',
+    'tasks',
     'tools',
-    'test-results',
+    'evaluations',
     'EVALUATION_PLAN.md',
-    '.test-worktrees'
   ];
 
   // Check which artifacts actually exist in git
@@ -582,7 +583,7 @@ function transcribeCodex(events) {
 }
 
 // Execute the agent with the test task
-async function executeAgent(test, agent, worktreePath, timestamp) {
+async function executeAgent(test, agent, worktreePath, timestamp, initialSha) {
   console.log(`  Executing ${agent} with task...`);
 
   const testDirName = sanitizeTestName(test.name);
@@ -746,8 +747,20 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
         }
       }
 
-      // Create diff of all staged changes (includes new files)
-      const { stdout: diffOutput } = await execAsync('git diff --cached HEAD', {
+      // Commit any staged changes so they're included in HEAD
+      // This ensures we capture everything whether agent committed or just staged
+      try {
+        await execAsync('git commit -m "Capture final state for evaluation" --allow-empty', {
+          cwd: worktreePath,
+          shell: '/bin/bash'
+        });
+      } catch (commitError) {
+        // No changes to commit, that's fine
+      }
+
+      // Create diff from initial state to current HEAD (includes all commits + previously staged changes)
+      // This captures ALL changes since the branch was created, even if agent made commits
+      const { stdout: diffOutput } = await execAsync(`git diff ${initialSha} HEAD`, {
         cwd: worktreePath,
         shell: '/bin/bash'
       });
@@ -879,7 +892,7 @@ async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null
     timestamp = new Date().toISOString();
   }
 
-  let branchName, worktreePath;
+  let branchName, worktreePath, initialSha;
 
   try {
     // Create branch
@@ -888,8 +901,15 @@ async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null
     // Create worktree
     worktreePath = await createWorktree(branchName);
 
-    // Remove test artifacts from the branch
+    // Remove test artifacts from the branch (this makes a commit)
     await cleanupTestArtifacts(worktreePath);
+
+    // Capture SHA AFTER cleanup - this is the true starting point for the agent
+    const { stdout: shaAfterCleanup } = await execAsync('git rev-parse HEAD', {
+      cwd: worktreePath,
+      shell: '/bin/bash'
+    });
+    initialSha = shaAfterCleanup.trim();
 
     // Install dependencies
     await installDependencies(worktreePath);
@@ -920,7 +940,7 @@ async function runTestWithAgent(test, agent, setupOnly = false, timestamp = null
       };
     } else {
       // Execute agent
-      const result = await executeAgent(test, agent, worktreePath, timestamp);
+      const result = await executeAgent(test, agent, worktreePath, timestamp, initialSha);
 
       console.log(`  Result: ${result.success ? 'SUCCESS' : 'PENDING'}`);
       console.log(`  Output: ${result.outputDir}`);
