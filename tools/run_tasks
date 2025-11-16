@@ -463,13 +463,11 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
   switch (agent) {
     case 'claude-code':
       agentBinary = 'claude';
-      // Use --permission-mode bypassPermissions for automated execution
-      // Use --output-format json to get structured output
-      agentCommand = `claude --permission-mode bypassPermissions --output-format json --print "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `claude --permission-mode bypassPermissions --output-format stream-json --verbose --print "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'cursor-cli':
       agentBinary = 'cursor-agent';
-      agentCommand = `cursor-agent --force "${taskPrompt.replace(/"/g, '\\"')}"`;
+      agentCommand = `cursor-agent --force --output-format stream-json "${taskPrompt.replace(/"/g, '\\"')}"`;
       break;
     case 'codex-cli':
       agentBinary = 'codex';
@@ -870,11 +868,10 @@ async function main() {
   console.log(`Successful: ${results.filter(r => r.success).length}`);
   console.log(`Failed/Pending: ${results.filter(r => !r.success).length}`);
 
-  const evaluationsPath = join(EVALUATIONS_DIR, timestamp);
   console.log('\nNext steps:');
-  console.log(`  1. Review task outputs: ${evaluationsPath}`);
-  console.log(`  2. Run evaluation: ./tools/evaluate ${evaluationsPath}`);
-  console.log('     Options: --eval-agent <agent>, --skip-dynamic');
+  console.log('  1. Review task outputs in evaluations/');
+  console.log('  2. Run evaluation: ./tools/evaluate <output-dir>');
+  console.log('     Options: --eval-agent <agent>, --skip-flexible');
 }
 
 main().catch(error => {
