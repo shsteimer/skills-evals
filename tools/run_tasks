@@ -373,8 +373,8 @@ async function installDependencies(worktreePath) {
       return;
     }
 
-    // Run npm install
-    await execAsync('npm install --silent', {
+    // Run npm ci (clean install from lock file, doesn't modify package-lock.json)
+    await execAsync('npm ci --silent', {
       cwd: worktreePath,
       shell: '/bin/bash'
     });
@@ -459,95 +459,42 @@ function generateExecutionTranscript(jsonlOutput, agentName, taskName) {
   }
 
   if (events.length === 0) {
-    return 'EXECUTION TRANSCRIPT\n\nNo structured output available.\n';
+    return '';
   }
 
-  // Build transcript header
-  let transcript = '';
-  transcript += '================================================================================\n';
-  transcript += 'EXECUTION TRANSCRIPT\n';
-  transcript += '================================================================================\n\n';
-  transcript += `Task: ${taskName}\n`;
-  transcript += `Agent: ${agentName}\n`;
-  transcript += `Events: ${events.length}\n\n`;
-
-  // Detect agent format
-  const firstEvent = events[0];
-  let agentFormat = 'unknown';
-
-  if (firstEvent.type === 'system' && firstEvent.subtype === 'init') {
-    agentFormat = 'claude-code';
-  } else if (firstEvent.type === 'thread.started') {
-    agentFormat = 'codex-cli';
-  } else if (firstEvent.type === 'system' && firstEvent.model) {
-    agentFormat = 'cursor-cli';
+  // Use the agent name we already know
+  if (agentName === 'claude-code') {
+    return transcribeClaudeCode(events);
+  } else if (agentName === 'cursor-cli') {
+    return transcribeCursor(events);
+  } else if (agentName === 'codex-cli') {
+    return transcribeCodex(events);
   }
 
-  transcript += `Format: ${agentFormat}\n`;
-  transcript += '================================================================================\n\n';
-
-  // Generate chronological transcript based on format
-  if (agentFormat === 'claude-code') {
-    transcript += transcribeClaudeCode(events);
-  } else if (agentFormat === 'cursor-cli') {
-    transcript += transcribeCursor(events);
-  } else if (agentFormat === 'codex-cli') {
-    transcript += transcribeCodex(events);
-  } else {
-    transcript += 'Unknown format - see stdout.jsonl for raw output\n';
-  }
-
-  transcript += '\n================================================================================\n';
-  transcript += 'Full JSONL output available in: stdout.jsonl\n';
-  transcript += '================================================================================\n';
-
-  return transcript;
+  return '';
 }
 
 // Transcribe Claude Code execution
 function transcribeClaudeCode(events) {
   let transcript = '';
-  let turnNum = 0;
 
   for (const event of events) {
-    if (event.type === 'system' && event.subtype === 'init') {
-      transcript += `[SESSION START]\n`;
-      transcript += `Model: ${event.model}\n`;
-      transcript += `Session: ${event.session_id}\n`;
-      if (event.skills && event.skills.length > 0) {
-        transcript += `Skills available: ${event.skills.length}\n`;
-      }
-      transcript += '\n';
-    } else if (event.type === 'assistant') {
-      turnNum++;
-      transcript += `[TURN ${turnNum}]\n`;
-
-      if (event.message && event.message.content && Array.isArray(event.message.content)) {
-        for (const item of event.message.content) {
-          if (item.type === 'text') {
-            transcript += `\nAgent says:\n${wrapText(item.text, 80)}\n`;
-          } else if (item.type === 'tool_use') {
-            transcript += `\n> Tool: ${item.name}\n`;
-            if (item.input) {
-              const inputStr = JSON.stringify(item.input, null, 2);
-              transcript += `> Input: ${inputStr.substring(0, 200)}${inputStr.length > 200 ? '...' : ''}\n`;
-            }
+    if (event.type === 'assistant' && event.message && event.message.content) {
+      for (const item of event.message.content) {
+        if (item.type === 'text' && item.text) {
+          transcript += '[AGENT MESSAGE]\n';
+          transcript += item.text + '\n\n';
+        } else if (item.type === 'tool_use') {
+          transcript += '[TOOL]\n';
+          transcript += `[Tool: ${item.name}]\n`;
+          if (item.input) {
+            transcript += JSON.stringify(item.input, null, 2) + '\n\n';
           }
         }
       }
-      transcript += '\n';
-    } else if (event.type === 'result') {
-      transcript += `[RESULT]\n`;
-      transcript += `Status: ${event.is_error ? 'ERROR' : 'SUCCESS'}\n`;
-      transcript += `Duration: ${(event.duration_ms / 1000).toFixed(1)}s\n`;
-      transcript += `Turns: ${event.num_turns}\n`;
-      if (event.total_cost_usd) {
-        transcript += `Cost: $${event.total_cost_usd.toFixed(4)}\n`;
-      }
-      if (event.result && typeof event.result === 'string') {
-        transcript += `\nFinal response:\n${wrapText(event.result.substring(0, 500), 80)}${event.result.length > 500 ? '\n...(truncated)' : ''}\n`;
-      }
-      transcript += '\n';
+    } else if (event.type === 'result' && event.result) {
+      transcript += '[RESULT]\n';
+      transcript += event.result + '\n\n';
     }
   }
 
@@ -559,58 +506,43 @@ function transcribeCursor(events) {
   let transcript = '';
 
   for (const event of events) {
-    if (event.type === 'system') {
-      transcript += `[SESSION START]\n`;
-      transcript += `Model: ${event.model}\n`;
-      transcript += `Session: ${event.session_id}\n\n`;
-    } else if (event.type === 'user') {
-      transcript += `[USER]\n`;
-      if (event.message && event.message.content) {
-        for (const item of event.message.content) {
-          if (item.type === 'text') {
-            transcript += `${wrapText(item.text, 80)}\n`;
-          }
+    if (event.type === 'user' && event.message && event.message.content) {
+      for (const item of event.message.content) {
+        if (item.type === 'text' && item.text) {
+          transcript += '[USER MESSAGE]\n';
+          transcript += item.text + '\n\n';
         }
       }
-      transcript += '\n';
     } else if (event.type === 'tool_call') {
       if (event.subtype === 'started' && event.tool_call) {
-        // Extract tool name from the tool_call object
         const toolCall = event.tool_call;
         const toolName = Object.keys(toolCall)[0]?.replace('ToolCall', '') || 'unknown';
         const args = toolCall[Object.keys(toolCall)[0]]?.args || {};
 
-        transcript += `> Tool: ${toolName}\n`;
+        transcript += '[TOOL]\n';
+        transcript += `[Tool: ${toolName}]\n`;
+        transcript += JSON.stringify(args, null, 2) + '\n\n';
+      } else if (event.subtype === 'completed' && event.tool_call) {
+        // Result is nested inside tool_call structure
+        const toolCall = event.tool_call;
+        const toolKey = Object.keys(toolCall)[0]; // e.g., "readToolCall"
+        const result = toolCall[toolKey]?.result;
 
-        // Show key arguments
-        const argStr = JSON.stringify(args, null, 2);
-        if (argStr.length > 150) {
-          transcript += `  Args: ${argStr.substring(0, 150)}...\n`;
-        } else {
-          transcript += `  Args: ${argStr}\n`;
-        }
-      } else if (event.subtype === 'completed' && event.result) {
-        transcript += `  Result: ${typeof event.result === 'string' ? event.result.substring(0, 100) : JSON.stringify(event.result).substring(0, 100)}...\n`;
-      }
-    } else if (event.type === 'assistant' && event.message) {
-      transcript += `\n[ASSISTANT]\n`;
-      if (event.message.content && Array.isArray(event.message.content)) {
-        for (const item of event.message.content) {
-          if (item.type === 'text' && item.text) {
-            transcript += `${wrapText(item.text, 80)}\n`;
-          }
+        if (result) {
+          transcript += '[RESULT]\n';
+          transcript += JSON.stringify(result, null, 2) + '\n\n';
         }
       }
-      transcript += '\n';
-    } else if (event.type === 'result') {
-      transcript += `\n[RESULT]\n`;
-      if (event.response_text) {
-        transcript += `${wrapText(event.response_text.substring(0, 500), 80)}\n`;
-        if (event.response_text.length > 500) {
-          transcript += `\n...(truncated, see full output in stdout.jsonl)\n`;
+    } else if (event.type === 'assistant' && event.message && event.message.content) {
+      for (const item of event.message.content) {
+        if (item.type === 'text' && item.text) {
+          transcript += '[AGENT MESSAGE]\n';
+          transcript += item.text + '\n\n';
         }
       }
-      transcript += '\n';
+    } else if (event.type === 'result' && event.response_text) {
+      transcript += '[RESULT]\n';
+      transcript += event.response_text + '\n\n';
     }
   }
 
@@ -622,56 +554,31 @@ function transcribeCodex(events) {
   let transcript = '';
 
   for (const event of events) {
-    if (event.type === 'thread.started') {
-      transcript += `[SESSION START]\n`;
-      transcript += `Thread: ${event.thread_id}\n\n`;
-    } else if (event.type === 'item.completed' && event.item) {
+    if (event.type === 'item.completed' && event.item) {
       const item = event.item;
-      if (item.type === 'reasoning') {
-        transcript += `[REASONING]\n${item.text}\n\n`;
+      if (item.type === 'reasoning' && item.text) {
+        transcript += '[REASONING]\n';
+        transcript += item.text + '\n\n';
       } else if (item.type === 'command_execution') {
-        transcript += `[COMMAND]\n`;
-        transcript += `> ${item.command}\n`;
+        transcript += '[COMMAND]\n';
+        transcript += `[Command: ${item.command}]\n`;
         if (item.aggregated_output) {
-          const output = item.aggregated_output.substring(0, 300);
-          transcript += `Output: ${output}${item.aggregated_output.length > 300 ? '...(truncated)' : ''}\n`;
+          transcript += item.aggregated_output + '\n';
         }
-        transcript += `Exit code: ${item.exit_code}\n\n`;
-      } else if (item.type === 'message') {
-        transcript += `[AGENT]\n${wrapText(item.text || '', 80)}\n\n`;
+        if (item.exit_code !== undefined) {
+          transcript += `Exit code: ${item.exit_code}\n\n`;
+        }
+      } else if (item.type === 'message' && item.text) {
+        transcript += '[AGENT MESSAGE]\n';
+        transcript += item.text + '\n\n';
+      } else if (item.type === 'agent_message' && item.text) {
+        transcript += '[AGENT MESSAGE]\n';
+        transcript += item.text + '\n\n';
       }
     }
   }
 
   return transcript;
-}
-
-// Wrap text to specified width
-function wrapText(text, width) {
-  if (!text) return '';
-  const lines = text.split('\n');
-  const wrapped = [];
-
-  for (const line of lines) {
-    if (line.length <= width) {
-      wrapped.push(line);
-    } else {
-      // Simple wrapping - break at spaces
-      let current = '';
-      const words = line.split(' ');
-      for (const word of words) {
-        if ((current + ' ' + word).length <= width) {
-          current = current ? current + ' ' + word : word;
-        } else {
-          if (current) wrapped.push(current);
-          current = word;
-        }
-      }
-      if (current) wrapped.push(current);
-    }
-  }
-
-  return wrapped.join('\n');
 }
 
 // Execute the agent with the test task
@@ -819,22 +726,23 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
       writeFileSync(join(outputDir, 'git-status.txt'), statusOutput);
 
       // Add all changes (tracked and untracked) to staging
-      // Try git add -A first, fall back to git add . if blocked (AI safety)
-      try {
-        await execAsync('git add -A', {
-          cwd: worktreePath,
-          shell: '/bin/bash'
-        });
-      } catch (addError) {
-        // If git add -A is blocked (AI safety), try git add .
-        if (addError.message && addError.message.includes('not allowed')) {
-          console.log('  Warning: git add -A blocked, trying git add .');
-          await execAsync('git add .', {
-            cwd: worktreePath,
-            shell: '/bin/bash'
-          });
-        } else {
-          throw addError;
+      // Parse git status to get list of files, then add individually (for AI safety)
+      const files = statusOutput.trim().split('\n').filter(line => line.trim());
+      if (files.length > 0) {
+        for (const line of files) {
+          // Parse git status --porcelain format: "XY filename"
+          // XY is 2-char status code, filename starts at position 3
+          const filename = line.substring(3).trim();
+          if (filename) {
+            try {
+              await execAsync(`git add "${filename.replace(/"/g, '\\"')}"`, {
+                cwd: worktreePath,
+                shell: '/bin/bash'
+              });
+            } catch (addError) {
+              console.log(`  Warning: Could not add ${filename}: ${addError.message}`);
+            }
+          }
         }
       }
 
