@@ -1042,12 +1042,16 @@ The following artifacts are available in the output directory:
 
 `;
 
-  // List available artifacts
+  // List available artifacts - only include files useful for evaluation
   try {
     const files = readdirSync(outputDir);
     const relevantFiles = files.filter(f => {
-      return f.endsWith('.js') || f.endsWith('.css') || f.endsWith('.json') ||
-             f.endsWith('.md') || f.endsWith('.diff') || f === 'agent-info.json';
+      // Include specific artifacts for evaluation
+      return f === 'code-diff.patch' ||
+             f === 'stdout.jsonl' ||
+             f === 'stderr.txt' ||
+             f === 'lint-result.json' ||
+             f === 'git-status.txt';
     });
 
     for (const file of relevantFiles) {
