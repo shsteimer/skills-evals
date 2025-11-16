@@ -443,6 +443,94 @@ async function setupAgentExecution(test, agent, worktreePath, timestamp) {
   };
 }
 
+// Generate human-readable execution summary from JSONL output
+function generateExecutionSummary(jsonlOutput, agent, taskName) {
+  const lines = jsonlOutput.trim().split('\n').filter(line => line.trim());
+  const events = [];
+
+  // Parse each line as JSON
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+      events.push(event);
+    } catch (e) {
+      // Skip lines that aren't valid JSON
+    }
+  }
+
+  if (events.length === 0) {
+    return '# Execution Summary\n\nNo structured output available.\n';
+  }
+
+  // Build summary
+  let summary = `# Execution Summary\n\n`;
+  summary += `**Task:** ${taskName}\n`;
+  summary += `**Agent:** ${agent}\n`;
+  summary += `**Events:** ${events.length}\n\n`;
+
+  // Extract key information
+  const toolUses = events.filter(e => e.type === 'tool_use' || e.name);
+  const messages = events.filter(e => e.type === 'message' || e.content);
+  const errors = events.filter(e => e.type === 'error' || e.error);
+
+  // Tool uses summary
+  if (toolUses.length > 0) {
+    summary += `## Tools Used (${toolUses.length})\n\n`;
+    const toolCounts = {};
+    toolUses.forEach(tool => {
+      const toolName = tool.name || tool.tool_name || 'unknown';
+      toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
+    });
+    for (const [tool, count] of Object.entries(toolCounts).sort((a, b) => b[1] - a[1])) {
+      summary += `- **${tool}**: ${count} use${count > 1 ? 's' : ''}\n`;
+    }
+    summary += '\n';
+  }
+
+  // Errors
+  if (errors.length > 0) {
+    summary += `## Errors (${errors.length})\n\n`;
+    errors.forEach((err, i) => {
+      const errorMsg = err.error || err.message || JSON.stringify(err);
+      summary += `${i + 1}. ${errorMsg}\n`;
+    });
+    summary += '\n';
+  }
+
+  // Timeline of key events
+  summary += `## Event Timeline\n\n`;
+  let eventCount = 0;
+  for (const event of events) {
+    if (eventCount >= 50) { // Limit to first 50 events for readability
+      summary += `\n_... ${events.length - 50} more events_\n`;
+      break;
+    }
+
+    const type = event.type || 'unknown';
+    const timestamp = event.timestamp || event.created_at || '';
+
+    if (type === 'tool_use' || event.name) {
+      const toolName = event.name || event.tool_name || 'unknown';
+      summary += `- **[${timestamp}]** Tool: \`${toolName}\`\n`;
+      eventCount++;
+    } else if (type === 'message' && event.content) {
+      const content = typeof event.content === 'string'
+        ? event.content.substring(0, 100)
+        : JSON.stringify(event.content).substring(0, 100);
+      summary += `- **[${timestamp}]** Message: ${content}${content.length >= 100 ? '...' : ''}\n`;
+      eventCount++;
+    } else if (type === 'error') {
+      summary += `- **[${timestamp}]** ❌ Error: ${event.error || event.message}\n`;
+      eventCount++;
+    }
+  }
+
+  summary += `\n---\n\n`;
+  summary += `**Full JSONL output available in:** \`stdout.jsonl\`\n`;
+
+  return summary;
+}
+
 // Execute the agent with the test task
 async function executeAgent(test, agent, worktreePath, timestamp) {
   console.log(`  Executing ${agent} with task...`);
@@ -565,19 +653,17 @@ async function executeAgent(test, agent, worktreePath, timestamp) {
     const duration = endTime - startTime;
     const { stdout, stderr } = result;
 
-    // Save raw output
-    writeFileSync(join(outputDir, 'stdout.txt'), stdout);
+    // Save raw output as JSONL (stream-json format)
+    writeFileSync(join(outputDir, 'stdout.jsonl'), stdout);
     writeFileSync(join(outputDir, 'stderr.txt'), stderr);
 
-    // Parse JSON output if available (for claude with --output-format json)
-    let parsedOutput = null;
-    if (agent === 'claude-code' && stdout.trim()) {
-      try {
-        parsedOutput = JSON.parse(stdout);
-        writeFileSync(join(outputDir, 'agent-output.json'), JSON.stringify(parsedOutput, null, 2));
-      } catch (e) {
-        console.log('  Warning: Could not parse agent JSON output');
-      }
+    // Generate human-readable summary from JSONL
+    try {
+      const summary = generateExecutionSummary(stdout, agent, test.name);
+      writeFileSync(join(outputDir, 'execution-summary.md'), summary);
+      console.log('  ✓ Generated execution summary');
+    } catch (e) {
+      console.log('  Warning: Could not generate execution summary:', e.message);
     }
 
     // Capture final code state (git diff from initial state)
