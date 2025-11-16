@@ -1,6 +1,15 @@
 # Skills Evaluation Site
 AEM Edge Delivery Services project for skills evaluation and testing.
 
+## Quick Start
+
+```sh
+npm install
+aem up
+```
+
+Then open http://localhost:3000 in your browser.
+
 ## Environments
 - Preview: https://main--skills-evals--shsteimer.aem.page/
 - Live: https://main--skills-evals--shsteimer.aem.live/
