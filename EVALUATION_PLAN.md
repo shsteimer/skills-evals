@@ -7,7 +7,9 @@
 | **Phase 1: Foundation** | ✅ Complete | Task structure, schema, documentation |
 | **Phase 2: Task Runner** | ✅ Complete | Agent execution working for all 3 agents |
 | **Phase 3: Evaluator** | ✅ Complete | Full evaluation with static + dynamic (LLM) |
-| **Phase 4: Write Tasks** | 📋 Next Up | Create real tasks, validate framework |
+| **Phase 3b: Fix Diff Bug** | ✅ Complete | Fix git diff capture when agent makes commits |
+| **Phase 3c: Refine Evaluator** | 🔬 Current | Run evaluate script, tune prompts and output |
+| **Phase 4: Write Tasks** | 📋 Next | Create real tasks, validate framework end-to-end |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
 
 ---
@@ -22,12 +24,16 @@ We have established the evaluation framework foundation with a simplified, empir
 
 All infrastructure complete. Agent execution working for Claude Code, Cursor CLI, and Windsurf CLI.
 
-**Phase 3: Evaluator - ✅ COMPLETE**
+**Phase 3b: Fix Diff Bug - ✅ COMPLETE**
 
-Full evaluation framework working end-to-end with both static and dynamic (LLM) evaluation!
+Git diff capture bug is fixed!
+
+**Phase 3c: Refine Evaluator - 🔬 CURRENT**
+
+Time to run the evaluate script on real results and tune it.
 
 **What's Done:**
-- ✅ Phase 1 & 2: Complete
+- ✅ Phase 1, 2, 3, 3b: Complete
 - ✅ `./tools/evaluate` script with full CLI interface
 - ✅ Task definition loading
 - ✅ File existence/non-existence checks (via git diff parsing)
@@ -39,16 +45,22 @@ Full evaluation framework working end-to-end with both static and dynamic (LLM) 
 - ✅ Multi-agent evaluation (evaluates all agents in one run)
 - ✅ Comprehensive reports (JSON + Markdown with all criteria)
 - ✅ Exit codes (0 for pass, 1 for fail)
+- ✅ **Git diff bug fixed** - captures full changes even when agent commits
 
 **What's Next:**
 
-**Phase 4:** Write real tests, validate framework end-to-end
-**Phase 5:** TBD based on learnings
+1. **Phase 3c (Current):** Run evaluate script on existing results and refine
+   - Run `./tools/evaluate` on the docs-search results we already have
+   - Review evaluation reports and JSON output
+   - Tune evaluation prompt if needed
+   - Adjust output format for better readability
+   - Iterate until evaluation results are useful
 
-**Quick Start to Resume:**
-1. Run full framework: `./tools/run_tasks --task <name> && ./tools/evaluate <output-dir>`
-2. Write real tests for actual skills (Phase 4)
-3. Validate framework catches regressions and improvements
+2. **Phase 4 (Next):** Write real tasks and validate framework
+   - Create unit tasks for individual skills
+   - Run tasks → evaluate → review results
+   - Validate framework catches skill improvements/regressions
+   - Document patterns and best practices
 
 ---
 
@@ -330,7 +342,7 @@ Tasks:
 - Ready for evaluation script development (Phase 3)
 
 ### Phase 3: Evaluator 🤖
-**Status:** COMPLETE ✅
+**Status:** BUG FOUND 🐛
 
 **Goal:** Automatically evaluate task results against criteria.
 
@@ -352,14 +364,19 @@ Tasks:
 - [x] Proper exit codes
 - [x] Agent response parsing (handles claude-code, cursor-cli, codex-cli formats)
 
-**What it does:
+**Bug discovered:**
+- [ ] Git diff capture in `run_tasks` is incomplete when agent makes commits
+  - See Phase 3b below for details
+
+**What it does:**
 
 1. **Run static evaluation criteria (required)**
-   - Check if required files exist
-   - Run linting (`npm run lint`)
-   - Check for forbidden/required patterns
+   - Check if required files exist (via git diff parsing)
+   - Run linting if `lint_passes: true` specified
+   - Check for forbidden/required patterns (regex in git diff)
    - Run custom scripts if specified
    - **Result:** PASS or FAIL (failures block test)
+   - **Exit behavior:** Static failures cause non-zero exit code
 
 2. **Run optional static evaluation criteria**
    - Same types as required checks
@@ -373,10 +390,12 @@ Tasks:
    - **Logic:** A broken PR is worse than no PR
 
 4. **Run dynamic criteria evaluation (LLM)**
+   - **RUNS REGARDLESS OF STATIC CHECK RESULTS** (line 1261-1265 in evaluate script)
    - Accept `--eval-agent` flag (default: claude-code)
+   - Can be skipped with `--skip-dynamic` for faster iteration
    - Load test criteria from task.yaml
    - Load captured artifacts (code, transcript, etc.)
-   - Invoke evaluation agent with detailed prompt
+   - Invoke evaluation agent with detailed prompt (see below)
    - For each criterion (organized by priority), agent identifies:
      - **Strengths:** What went well
      - **Issues:** What didn't go well
@@ -387,6 +406,36 @@ Tasks:
    - `evaluation-results.json` - Structured data with static + dynamic results
    - `evaluation-report.md` - Human-readable findings
    - Save both to task results directory
+
+**Evaluation Prompt Structure (buildEvaluationPrompt, line 1005-1089):**
+```
+# Agent Skills Test Evaluation
+
+## Test Information
+- Test name, description, task prompt
+- Expected skills
+
+## Evaluation Criteria
+- Grouped by priority (high/medium/low)
+- Each criterion has name + description
+
+## Artifacts to Review
+- Lists all available files in output directory
+- Includes: code diff, transcripts, test-info.json, etc.
+
+## Instructions
+- Focus on qualitative assessment
+- Acknowledge multiple valid approaches
+- Note both successes and improvements
+- Be constructive and specific
+
+## Output Format
+- Organize by priority
+- For each criterion: strengths/issues/notes arrays
+- Plus overall_notes array
+```
+
+The agent receives this as a structured prompt and responds with JSON matching the schema.
 
 **Flags:**
 - `--eval-agent <agent>` - Agent to use for dynamic evaluation (default: claude-code)
@@ -399,43 +448,132 @@ Tasks:
 - Keep evaluation agent prompts in separate files for easy iteration
 - Script takes test output directory as input
 
-### Phase 4a: Optimize Evaluation Output 📊
-**Status:** In Progress
+### Phase 3b: Fix Git Diff Capture Bug 🐛
+**Status:** ✅ COMPLETE
 
-**Goal:** Refine evaluation output format to optimize for human review and comparison.
+**Goal:** Fix critical bug in git diff capture that causes missed changes when agents make commits.
+
+**Problem:**
+In `./tools/run_tasks`, the code diff is captured with:
+```bash
+git diff --cached HEAD
+```
+
+This only shows staged changes relative to HEAD. If the agent makes commits during execution, HEAD moves forward, so the diff only shows changes after the last commit, not all changes from the initial state.
+
+**Example scenario:**
+- Initial state: `main` branch (commit A)
+- Agent runs, creates commit B (adds `hero.js`)
+- Agent creates commit C (adds `hero.css`)
+- Agent stages more changes
+- We capture: `git diff --cached HEAD` → only shows staged changes, misses B and C!
+- Evaluation checks for `hero.js` and `hero.css` → incorrectly reports as missing!
+
+**The Fix:**
+
+1. **In `createTestBranch()` function (line ~283):**
+   - Capture the initial commit SHA before creating branch
+   - Return both branch name and initial SHA
+   ```javascript
+   const { stdout: initialSha } = await execAsync(`git rev-parse ${initialState}`);
+   return { branchName, initialSha: initialSha.trim() };
+   ```
+
+2. **In diff capture code (line ~750):**
+   - Change from `git diff --cached HEAD` to `git diff ${initialSha} HEAD`
+   - This captures ALL changes from initial state to current HEAD (includes all commits + staged changes)
+   ```javascript
+   // Include all commits + staged changes
+   const { stdout: diffOutput } = await execAsync(
+     `git diff ${initialSha} HEAD`, 
+     { cwd: worktreePath }
+   );
+   ```
+
+3. **Also capture staged-only diff for reference:**
+   ```javascript
+   // Also save staged-only changes for debugging
+   const { stdout: stagedDiff } = await execAsync(
+     `git diff --cached HEAD`,
+     { cwd: worktreePath }
+   );
+   writeFileSync(join(outputDir, 'staged-changes.patch'), stagedDiff);
+   ```
+
+**What was done:**
+1. Simplified `createTestBranch()` - just creates branch, no SHA capture
+2. In `runTestWithAgent()` - capture SHA AFTER `cleanupTestArtifacts()` instead of before
+   - This excludes infrastructure cleanup from diffs
+3. In diff capture code:
+   - Stage all changes (tracked + untracked)
+   - Commit staged changes to ensure they're in HEAD
+   - Use `git diff ${initialSha} HEAD` to capture full history
+4. Result: Diff now shows only what agent did, excludes cleanup commit
+
+**Committed:** `802feb6` - "fix: capture git diff from correct baseline after cleanup"
+
+### Phase 3c: Refine Evaluator 🔬
+**Status:** 🔬 CURRENT
+
+**Goal:** Run the evaluate script on real results and tune it for useful output.
+
+**Why this phase:**
+- The evaluate script is built but untested on real results
+- We have existing task results in `evaluations/2025-11-16T02:25:38.205Z/`
+- Need to verify prompts produce useful evaluations
+- Output format may need tuning for readability
 
 **What to do:**
-1. **Review current output format**
-   - Run sample evaluations with current format
-   - Identify what's helpful vs. noisy
-   - Consider different comparison scenarios (before/after skill changes, agent vs agent)
 
-2. **Optimize for readability**
-   - Improve markdown report formatting
-   - Add summary tables for quick scanning
-   - Highlight key differences and failures
-   - Group related information logically
+1. **Run evaluator on existing results**
+   ```bash
+   # After fixing diff bug, run evaluate on existing docs-search task
+   ./tools/evaluate evaluations/2025-11-16T02:25:38.205Z/docs-search-basic-feature-lookup
+   ```
 
-3. **Optimize for comparison**
-   - Make it easy to compare results across agents
-   - Make it easy to compare results across time (before/after changes)
-   - Consider diff-friendly formats for key metrics
+2. **Review outputs**
+   - Check `evaluation-results.json` structure
+   - Read `evaluation-report.md` for clarity
+   - Review evaluation prompt sent to LLM
+   - Check if dynamic criteria findings are useful
 
-4. **Iterate based on usage**
-   - Try reviewing real evaluation results
-   - Refine format based on what's actually useful
-   - Keep it simple and focused
+3. **Tune evaluation prompt (if needed)**
+   - Update `buildEvaluationPrompt()` in `./tools/evaluate`
+   - Adjust instructions for clearer guidance
+   - Test with different eval agents
+   - Ensure JSON response parsing works reliably
+
+4. **Refine output format (if needed)**
+   - Update `generateMarkdownReport()` for better readability
+   - Add summary tables or key metrics at top
+   - Make it easy to compare across agents
+   - Consider diff-friendly formats for tracking over time
+
+5. **Test with multiple agents**
+   - Run evaluation with different `--eval-agent` options
+   - Compare evaluation perspectives
+   - Ensure all agent response formats parse correctly
 
 **Success criteria:**
-- Can quickly identify pass/fail status
-- Easy to spot key issues and strengths
-- Comparison across runs is straightforward
-- Format supports both quick scanning and deep investigation
+- Can run evaluate on all agents without errors
+- Evaluation reports are readable and useful
+- Dynamic findings provide actionable insights
+- Easy to spot what went well vs. what needs work
 
-### Phase 4b: Write Unit Tasks 📝
-**Status:** Not Started - NEXT
+**Iteration approach:**
+- Run → Review → Adjust → Repeat
+- Don't try to perfect it, just make it useful
+- Keep it simple and focused
 
-**Goal:** Create unit tasks to test individual skills.
+### Phase 4: Write Tasks 📝
+**Status:** 📋 NEXT - After evaluator is proven to work
+
+**Goal:** Create unit tasks to test individual skills and validate the full framework.
+
+**Why wait until now:**
+- ✅ Git diff bug must be fixed (Phase 3b) - DONE
+- 🔬 Evaluator must produce useful output (Phase 3c) - IN PROGRESS
+- Otherwise we're writing tasks against a broken system
 
 **Approach:**
 - Focus on unit tasks first (test one skill at a time)
@@ -444,47 +582,89 @@ Tasks:
 - See "Planned Unit Tasks" section below for initial list
 
 **What to do:**
+
 1. **Create initial unit tasks** (see list below)
    - Pick real scenarios from actual skill usage
    - Cover key skills individually
-   - Use empirical approach: run 5+ times, document, then add criteria
+   - Start with simple tasks to validate framework
 
-2. **Run tasks with framework**
-   - Use `./tools/run_tasks` to execute
-   - Use `./tools/evaluate` to assess
-   - Identify what works, what doesn't
+2. **Run full evaluation loop for each task**
+   ```bash
+   # Full workflow
+   ./tools/run_tasks --task <task-name> --agents claude-code,cursor-cli
+   ./tools/evaluate evaluations/{timestamp}/{task-name}
+   
+   # Review results
+   cat evaluations/{timestamp}/{task-name}/*/evaluation-report.md
+   ```
 
-3. **Iterate on framework**
+3. **Use empirical approach to add criteria**
+   - Run task 5+ times with different agents
+   - Document what ALWAYS should be true (static criteria)
+   - Document what VARIES but matters (dynamic criteria)
+   - Add criteria to task.yaml based on patterns observed
+
+4. **Iterate on framework as needed**
    - Fix bugs discovered during real usage
-   - Improve task schema if needed
-   - Refine evaluation criteria based on what matters
+   - Improve task schema if patterns emerge
+   - Refine evaluation criteria based on what's useful vs. noise
+   - Update documentation with lessons learned
 
-4. **Document learnings**
+5. **Document learnings**
    - What task patterns work well?
-   - What criteria are useful vs. noise?
-   - How to write better tasks?
+   - What criteria catch real issues?
+   - How to write better tasks for different skill types?
+   - What makes evaluation results actionable?
 
 **Success criteria:**
-- Can run a task end-to-end without manual intervention
+- Can run any task end-to-end without manual intervention
 - Evaluation results are useful and actionable
 - Framework helps identify skill improvements/regressions
+- Have enough tasks to validate framework thoroughly
 
 ### Phase 5: TBD 🤷
 **Status:** Not Started
 
 **Goal:** Decide next steps based on Phase 4 learnings.
 
-**Potential directions:**
-- Comparison & baselines (if we need to track over time)
-- More automation (run all tests, CI/CD integration)
-- Better tooling (validation, dashboards, etc.)
-- More tasks (expand coverage)
-- Framework improvements (based on pain points)
-
 **Implementation approach:**
 - See where we are after Phase 4
 - Build what we actually need, not what we think we might need
 - Keep it simple and focused
+
+**Potential directions to consider:**
+
+#### Performance Improvements
+- **Parallel execution**: Run multiple agents in parallel during both test execution and evaluation
+  - Currently: Sequential execution (one agent at a time)
+  - Potential: Significant time savings when testing with multiple agents
+  - Implementation: Would need to handle concurrent worktrees and output directories
+
+#### Evaluation Enhancements
+- **Random evaluator selection**: Option to use a random/different agent for each evaluation
+  - `--eval-agent random` - Randomly selects evaluator for each agent being tested
+  - `--eval-agent round-robin` - Cycles through available evaluators
+  - Benefits: Diverse evaluation perspectives, reduces bias from single evaluator
+  - Use case: Get multiple viewpoints on agent performance
+
+#### Analysis & Optimization
+- A/B testing between skill versions
+- Automatic skill optimization suggestions
+- Integration with human feedback loop
+- Test case generation from real usage patterns
+- Performance benchmarking (speed, cost)
+
+#### Automation & Tooling
+- Run all tests in CI/CD
+- Validation tools for task definitions
+- Dashboards for tracking results over time
+- Comparison tools (before/after, agent vs agent)
+- Baseline tracking for detecting regressions
+
+#### Expansion
+- More tasks (expand coverage of skills and scenarios)
+- Integration tests (full workflows combining multiple skills)
+- Framework improvements based on pain points discovered in Phase 4
 
 ## Planned Unit Tasks
 
@@ -625,24 +805,3 @@ The framework is successful if:
 4. ✅ Handles dynamic variation gracefully
 5. ✅ Minimal maintenance overhead for adding new tasks
 
-## Future Enhancements
-
-### Performance
-- **Parallel execution**: Run multiple agents in parallel during both test execution and evaluation
-  - Currently: Sequential execution (one agent at a time)
-  - Potential: Significant time savings when testing with multiple agents
-  - Implementation: Would need to handle concurrent worktrees and output directories
-
-### Evaluation
-- **Random evaluator selection**: Option to use a random/different agent for each evaluation
-  - `--eval-agent random` - Randomly selects evaluator for each agent being tested
-  - `--eval-agent round-robin` - Cycles through available evaluators
-  - Benefits: Diverse evaluation perspectives, reduces bias from single evaluator
-  - Use case: Get multiple viewpoints on agent performance
-
-### Analysis & Optimization
-- A/B testing between skill versions
-- Automatic skill optimization suggestions
-- Integration with human feedback loop
-- Test case generation from real usage patterns
-- Performance benchmarking (speed, cost)
