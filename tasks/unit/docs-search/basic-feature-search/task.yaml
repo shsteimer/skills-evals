@@ -13,7 +13,7 @@ task: |
   Please explain:
   1. What blocks are
   2. How to create a basic block
-  3. What files are needed
+  3. What blocks are available
 
 static_criteria:
   forbidden_patterns:
