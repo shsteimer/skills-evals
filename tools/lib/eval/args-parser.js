@@ -74,7 +74,7 @@ Arguments:
 Options:
   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
   --skip-dynamic        Generate prompt but skip agent invocation (useful for review)
-  --clean               Remove evaluation artifacts before running
+  --clean               Remove evaluation artifacts and exit (cleanup only)
   --help                Show this help message
 
 Examples:
@@ -93,7 +93,7 @@ Examples:
   # Use specific agent for dynamic evaluation
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --eval-agent cursor-cli
 
-  # Clean previous evaluation results before running
+  # Clean evaluation artifacts (cleanup only, does not run evaluation)
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --clean
 `);
 }

@@ -12,7 +12,7 @@
  * Options:
  *   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
  *   --skip-dynamic        Generate prompt but skip agent invocation (useful for review)
- *   --clean               Remove evaluation artifacts before running
+ *   --clean               Remove evaluation artifacts and exit (cleanup only)
  *   --help                Show this help message
  */
 
@@ -97,13 +97,15 @@ async function main() {
     console.log(`Skip Dynamic: ${options.skipNonDeterministic}`);
     console.log(`Clean: ${options.clean}`);
 
-    // Clean artifacts if requested
+    // Clean artifacts if requested (standalone operation)
     if (options.clean) {
       console.log(`\n${'='.repeat(60)}`);
       console.log('Cleaning Evaluation Artifacts');
       console.log('='.repeat(60));
       const cleaned = cleanDirectory(options.outputDir);
-      console.log(`\nCleaned ${cleaned} artifact(s)\n`);
+      console.log(`\nCleaned ${cleaned} artifact(s)`);
+      console.log('='.repeat(60));
+      process.exit(0);
     }
 
     // Detect path type first
