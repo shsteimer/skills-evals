@@ -147,34 +147,24 @@ function buildEvaluationPrompt(outputDir, testDef, criteria) {
     // If we can't read test-info.json, continue with 'unknown'
   }
 
-  let prompt = `You are an expert in AEM Edge Delivery Services coding and architecture. Your job is to judge how well coding agents are able to perform tasks. Your judgement should always be fair and impartial, based only on the task given and the criteria specified.
+  // Load prompt template
+  const templatePath = join(import.meta.dirname, 'evaluation-prompt-template.txt');
+  const template = readFileSync(templatePath, 'utf8');
 
-# Agent Skills Task Evaluation
-
-You are evaluating the results of an agent skills task. Your task is to assess the agent's performance based on the dynamic criteria defined for this task.
-
-## Task Information
-
-**Task Name:** ${testDef.name}
+  // Build task information section
+  let taskInfo = `**Task Name:** ${testDef.name}
 **Description:** ${testDef.description || 'N/A'}
 **Agent Under Evaluation:** ${agentName}
 **Task Prompt:** ${testDef.task}`;
 
   // Add expected outcome if provided
   if (testDef.expected_outcome) {
-    prompt += `
+    taskInfo += `
 **Expected Outcome:** ${testDef.expected_outcome}`;
   }
 
-  prompt += `
-
-## Evaluation Criteria
-
-You will evaluate the following criteria, organized by priority:
-
-`;
-
-  // Group criteria by priority
+  // Build criteria section
+  let criteriaText = '';
   const byPriority = { high: [], medium: [], low: [] };
   for (const criterion of criteria) {
     const priority = criterion.priority || 'medium';
@@ -183,21 +173,16 @@ You will evaluate the following criteria, organized by priority:
 
   for (const priority of ['high', 'medium', 'low']) {
     if (byPriority[priority].length > 0) {
-      prompt += `### ${priority.toUpperCase()} Priority\n\n`;
+      criteriaText += `### ${priority.toUpperCase()} Priority\n\n`;
       for (const criterion of byPriority[priority]) {
-        prompt += `- **${criterion.name}**: ${criterion.description}\n`;
+        criteriaText += `- **${criterion.name}**: ${criterion.description}\n`;
       }
-      prompt += '\n';
+      criteriaText += '\n';
     }
   }
 
-  prompt += `## Artifacts to Review
-
-The following artifacts are available in the output directory:
-
-`;
-
-  // List available artifacts
+  // Build artifacts list
+  let artifactsText = '';
   try {
     const files = readdirSync(outputDir);
     const relevantFiles = files.filter((f) => f === 'code-diff.patch'
@@ -207,71 +192,17 @@ The following artifacts are available in the output directory:
              || f === 'git-status.txt');
 
     for (const file of relevantFiles) {
-      prompt += `- ${file}\n`;
+      artifactsText += `- ${file}\n`;
     }
   } catch (error) {
-    prompt += '- (Error listing files)\n';
+    artifactsText += '- (Error listing files)\n';
   }
 
-  prompt += `
-## Your Task
-
-Assess the agent's overall performance and report on how well it completed the task.
-
-Think carefully about both the overall agent output (code changes made, final response delivered to the user) and the steps the agent took to get there (tools used, decisions made, approach taken).
-
-Consider all of this in context of the evaluation criteria specified above and the expected outcome. Then provide a report that highlights strengths, weaknesses, issues, and notable observations.
-
-## Guidelines
-
-- Provide a holistic assessment, not just a checklist
-- Be specific with examples from the artifacts
-- Consider the criteria priorities but organize naturally
-- Acknowledge when multiple approaches are valid
-- Be constructive and fair in your judgment
-
-## Output Format
-
-Provide your evaluation as markdown with the following structure:
-
-### Executive Summary
-
-[Overall assessment - did the agent succeed? How well? How does the output compare to the expected outcome?]
-
-### Strengths
-
-- [What went well - organized naturally, not forced into rigid criterion boxes]
-- [Good decisions, proper approach, quality output]
-- [Effective tool usage, solid implementation choices]
-
-### Areas for Improvement
-
-- [Issues, weaknesses, missed opportunities]
-- [What could have been done better]
-- [Anti-patterns or problematic approaches]
-
-### Detailed Analysis
-
-[Free-form commentary providing deeper context. You may organize this by priority level, by theme, or chronologically - whatever makes the most sense for conveying your assessment clearly.]
-
-#### High Priority Observations
-
-[Commentary on high-priority criteria and critical aspects of the task]
-
-#### Medium Priority Observations
-
-[Commentary on medium-priority criteria and important aspects]
-
-#### Low Priority Observations
-
-[Commentary on low-priority criteria and nice-to-have aspects]
-
-### Conclusion
-
-[Final verdict and key takeaways about the agent's performance on this task]
-
-IMPORTANT: Respond with ONLY the markdown content above. Do not include any other text, explanations, or commentary outside of the requested markdown format.
-`;
+  // Substitute placeholders in template
+  const prompt = template
+    .replace('{{TASK_INFO}}', taskInfo)
+    .replace('{{CRITERIA}}', criteriaText)
+    .replace('{{ARTIFACTS}}', artifactsText);
 
   return prompt;
 }
