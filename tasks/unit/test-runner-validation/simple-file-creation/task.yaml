@@ -27,8 +27,8 @@ static_criteria:
       script: "test -f code-diff.patch && grep -q 'Test completed successfully' code-diff.patch"
 
 dynamic_criteria:
-  - name: task_completion
-    description: |
+  - description: Assess task completion - file created correctly without errors
+    details:
       - File was created with correct content
       - Task was completed without errors
     priority: high

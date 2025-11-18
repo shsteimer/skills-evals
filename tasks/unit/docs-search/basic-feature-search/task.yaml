@@ -35,16 +35,16 @@ static_criteria:
         fi
 
 dynamic_criteria:
-  - name: skill_usage
-    description: |
-      - if Agent isn't claude, they ran discover_skills script first to find the docs-search skill
+  - description: Assess skill discovery and usage - agent properly identified and used docs-search skill
+    details:
+      - If agent is cursor-cli or codex-cli, ran discover_skills script first to find the docs-search skill
       - Agent correctly invoked the docs-search skill
       - Agent searched for relevant terms (blocks, Edge Delivery, etc.)
       - Agent acknowledged using the skill in its response
     priority: high
 
-  - name: information_quality
-    description: |
+  - description: Evaluate information quality - accurate, relevant documentation was found and used
+    details:
       - Found relevant documentation about blocks
       - Explanation covers what blocks are
       - Explanation includes how to create blocks
@@ -52,15 +52,15 @@ dynamic_criteria:
       - Information is specific to AEM Edge Delivery Services and not AEM Classic (6.5, cloud service, etc.)
     priority: high
 
-  - name: response_structure
-    description: |
+  - description: Assess response structure - well-organized and easy to understand
+    details:
       - Response is well-organized and easy to understand
       - Key points are clearly identified
       - Appropriate level of detail (not too brief, not overwhelming)
     priority: medium
 
-  - name: completeness
-    description: |
+  - description: Check completeness - all parts of question addressed with helpful context
+    details:
       - Addressed all three parts of the question
       - Provided URLs or references to documentation
       - Explained concepts in a helpful way

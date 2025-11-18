@@ -199,31 +199,41 @@ Quality criteria evaluated by LLM using dynamic evaluation, can vary across runs
 **Example:**
 ```yaml
 dynamic_criteria:
-  - name: code_quality
-    description: Code follows style guidelines, is maintainable and well-structured
+  - description: Evaluate code quality - follows style guidelines, is maintainable and well-structured
+    details:
+      - JavaScript uses proper patterns and modern syntax
+      - CSS is well-organized with appropriate selectors
+      - Code is readable and maintainable
     priority: high
-  - name: process_adherence
-    description: Followed skill workflow correctly and completely
+
+  - description: Assess process adherence - agent followed skill workflows correctly
+    details:
+      - Used content-driven development approach
+      - Followed building-blocks skill guidelines
+      - Completed workflow in logical order
     priority: high
-  - name: completeness
-    description: Implementation is complete and handles edge cases appropriately
+
+  - description: Check completeness - implementation handles requirements and edge cases
     priority: medium
-  - name: autonomy
-    description: Minimal human intervention needed to complete task
+
+  - description: Evaluate autonomy - minimal human intervention needed
     priority: low
 ```
 
 ##### Dynamic Evaluation Criterion Properties
 
-**`name`** (string)
-- Unique identifier for this criterion
-- Used in evaluation results
+**`description`** (string, required)
+- Main criterion description - what aspect of the task to evaluate
+- Should be clear and focused on a specific quality or aspect
+- This becomes the header in the evaluation prompt
 
-**`description`** (string)
-- What this criterion evaluates
-- Provides context to evaluation agent
+**`details`** (array of strings, optional)
+- Specific points to consider when evaluating this criterion
+- Provides concrete guidance to the evaluation agent
+- Use when the criterion benefits from explicit sub-points
+- Can be omitted for simpler criteria
 
-**`priority`** (enum: "high" | "medium" | "low")
+**`priority`** (enum: "high" | "medium" | "low", required)
 - Relative importance for evaluation
 - High priority issues have more impact on overall assessment
 
@@ -289,8 +299,8 @@ optional_static_criteria:
       message: "Consider adding ARIA attributes for better accessibility"
 
 dynamic_criteria:
-  - name: code_quality
-    description: |
+  - description: Evaluate code quality - proper patterns, maintainability, and structure
+    details:
       - JavaScript uses proper decoration patterns
       - CSS is mobile-first with proper breakpoints (600px, 900px)
       - All selectors scoped to .quote
@@ -298,24 +308,24 @@ dynamic_criteria:
       - Code is clean and maintainable
     priority: high
 
-  - name: process_adherence
-    description: |
+  - description: Assess process adherence - followed skill workflows correctly
+    details:
       - Followed content-driven development (content model first)
       - Used building-blocks skill guidelines
       - Created test content before implementation
       - Announced skill usage
     priority: high
 
-  - name: completeness
-    description: |
+  - description: Check completeness - handles all requirements and edge cases
+    details:
       - Handles all required content fields
       - Handles optional fields gracefully
       - Responsive across all breakpoints
       - Accessible (proper semantic HTML, ARIA if needed)
     priority: medium
 
-  - name: autonomy
-    description: |
+  - description: Evaluate autonomy - minimal human intervention needed
+    details:
       - Completed without asking unnecessary questions
       - Made reasonable decisions independently
       - Only asked for clarification on truly ambiguous points

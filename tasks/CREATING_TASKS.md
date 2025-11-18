@@ -353,21 +353,20 @@ dynamic_criteria:
     priority: low
 ```
 
-### 3. Specific Flexible Criteria
+### 3. Specific Dynamic Criteria
 
 ❌ **Bad:**
 ```yaml
 dynamic_criteria:
-  - name: quality
-    description: Code is good quality
+  - description: Code is good quality
     priority: high
 ```
 
 ✅ **Good:**
 ```yaml
 dynamic_criteria:
-  - name: code_quality
-    description: |
+  - description: Evaluate code quality - proper patterns, maintainability, and structure
+    details:
       - JavaScript uses proper decoration patterns
       - CSS is mobile-first with breakpoints (600px, 900px)
       - Selectors properly scoped
@@ -381,24 +380,24 @@ dynamic_criteria:
 ```yaml
 # For a test focused on following process:
 dynamic_criteria:
-  - name: process_adherence
+  - description: Assess process adherence - agent followed skill workflows correctly
     priority: high  # Most important for this test
-  - name: code_quality
+  - description: Evaluate code quality
     priority: high
-  - name: completeness
+  - description: Check completeness
     priority: medium
-  - name: autonomy
+  - description: Evaluate autonomy
     priority: low
 
 # For a test focused on code quality:
 dynamic_criteria:
-  - name: code_quality
+  - description: Evaluate code quality - proper patterns and maintainability
     priority: high  # Most important for this test
-  - name: completeness
+  - description: Check completeness - handles all requirements
     priority: high
-  - name: process_adherence
+  - description: Assess process adherence
     priority: medium
-  - name: autonomy
+  - description: Evaluate autonomy
     priority: low
 ```
 
@@ -445,14 +444,15 @@ dynamic_criteria:
 **Solution**: Be explicit about agent names in criteria:
 ```yaml
 # Bad - ambiguous
-- name: skill_discovery
-  description: if Agent isn't claude, run discover_skills first
+- description: if Agent isn't claude, run discover_skills first
+  priority: high
 
 # Good - explicit
-- name: skill_discovery
-  description: |
+- description: Assess skill discovery and usage
+  details:
     - If agent is cursor-cli or codex-cli, run discover_skills to find available skills
     - Agent correctly identified and used the appropriate skill
+  priority: high
 ```
 **Note**: This may indicate skills need better documentation about when discover_skills is required. Consider refining skill instructions separately.
 
