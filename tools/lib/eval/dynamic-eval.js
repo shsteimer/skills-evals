@@ -175,9 +175,17 @@ function buildEvaluationPrompt(outputDir, testDef, criteria) {
     if (byPriority[priority].length > 0) {
       criteriaText += `### ${priority.toUpperCase()} Priority\n\n`;
       for (const criterion of byPriority[priority]) {
-        criteriaText += `- **${criterion.name}**: ${criterion.description}\n`;
+        criteriaText += `${criterion.description}\n\n`;
+
+        // If criterion has details, format as bullet points
+        if (criterion.details && criterion.details.length > 0) {
+          criteriaText += 'Consider the following:\n\n';
+          for (const detail of criterion.details) {
+            criteriaText += `- ${detail}\n`;
+          }
+          criteriaText += '\n';
+        }
       }
-      criteriaText += '\n';
     }
   }
 
