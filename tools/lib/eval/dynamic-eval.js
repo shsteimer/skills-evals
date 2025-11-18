@@ -211,16 +211,24 @@ function buildEvaluationPrompt(outputDir, testDef, criteria) {
 
   let prompt = `You are an expert in AEM Edge Delivery Services coding and architecture. Your job is to judge how well coding agents are able to perform tasks. Your judgement should always be fair and impartial, based only on the task given and the criteria specified.
 
-# Agent Skills Test Evaluation
+# Agent Skills Task Evaluation
 
-You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the dynamic criteria defined for this test.
+You are evaluating the results of an agent skills task. Your task is to assess the agent's performance based on the dynamic criteria defined for this task.
 
-## Test Information
+## Task Information
 
-**Test Name:** ${testDef.name}
+**Task Name:** ${testDef.name}
 **Description:** ${testDef.description || 'N/A'}
 **Agent Under Evaluation:** ${agentName}
-**Task:** ${testDef.task}
+**Task Prompt:** ${testDef.task}`;
+
+  // Add expected outcome if provided
+  if (testDef.expected_outcome) {
+    prompt += `
+**Expected Outcome:** ${testDef.expected_outcome}`;
+  }
+
+  prompt += `
 
 ## Evaluation Criteria
 
