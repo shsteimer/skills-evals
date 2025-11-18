@@ -17,12 +17,7 @@ export async function runDynamicEvaluation(
   }
 
   const results = {
-    by_priority: {
-      high: {},
-      medium: {},
-      low: {},
-    },
-    overall_notes: [],
+    markdown_report: null,
   };
 
   const criteria = testDef.dynamic_criteria || testDef.flexible_criteria || [];
@@ -97,99 +92,42 @@ export async function runDynamicEvaluation(
       // Save raw output
       writeFileSync(join(outputDir, 'eval-agent-output.txt'), `${evalResult.stdout}\n\n${evalResult.stderr}`);
 
-      // Try to parse JSON from output
-      let evaluationData;
+      // Extract markdown response from output
       try {
         const output = evalResult.stdout.trim();
+        let markdownResponse = output;
 
-        // Try to parse as JSON
-        let parsedOutput;
+        // Check if this is claude-code wrapped format (JSON with result field)
         try {
-          parsedOutput = JSON.parse(output);
+          const parsedOutput = JSON.parse(output);
+          if (parsedOutput.result && typeof parsedOutput.result === 'string') {
+            markdownResponse = parsedOutput.result;
+          }
         } catch (e) {
-          // Extract JSON from text
-          const jsonMatch = output.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            parsedOutput = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error('Could not find JSON in output');
-          }
-        }
-
-        // Check if this is claude-code wrapped format
-        if (parsedOutput.result && typeof parsedOutput.result === 'string') {
-          // Extract JSON from markdown code block
-          const codeBlockMatch = parsedOutput.result.match(/```json\s*([\s\S]*?)\s*```/);
-          if (codeBlockMatch) {
-            evaluationData = JSON.parse(codeBlockMatch[1]);
-          } else {
-            const jsonMatch = parsedOutput.result.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              evaluationData = JSON.parse(jsonMatch[0]);
-            } else {
-              evaluationData = parsedOutput;
-            }
-          }
-        } else {
-          evaluationData = parsedOutput;
+          // Not JSON, use output as-is
         }
 
         console.log('  ✓ Received evaluation from agent\n');
 
-        // Validate structure
-        if (evaluationData.by_priority) {
-          results.by_priority = evaluationData.by_priority;
-        }
-        if (evaluationData.overall_notes) {
-          results.overall_notes = evaluationData.overall_notes;
-        }
+        // Save the markdown response
+        writeFileSync(join(outputDir, 'eval-agent-response.md'), markdownResponse);
 
-        // Save parsed evaluation
-        writeFileSync(join(outputDir, 'eval-agent-response.json'), JSON.stringify(evaluationData, null, 2));
-      } catch (parseError) {
-        console.log(`  ⚠ Could not parse agent response as JSON: ${parseError.message}`);
-        console.log('  Creating placeholder results instead\n');
+        // Store markdown in results for report generation
+        results.markdown_report = markdownResponse;
+      } catch (error) {
+        console.log(`  ⚠ Error processing agent response: ${error.message}`);
+        console.log('  Response saved to eval-agent-output.txt\n');
 
-        // Fall back to placeholder results
-        for (const criterion of criteria) {
-          const priority = criterion.priority || 'medium';
-
-          if (!results.by_priority[priority]) {
-            results.by_priority[priority] = {};
-          }
-
-          results.by_priority[priority][criterion.name] = {
-            strengths: ['[Could not parse agent response]'],
-            issues: [],
-            notes: ['Agent output saved to eval-agent-output.txt', `Criterion: ${criterion.description}`],
-          };
-        }
-
-        results.overall_notes.push('Note: Agent response could not be parsed. See eval-agent-output.txt for raw output.');
+        results.markdown_report = `# Evaluation Error\n\nCould not process agent response. See eval-agent-output.txt for raw output.\n\nError: ${error.message}`;
       }
     } catch (error) {
       console.log(`  ✗ Error running eval agent: ${error.message}\n`);
 
-      // Create placeholder results
-      for (const criterion of criteria) {
-        const priority = criterion.priority || 'medium';
-
-        if (!results.by_priority[priority]) {
-          results.by_priority[priority] = {};
-        }
-
-        results.by_priority[priority][criterion.name] = {
-          strengths: [],
-          issues: [`Evaluation agent failed: ${error.message}`],
-          notes: [`Criterion: ${criterion.description}`],
-        };
-      }
-
-      results.overall_notes.push(`Error: Could not run evaluation agent - ${error.message}`);
+      results.markdown_report = `# Evaluation Error\n\nCould not run evaluation agent.\n\nError: ${error.message}`;
     }
   } catch (error) {
     console.log(`  ✗ Error in dynamic evaluation: ${error.message}`);
-    results.overall_notes.push(`Error during evaluation: ${error.message}`);
+    results.markdown_report = `# Evaluation Error\n\nError during evaluation: ${error.message}`;
   }
 
   return results;
@@ -278,62 +216,59 @@ The following artifacts are available in the output directory:
   prompt += `
 ## Your Task
 
+Assess the agent's overall performance and report on how well it completed the task.
+
 Think carefully about both the overall agent output (code changes made, final response delivered to the user) and the steps the agent took to get there (tools used, decisions made, approach taken).
 
-For each criterion, provide:
+Consider all of this in context of the evaluation criteria specified above and the expected outcome. Then provide a report that highlights strengths, weaknesses, issues, and notable observations.
 
-1. **Strengths**: What went well? What did the agent do correctly?
-2. **Issues**: What didn't go well? What could be improved?
-3. **Notes**: Additional observations or context
+## Guidelines
 
-## Important Guidelines
-
-- Focus on qualitative assessment, not scores
-- Consider the specific task and context
-- Acknowledge that there may be multiple valid approaches
-- Note both successes and areas for improvement
-- Be constructive and specific in your feedback
+- Provide a holistic assessment, not just a checklist
+- Be specific with examples from the artifacts
+- Consider the criteria priorities but organize naturally
+- Acknowledge when multiple approaches are valid
+- Be constructive and fair in your judgment
 
 ## Output Format
 
 Provide your evaluation as markdown with the following structure:
 
-### Overall Notes
+### Executive Summary
 
-[Start with an overall assessment including:
-- General observations about the agent's performance
-- Summary of strengths and weaknesses
-- Notable patterns or behaviors
-- Overall assessment of task completion]
+[Overall assessment - did the agent succeed? How well? How does the output compare to the expected outcome?]
 
-### HIGH Priority
+### Strengths
 
-#### [criterion_name]
+- [What went well - organized naturally, not forced into rigid criterion boxes]
+- [Good decisions, proper approach, quality output]
+- [Effective tool usage, solid implementation choices]
 
-**Strengths:**
+### Areas for Improvement
 
-- [strength 1]
-- [strength 2]
+- [Issues, weaknesses, missed opportunities]
+- [What could have been done better]
+- [Anti-patterns or problematic approaches]
 
-**Issues:**
+### Detailed Analysis
 
-- [issue 1]
-- [issue 2]
+[Free-form commentary providing deeper context. You may organize this by priority level, by theme, or chronologically - whatever makes the most sense for conveying your assessment clearly.]
 
-**Notes:**
+#### High Priority Observations
 
-- [note 1]
-- [note 2]
+[Commentary on high-priority criteria and critical aspects of the task]
 
-[Repeat for each HIGH priority criterion]
+#### Medium Priority Observations
 
-### MEDIUM Priority
+[Commentary on medium-priority criteria and important aspects]
 
-[Same structure as HIGH priority]
+#### Low Priority Observations
 
-### LOW Priority
+[Commentary on low-priority criteria and nice-to-have aspects]
 
-[Same structure as HIGH priority]
+### Conclusion
+
+[Final verdict and key takeaways about the agent's performance on this task]
 
 IMPORTANT: Respond with ONLY the markdown content above. Do not include any other text, explanations, or commentary outside of the requested markdown format.
 `;

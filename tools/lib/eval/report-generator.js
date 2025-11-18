@@ -114,53 +114,11 @@ export function generateMarkdownReport(results) {
     }
   }
 
-  md += '## Dynamic Evaluations\n\n';
+  md += '## Dynamic Evaluation\n\n';
 
-  if (results.dynamic_assessment && results.dynamic_assessment.by_priority) {
-    const assessment = results.dynamic_assessment;
-
-    // Show overall notes first
-    if (assessment.overall_notes && assessment.overall_notes.length > 0) {
-      md += '### Overall Notes\n\n';
-      assessment.overall_notes.forEach((note) => { md += `- ${note}\n`; });
-      md += '\n';
-    }
-
-    // Then show criteria organized by priority
-    for (const priority of ['high', 'medium', 'low']) {
-      const priorityResults = assessment.by_priority[priority];
-      if (priorityResults && Object.keys(priorityResults).length > 0) {
-        md += `### ${priority.toUpperCase()} Priority\n\n`;
-
-        for (const [criterionName, criterionResults] of Object.entries(priorityResults)) {
-          md += `#### ${criterionName}\n\n`;
-
-          if (criterionResults.strengths && criterionResults.strengths.length > 0) {
-            md += '**Strengths:**\n\n';
-            for (const s of criterionResults.strengths) {
-              md += `- ✅ ${s}\n`;
-            }
-            md += '\n';
-          }
-
-          if (criterionResults.issues && criterionResults.issues.length > 0) {
-            md += '**Issues:**\n\n';
-            for (const i of criterionResults.issues) {
-              md += `- ⚠️ ${i}\n`;
-            }
-            md += '\n';
-          }
-
-          if (criterionResults.notes && criterionResults.notes.length > 0) {
-            md += '**Notes:**\n\n';
-            for (const n of criterionResults.notes) {
-              md += `- ${n}\n`;
-            }
-            md += '\n';
-          }
-        }
-      }
-    }
+  if (results.dynamic_assessment && results.dynamic_assessment.markdown_report) {
+    md += results.dynamic_assessment.markdown_report;
+    md += '\n\n';
   } else {
     md += '_(Not evaluated)_\n\n';
   }
