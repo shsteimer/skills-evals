@@ -8,7 +8,7 @@
 | **Phase 2: Task Runner** | ✅ Complete | Agent execution working for all 3 agents |
 | **Phase 3: Evaluator** | ✅ Complete | Full evaluation with static + dynamic (LLM) |
 | **Phase 3b: Fix Diff Bug** | ✅ Complete | Fix git diff capture when agent makes commits |
-| **Phase 3c: Refine Evaluator** | 🔬 Current | Run evaluate script, tune prompts and output |
+| **Phase 3c: Refine Evaluator** | ✅ Complete | Narrative format, template-based prompts, new criteria schema |
 | **Phase 4: Write Tasks** | 📋 Next | Create real tasks, validate framework end-to-end |
 | **Phase 5: TBD** | 🤷 Future | Decide based on Phase 4 learnings |
 
@@ -28,35 +28,43 @@ All infrastructure complete. Agent execution working for Claude Code, Cursor CLI
 
 Git diff capture bug is fixed!
 
-**Phase 3c: Refine Evaluator - 🔬 CURRENT**
+**Phase 3c: Refine Evaluator - ✅ COMPLETE**
 
-Time to run the evaluate script on real results and tune it.
+Ran evaluations, identified issues, and made significant improvements to the evaluation system.
 
-**What's Done:**
-- ✅ Phase 1, 2, 3, 3b: Complete
-- ✅ `./tools/evaluate.js` script with full CLI interface
-- ✅ Task definition loading
-- ✅ File existence/non-existence checks (via git diff parsing)
-- ✅ Forbidden/required pattern checks (regex in git diff)
-- ✅ Linting checks (run in task-runner, results saved)
-- ✅ Custom script execution for specialized validation
-- ✅ PR quality checks (using gh CLI)
-- ✅ **Dynamic LLM evaluation** (invokes agent for quality assessment)
-- ✅ Multi-agent evaluation (evaluates all agents in one run)
-- ✅ Comprehensive reports (JSON + Markdown with all criteria)
-- ✅ Exit codes (0 for pass, 1 for fail)
-- ✅ **Git diff bug fixed** - captures full changes even when agent commits
+**What Was Done:**
 
-**What's Next:**
+1. **Evaluation Workflow** - Added flags for better control:
+   - `--clean`: Cleanup only, exit
+   - `--skip-dynamic`: Clean → static → prompt (skip agent invocation)
+   - No flags: Clean → static → prompt → dynamic (default full evaluation)
+   - Cleanup now runs by default for fresh results
 
-1. **Phase 3c (Current):** Run evaluate script on existing results and refine
-   - Run `./tools/evaluate.js` on the docs-search results we already have
-   - Review evaluation reports and JSON output
-   - Tune evaluation prompt if needed
-   - Adjust output format for better readability
-   - Iterate until evaluation results are useful
+2. **Narrative Evaluation Format** - Replaced rigid JSON with free-form markdown:
+   - Executive Summary → Strengths → Areas for Improvement → Detailed Analysis → Conclusion
+   - Gives evaluation agents creative freedom while maintaining structure
+   - Responses saved as `eval-agent-response.md`
+   - Fixed JSON output flags that were forcing wrong format
 
-2. **Phase 4 (Next):** Write real tasks and validate framework
+3. **Prompt Improvements**:
+   - Extracted to `evaluation-prompt-template.txt` for easy editing
+   - Changed "Test" → "Task" terminology throughout
+   - Added optional `expected_outcome` field support
+   - Softened "based only on" → "based largely on" for flexibility
+   - Template uses placeholders: `{{TASK_INFO}}`, `{{CRITERIA}}`, `{{ARTIFACTS}}`
+
+4. **Simplified Criteria Schema**:
+   - **Removed** redundant `name` field
+   - **`description`**: Main criterion (what to evaluate)
+   - **`details`**: Optional array of specific points to consider
+   - Much cleaner and more natural to write
+
+5. **Documentation Updated**:
+   - Updated `tasks/TASK_SCHEMA.md` with new format
+   - Updated `tasks/CREATING_TASKS.md` with examples
+   - Migrated both existing test tasks to new format
+
+**Phase 4 (Next):** Write real tasks and validate framework
    - Create unit tasks for individual skills
    - Run tasks → evaluate → review results
    - Validate framework catches skill improvements/regressions
