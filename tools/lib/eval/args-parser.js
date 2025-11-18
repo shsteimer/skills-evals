@@ -16,6 +16,7 @@ export function parseArgs() {
     evalAgent: 'claude-code',
     skipNonDeterministic: false,
     clean: false,
+    cleanOnly: false,
   };
 
   let i = 0;
@@ -34,6 +35,7 @@ export function parseArgs() {
         break;
       case '--clean':
         options.clean = true;
+        // If --clean is the only flag, mark as cleanOnly
         break;
       default:
         if (!options.outputDir && !arg.startsWith('--')) {
@@ -55,6 +57,15 @@ export function parseArgs() {
     process.exit(1);
   }
 
+  // Determine if --clean is the only operation (cleanup and exit)
+  if (options.clean && !options.skipNonDeterministic && options.evalAgent === 'claude-code') {
+    // Check if no other flags were specified (only --clean)
+    const otherFlags = args.filter((a) => a.startsWith('--') && a !== '--clean');
+    if (otherFlags.length === 0) {
+      options.cleanOnly = true;
+    }
+  }
+
   return options;
 }
 
@@ -73,9 +84,14 @@ Arguments:
 
 Options:
   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
-  --skip-dynamic        Generate prompt but skip agent invocation (useful for review)
-  --clean               Remove evaluation artifacts and exit (cleanup only)
+  --skip-dynamic        Skip dynamic evaluation (still runs cleanup, static, and prompt generation)
+  --clean               Cleanup only, do not run evaluation
   --help                Show this help message
+
+Workflow:
+  No flags:        clean → static checks → generate prompt → run dynamic evaluation
+  --clean:         clean only, exit
+  --skip-dynamic:  clean → static checks → generate prompt (skip dynamic evaluation)
 
 Examples:
   # Evaluate all tasks and agents from a run
@@ -87,13 +103,13 @@ Examples:
   # Evaluate specific agent for specific task
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z/create-simple-block/claude-code
 
-  # Skip dynamic evaluation (generates prompt but doesn't run agent)
-  ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --skip-dynamic
+  # Full evaluation (clean, static, prompt, dynamic)
+  ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z
 
-  # Use specific agent for dynamic evaluation
-  ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --eval-agent cursor-cli
-
-  # Clean evaluation artifacts (cleanup only, does not run evaluation)
+  # Cleanup only
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --clean
+
+  # Everything except dynamic evaluation (clean, static, prompt)
+  ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --skip-dynamic
 `);
 }
