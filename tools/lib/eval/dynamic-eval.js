@@ -60,7 +60,6 @@ export async function runDynamicEvaluation(
           agentCommand = 'claude';
           agentArgs = [
             '--permission-mode', 'bypassPermissions',
-            '--output-format', 'json',
             '--print', prompt,
           ];
           break;
@@ -70,7 +69,7 @@ export async function runDynamicEvaluation(
           break;
         case 'codex-cli':
           agentCommand = 'codex';
-          agentArgs = ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', prompt];
+          agentArgs = ['exec', '--dangerously-bypass-approvals-and-sandbox', prompt];
           break;
         default:
           throw new Error(`Unknown eval agent: ${evalAgent}`);
