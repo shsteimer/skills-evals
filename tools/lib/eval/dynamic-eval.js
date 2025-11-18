@@ -1,13 +1,20 @@
-import { writeFileSync, readdirSync } from 'fs';
+import { writeFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
 
 /**
  * Run dynamic criteria evaluation with LLM
  */
-export async function runDynamicEvaluation(outputDir, testDef, evalAgent) {
-  console.log('\n=== Running Non-Deterministic Criteria Evaluation ===\n');
-  console.log(`Using agent: ${evalAgent}\n`);
+export async function runDynamicEvaluation(
+  outputDir, testDef, evalAgent, skipAgentInvocation = false,
+) {
+  console.log('\n=== Dynamic Criteria Evaluation ===\n');
+
+  if (skipAgentInvocation) {
+    console.log('Mode: Generate prompt only (agent invocation skipped)\n');
+  } else {
+    console.log(`Using agent: ${evalAgent}\n`);
+  }
 
   const results = {
     by_priority: {
@@ -34,38 +41,20 @@ export async function runDynamicEvaluation(outputDir, testDef, evalAgent) {
     // Save prompt to file for reference
     const promptPath = join(outputDir, 'evaluation-prompt.txt');
     writeFileSync(promptPath, prompt);
-    console.log(`  ℹ Saved evaluation prompt: ${promptPath}`);
+    console.log(`  ✓ Saved evaluation prompt: ${promptPath}`);
 
-    // Run evaluation agent
-    console.log(`  ℹ Running ${evalAgent} for evaluation...\n`);
-
+    // Also write to eval-task.txt for compatibility
     const evalPromptFile = join(outputDir, 'eval-task.txt');
+    writeFileSync(evalPromptFile, prompt);
 
-    // Create a structured task for the agent
-    const agentTask = `${prompt}
-
-IMPORTANT: You must respond with ONLY a valid JSON object matching this schema:
-{
-  "by_priority": {
-    "high": {
-      "<criterion_name>": {
-        "strengths": ["string"],
-        "issues": ["string"],
-        "notes": ["string"]
-      }
-    },
-    "medium": { /* same structure */ },
-    "low": { /* same structure */ }
-  },
-  "overall_notes": ["string"]
-}
-
-Do not include any other text before or after the JSON. The response must be valid JSON.`;
-
-    writeFileSync(evalPromptFile, agentTask);
+    // If skipping agent invocation, return early with empty results
+    if (skipAgentInvocation) {
+      console.log('  ℹ Skipping agent invocation (prompt generated for review)\n');
+      return results;
+    }
 
     // Invoke the evaluation agent
-    console.log(`  Invoking ${evalAgent} for evaluation...\n`);
+    console.log(`  ℹ Invoking ${evalAgent} for evaluation...\n`);
 
     try {
       let agentCommand;
@@ -77,16 +66,16 @@ Do not include any other text before or after the JSON. The response must be val
           agentArgs = [
             '--permission-mode', 'bypassPermissions',
             '--output-format', 'json',
-            '--print', agentTask,
+            '--print', prompt,
           ];
           break;
         case 'cursor-cli':
           agentCommand = 'cursor-agent';
-          agentArgs = ['--force', agentTask];
+          agentArgs = ['--force', prompt];
           break;
         case 'codex-cli':
           agentCommand = 'codex';
-          agentArgs = ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', agentTask];
+          agentArgs = ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', prompt];
           break;
         default:
           throw new Error(`Unknown eval agent: ${evalAgent}`);
@@ -210,7 +199,19 @@ Do not include any other text before or after the JSON. The response must be val
  * Build evaluation prompt for LLM
  */
 function buildEvaluationPrompt(outputDir, testDef, criteria) {
-  let prompt = `# Agent Skills Test Evaluation
+  // Read test-info.json to get agent name
+  let agentName = 'unknown';
+  try {
+    const testInfoPath = join(outputDir, 'test-info.json');
+    const testInfo = JSON.parse(readFileSync(testInfoPath, 'utf8'));
+    agentName = testInfo.agent || 'unknown';
+  } catch (error) {
+    // If we can't read test-info.json, continue with 'unknown'
+  }
+
+  let prompt = `You are an expert in AEM Edge Delivery Services coding and architecture. Your job is to judge how well coding agents are able to perform tasks. Your judgement should always be fair and impartial, based only on the task given and the criteria specified.
+
+# Agent Skills Test Evaluation
 
 You are evaluating the results of an agent skills test. Your task is to assess the agent's performance based on the dynamic criteria defined for this test.
 
@@ -218,6 +219,7 @@ You are evaluating the results of an agent skills test. Your task is to assess t
 
 **Test Name:** ${testDef.name}
 **Description:** ${testDef.description || 'N/A'}
+**Agent Under Evaluation:** ${agentName}
 **Task:** ${testDef.task}
 
 ## Evaluation Criteria
@@ -268,13 +270,13 @@ The following artifacts are available in the output directory:
   prompt += `
 ## Your Task
 
+Think carefully about both the overall agent output (code changes made, final response delivered to the user) and the steps the agent took to get there (tools used, decisions made, approach taken).
+
 For each criterion, provide:
 
 1. **Strengths**: What went well? What did the agent do correctly?
 2. **Issues**: What didn't go well? What could be improved?
 3. **Notes**: Additional observations or context
-
-Also provide **Overall Notes** with general observations about the agent's performance.
 
 ## Important Guidelines
 
@@ -286,12 +288,46 @@ Also provide **Overall Notes** with general observations about the agent's perfo
 
 ## Output Format
 
-Organize your findings by priority (high/medium/low), with each criterion having:
-- strengths: array of strings
-- issues: array of strings
-- notes: array of strings
+Provide your evaluation as markdown with the following structure:
 
-Plus overall_notes as an array of general observations.
+### Overall Notes
+
+[Start with an overall assessment including:
+- General observations about the agent's performance
+- Summary of strengths and weaknesses
+- Notable patterns or behaviors
+- Overall assessment of task completion]
+
+### HIGH Priority
+
+#### [criterion_name]
+
+**Strengths:**
+
+- [strength 1]
+- [strength 2]
+
+**Issues:**
+
+- [issue 1]
+- [issue 2]
+
+**Notes:**
+
+- [note 1]
+- [note 2]
+
+[Repeat for each HIGH priority criterion]
+
+### MEDIUM Priority
+
+[Same structure as HIGH priority]
+
+### LOW Priority
+
+[Same structure as HIGH priority]
+
+IMPORTANT: Respond with ONLY the markdown content above. Do not include any other text, explanations, or commentary outside of the requested markdown format.
 `;
 
   return prompt;

@@ -30,34 +30,42 @@ export function generateOutputs(outputDir, evaluationResults) {
 }
 
 /**
+ * Format timestamp to human-readable date
+ */
+function formatTimestamp(isoString) {
+  const date = new Date(isoString);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
+/**
  * Generate markdown report
  */
 export function generateMarkdownReport(results) {
   let md = '# Evaluation Report\n\n';
 
-  md += `**Timestamp:** ${new Date().toISOString()}\n\n`;
-  md += `**Test:** ${results.task_name || 'Unknown'}\n\n`;
-  md += `**Agent (tested):** ${results.agent || 'Unknown'}\n\n`;
+  md += `**Timestamp:** ${formatTimestamp(new Date().toISOString())}\n`;
+  md += `**Test:** ${results.task_name || 'Unknown'}\n`;
+  md += `**Agent (tested):** ${results.agent || 'Unknown'}\n`;
   md += `**Evaluator:** ${results.evaluator || 'Unknown'}\n\n`;
 
-  md += '## Deterministic Results\n\n';
+  md += '## Static Evaluations\n\n';
   md += `**Status:** ${results.static_results?.passed ? '✅ PASSED' : '❌ FAILED'}\n\n`;
 
-  // Show all checks that were run
+  // Show all checks that were run with their results
   if (results.static_results?.checks) {
-    md += '### Checks Run\n\n';
+    md += '### Checks\n\n';
     const { checks } = results.static_results;
     for (const [checkName, passed] of Object.entries(checks)) {
       const icon = passed ? '✅' : '❌';
       md += `- ${icon} ${checkName}\n`;
-    }
-    md += '\n';
-  }
-
-  if (results.static_results?.failures?.length > 0) {
-    md += '### Failures\n\n';
-    for (const failure of results.static_results.failures) {
-      md += `- ❌ ${failure}\n`;
     }
     md += '\n';
   }
@@ -106,11 +114,19 @@ export function generateMarkdownReport(results) {
     }
   }
 
-  md += '## Non-Deterministic Criteria Assessment\n\n';
+  md += '## Dynamic Evaluations\n\n';
 
   if (results.dynamic_assessment && results.dynamic_assessment.by_priority) {
     const assessment = results.dynamic_assessment;
 
+    // Show overall notes first
+    if (assessment.overall_notes && assessment.overall_notes.length > 0) {
+      md += '### Overall Notes\n\n';
+      assessment.overall_notes.forEach((note) => { md += `- ${note}\n`; });
+      md += '\n';
+    }
+
+    // Then show criteria organized by priority
     for (const priority of ['high', 'medium', 'low']) {
       const priorityResults = assessment.by_priority[priority];
       if (priorityResults && Object.keys(priorityResults).length > 0) {
@@ -144,12 +160,6 @@ export function generateMarkdownReport(results) {
           }
         }
       }
-    }
-
-    if (assessment.overall_notes && assessment.overall_notes.length > 0) {
-      md += '### Overall Notes\n\n';
-      assessment.overall_notes.forEach((note) => { md += `- ${note}\n`; });
-      md += '\n';
     }
   } else {
     md += '_(Not evaluated)_\n\n';

@@ -15,6 +15,7 @@ export function parseArgs() {
     outputDir: null,
     evalAgent: 'claude-code',
     skipNonDeterministic: false,
+    clean: false,
   };
 
   let i = 0;
@@ -30,6 +31,9 @@ export function parseArgs() {
       case '--skip-dynamic':
       case '--skip-flexible': // Backward compatibility
         options.skipNonDeterministic = true;
+        break;
+      case '--clean':
+        options.clean = true;
         break;
       default:
         if (!options.outputDir && !arg.startsWith('--')) {
@@ -69,7 +73,8 @@ Arguments:
 
 Options:
   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
-  --skip-dynamic        Only run static evaluation criteria (faster)
+  --skip-dynamic        Generate prompt but skip agent invocation (useful for review)
+  --clean               Remove evaluation artifacts before running
   --help                Show this help message
 
 Examples:
@@ -82,10 +87,13 @@ Examples:
   # Evaluate specific agent for specific task
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z/create-simple-block/claude-code
 
-  # Skip dynamic evaluation (static only, faster)
+  # Skip dynamic evaluation (generates prompt but doesn't run agent)
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --skip-dynamic
 
   # Use specific agent for dynamic evaluation
   ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --eval-agent cursor-cli
+
+  # Clean previous evaluation results before running
+  ./tools/evaluate.js evaluations/2025-01-14T10:00:00Z --clean
 `);
 }

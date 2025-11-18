@@ -439,6 +439,23 @@ dynamic_criteria:
 **Problem**: Too much context makes test slow and brittle
 **Solution**: Minimal setup - only what's necessary
 
+### 6. Agent vs Model Confusion in Criteria
+**Problem**: Criteria that reference "Agent" can be ambiguous when agents like cursor-cli and codex-cli use Claude as the underlying model
+**Example**: "if Agent isn't claude, run discover_skills" - evaluator may interpret this as the model rather than the specific agent
+**Solution**: Be explicit about agent names in criteria:
+```yaml
+# Bad - ambiguous
+- name: skill_discovery
+  description: if Agent isn't claude, run discover_skills first
+
+# Good - explicit
+- name: skill_discovery
+  description: |
+    - If agent is cursor-cli or codex-cli, run discover_skills to find available skills
+    - Agent correctly identified and used the appropriate skill
+```
+**Note**: This may indicate skills need better documentation about when discover_skills is required. Consider refining skill instructions separately.
+
 ## Examples
 
 See these tasks for reference:

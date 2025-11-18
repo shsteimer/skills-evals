@@ -11,7 +11,8 @@
  *
  * Options:
  *   --eval-agent <agent>  Agent to use for dynamic evaluation (default: claude-code)
- *   --skip-dynamic        Only run static evaluation criteria (faster)
+ *   --skip-dynamic        Generate prompt but skip agent invocation (useful for review)
+ *   --clean               Remove evaluation artifacts before running
  *   --help                Show this help message
  */
 
@@ -25,6 +26,7 @@ import { runOptionalChecks } from './lib/eval/optional-checks.js';
 import { checkPRQuality } from './lib/eval/pr-checks.js';
 import { runDynamicEvaluation } from './lib/eval/dynamic-eval.js';
 import { generateOutputs } from './lib/eval/report-generator.js';
+import { cleanDirectory } from './lib/eval/cleanup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,12 +47,13 @@ async function evaluateSingleAgent(agentDir, testDef, options) {
   const optionalResults = await runOptionalChecks(agentDir, testDef);
   const prResults = await checkPRQuality(agentDir, testDef, PROJECT_ROOT);
 
-  let dynamicAssessment = null;
-  if (!options.skipNonDeterministic) {
-    dynamicAssessment = await runDynamicEvaluation(agentDir, testDef, options.evalAgent);
-  } else {
-    console.log('\n=== Skipping Non-Deterministic Evaluation ===\n');
-  }
+  // Always run dynamic evaluation (generates prompt), but may skip agent invocation
+  const dynamicAssessment = await runDynamicEvaluation(
+    agentDir,
+    testDef,
+    options.evalAgent,
+    options.skipNonDeterministic,
+  );
 
   // Combine results
   const evaluationResults = {
@@ -91,7 +94,17 @@ async function main() {
     console.log('='.repeat(60));
     console.log(`\nOutput Directory: ${options.outputDir}`);
     console.log(`Eval Agent: ${options.evalAgent}`);
-    console.log(`Skip Non-Deterministic: ${options.skipNonDeterministic}`);
+    console.log(`Skip Dynamic: ${options.skipNonDeterministic}`);
+    console.log(`Clean: ${options.clean}`);
+
+    // Clean artifacts if requested
+    if (options.clean) {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log('Cleaning Evaluation Artifacts');
+      console.log('='.repeat(60));
+      const cleaned = cleanDirectory(options.outputDir);
+      console.log(`\nCleaned ${cleaned} artifact(s)\n`);
+    }
 
     // Detect path type first
     const pathType = detectPathType(options.outputDir);
