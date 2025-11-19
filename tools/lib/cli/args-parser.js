@@ -16,6 +16,7 @@ export function parseArgs() {
     const next = args[i + 1];
 
     switch (arg) {
+      case '--task':
       case '--test':
         options.test = next;
         i++;
@@ -66,9 +67,10 @@ Usage:
   ./tools/run-tasks.js --skills <skill1,skill2>
 
 Options:
-  --task <name>         Run specific test(s) by name (path to test directory)
-  --tags <tags>         Run tests matching these tags (comma-separated)
-  --skills <skills>     Run tests using these skills (comma-separated)
+  --task <name>         Run specific task(s) by name (path to task directory)
+  --test <name>         Alias for --task
+  --tags <tags>         Run tasks matching these tags (comma-separated)
+  --skills <skills>     Run tasks using these skills (comma-separated)
   --agents <agents>     Agent(s) to test with (default: all agents)
                         Options: claude-code, cursor-cli, codex-cli
   --setup-only          Set up test environment but don't run agent (shows commands)
@@ -80,7 +82,7 @@ Examples:
   ./tools/run-tasks.js --skills building-blocks
   ./tools/run-tasks.js --tags blocks --agents claude-code,cursor-cli
 
-At least one of --test, --tags, or --skills is required.
+At least one of --task, --tags, or --skills is required.
 `);
 }
 
@@ -92,7 +94,7 @@ export async function validateArgs(options, checkAgentAvailability) {
 
   // Must have at least one selector
   if (!options.test && options.tags.length === 0 && options.skills.length === 0) {
-    errors.push('Must specify at least one of: --test, --tags, or --skills');
+    errors.push('Must specify at least one of: --task, --tags, or --skills');
   }
 
   // Validate agent names

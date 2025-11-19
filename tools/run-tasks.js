@@ -9,9 +9,9 @@
  *   ./tools/run-tasks.js --skills <skill1,skill2>
  *
  * Options:
- *   --task <name>         Run specific test(s) by name (supports wildcards)
- *   --tags <tags>         Run tests matching these tags (comma-separated)
- *   --skills <skills>     Run tests using these skills (comma-separated)
+ *   --task <name>         Run specific task(s) by name (supports wildcards)
+ *   --tags <tags>         Run tasks matching these tags (comma-separated)
+ *   --skills <skills>     Run tasks using these skills (comma-separated)
  *   --agents <agents>     Agent(s) to test with (default: all agents)
  *                         Options: claude-code, cursor-cli, codex-cli
  */
@@ -39,7 +39,7 @@ async function main() {
   await validateArgs(options, checkAgentAvailability);
 
   console.log('Configuration:');
-  if (options.test) console.log(`  Test: ${options.test}`);
+  if (options.test) console.log(`  Task: ${options.test}`);
   if (options.tags.length > 0) console.log(`  Tags: ${options.tags.join(', ')}`);
   if (options.skills.length > 0) console.log(`  Skills: ${options.skills.join(', ')}`);
   console.log(`  Agents: ${options.agents.join(', ')}`);
