@@ -1,45 +1,44 @@
-# Creating Tasks Guide
+# Creating Tasks - Best Practices Guide
 
-## Overview
-
-This guide explains how to create new tasks for the Agent Skills Evaluation Framework.
+This guide explains how to create effective evaluation tasks for the Agent Skills Evaluation Framework.
 
 ## Task Types
 
 ### Unit Tasks
-- **Location**: `tasks/unit/`
+- **Location**: `tasks/unit/{skill-name}/{task-name}/`
 - **Purpose**: Evaluate individual skills or focused capabilities
 - **Scope**: Single skill or small set of related skills
 - **Duration**: Should complete in < 5 minutes
-- **Example**: "Create a simple block", "Model content for a carousel"
+- **Example**: "Find security documentation", "Create a simple block"
 
 ### Integration Tasks
-- **Location**: `tasks/integration/`
+- **Location**: `tasks/integration/{workflow-name}/`
 - **Purpose**: Evaluate complete workflows involving multiple skills
 - **Scope**: Full development workflows (design → implement → test)
 - **Duration**: May take 10-15 minutes
 - **Example**: "Build new feature end-to-end", "Fix bug workflow"
 
-## Recommended Workflow
+## Recommended Workflow: Build Tasks Empirically
 
-**The best way to write tasks is empirically:**
+**The best way to write tasks is empirically** - create a minimal task, run it multiple times, observe what happens, then write criteria based on real behavior.
 
-1. Create initial state branch (if needed) and basic task.yaml with just the task
-2. Run the test 5+ times, documenting what happens
-3. Identify patterns: What fails? What varies? What's consistently good/bad?
-4. Use those real observations to write your criteria
+### Why This Approach Works
 
-**Don't try to predict everything upfront** - let the agent show you what needs to be checked!
+1. **Avoid over-specifying** - Only check what actually matters
+2. **Catch real issues** - Find problems you wouldn't predict
+3. **Proper categorization** - Clear which things are hard failures vs. nice-to-haves
+4. **Data-driven priorities** - Set priorities based on actual impact
+5. **Realistic expectations** - Understand what agents can/can't do consistently
 
-## Creating a New Task
+## Step-by-Step Task Creation
 
 ### Step 1: Choose Task Location
 
 ```bash
-# Unit task example
+# Unit task
 mkdir -p tasks/unit/{skill-name}/{task-name}
 
-# Integration task example
+# Integration task
 mkdir -p tasks/integration/{workflow-name}
 ```
 
@@ -47,68 +46,50 @@ mkdir -p tasks/integration/{workflow-name}
 
 Start with just the essentials - you'll add criteria after running it.
 
-**Initial task.yaml template:**
 ```yaml
 name: "Your task name"
-description: "Brief description"
+description: "Brief description of what this evaluates"
 type: unit  # or integration
 skills:
   - skill-name
-tags:  # Optional but recommended
-  - relevant-tag-1
-  - relevant-tag-2
+tags:
+  - relevant-tag
 
 task: |
   Your realistic task prompt here
 ```
 
-That's it! No checks, no criteria yet. See `tasks/TASK_SCHEMA.md` for complete schema.
+See `tasks/TASK_SCHEMA.md` for complete schema reference.
 
-**About tags:**
-Tags help organize and filter tasks. Common tags include:
-- `blocks` - Block creation/modification tasks
-- `basic` / `advanced` - Complexity level
-- `workflow` - Full development workflow tasks
-- `accessibility` - Accessibility-focused tasks
-- `performance` - Performance-focused tasks
-- `migration` - Migration-related tasks
+### Step 3: Set Up Initial State (Optional)
 
-Choose tags that make your task easy to find later!
-
-### Step 3: Set Up Initial State Branch (Optional)
-
-If starting from `main` isn't appropriate:
+If starting from `main` isn't appropriate, create a branch with minimal setup:
 
 ```bash
-# Create a branch with minimal setup
 git checkout -b task/my-task-setup main
 
-# Add only what's needed
-# Example: package.json, basic scripts, linting config
-
-git add package.json .eslintrc.js scripts/ styles/
+# Add only what's needed (e.g., package.json, basic config)
+git add package.json scripts/ styles/
 git commit -m "test: initial state for my-task"
 git push -u origin task/my-task-setup
 git checkout main
 ```
 
 Reference in task.yaml:
+
 ```yaml
 initial_state: task/my-task-setup
 ```
 
-### Step 4: Run Task 5+ Times
+### Step 4: Run Task Multiple Times (5+)
 
-**This is the key step!** Run your minimal task multiple times and observe:
+**This is the key step!** Run your minimal task multiple times and observe what happens.
 
 ```bash
-# Run 1
-./tools/run-tasks.js tasks/unit/my-skill/my-task > results/run-1.txt
+# Run with specific task
+./tools/run-tasks.js --task tasks/unit/my-skill/my-task --agents claude-code
 
-# Run 2
-./tools/run-tasks.js tasks/unit/my-skill/my-task > results/run-2.txt
-
-# ... continue for runs 3, 4, 5+
+# Results saved to evaluations/{timestamp}/
 ```
 
 **Document everything:**
@@ -119,210 +100,140 @@ initial_state: task/my-task-setup
 - What varied across runs?
 - What was consistently good/bad?
 
-**Create a notes file:**
+**Create observation notes:**
+
 ```markdown
 # Task Run Observations
 
 ## Run 1
 - Created blocks/quote/quote.js ✅
-- Created blocks/quote/quote.css ✅
 - Used `var` instead of `const` ❌
-- Skipped linting step ❌
-- Didn't announce skill usage ⚠️
+- Skipped linting ❌
 
 ## Run 2
 - Created same files ✅
 - Used `const` properly ✅
-- Ran linting and passed ✅
-- Announced skill usage ✅
-- But created blocks/quote/quote.test.js (unnecessary) ⚠️
-
-## Run 3
-...
+- Ran linting ✅
+- Created unnecessary test file ⚠️
 
 ## Patterns Identified
-### Hard failures (should be static evaluation criteria):
+### Hard failures (static criteria):
 - Sometimes uses `var` instead of `const/let`
-- Sometimes skips linting entirely
+- Sometimes skips linting
 
-### Inconsistent but not critical (optional checks or dynamic evaluation):
-- Sometimes creates test files (not needed)
-- Skill announcement varies
-
-### Quality issues (dynamic evaluation criteria):
-- CSS scoping varies in quality
+### Quality issues (dynamic criteria):
+- CSS scoping varies
 - Code structure varies
 ```
 
 ### Step 5: Write Criteria Based on Observations
 
-Now use your real-world data to inform the test:
+Use your real-world data to inform the criteria:
 
-**Static evaluation criteria (required)** - Things that MUST be true:
+**Static criteria** - Must pass or task fails:
+
 ```yaml
 static_criteria:
   lint_passes: true  # Failed in run 3
   files_exist:
-    - blocks/quote/quote.js  # Present in all runs
-    - blocks/quote/quote.css  # Present in all runs
+    - blocks/quote/quote.js
+    - blocks/quote/quote.css
   forbidden_patterns:
-    - pattern: "var "  # Saw this fail in run 1
+    - pattern: "var "
       in_files: ["**/*.js"]
       message: "Should use const/let instead of var"
 ```
 
-**Optional static evaluation criteria** - Nice to have, but seen valid exceptions:
+**Optional static criteria** - Nice to have, warnings only:
+
 ```yaml
 optional_static_criteria:
   files_not_exist:
     - blocks/quote/quote.test.js  # Sometimes created, not needed
 ```
 
-**Dynamic evaluation criteria** - Quality that varies but should be evaluated:
+**Dynamic criteria** - Quality that varies:
+
 ```yaml
 dynamic_criteria:
-  - name: code_quality
-    description: |
+  - description: Evaluate code quality - proper patterns and maintainability
+    details:
       - CSS selectors properly scoped (saw issues in run 4)
       - Clean code structure (varied across runs)
     priority: high
 
-  - name: process_adherence
-    description: |
-      - Announces skill usage (inconsistent in early runs)
-      - Follows content-driven development
+  - description: Assess process adherence - followed workflows correctly
+    details:
+      - Announced skill usage (inconsistent in early runs)
+      - Followed content-driven development
     priority: high
 ```
 
-### Step 6: Write Task README
+### Step 6: Evaluate Results
 
-Create `README.md` explaining the test:
-
-```markdown
-# [Task Name]
-
-## Purpose
-[What does this task evaluate?]
-
-## What It Tests
-### Skills Under Evaluation
-- skill-name - [what aspect]
-
-### Key Behaviors
-1. [Behavior 1]
-2. [Behavior 2]
-
-## Expected Outcome
-[What should happen when test passes?]
-
-## Static Evaluation Pass Criteria
-- ✅ [Required check 1]
-- ✅ [Required check 2]
-
-## Optional Checks
-- ⚠️ [Nice-to-have 1]
-- ⚠️ [Nice-to-have 2]
-
-## Dynamic Evaluation Criteria
-**High priority:**
-- [High priority criterion]
-
-**Medium priority:**
-- [Medium priority criterion]
-
-**Low priority:**
-- [Low priority criterion]
-
-## Common Failure Modes
-[What typically goes wrong]
-```
-
-### Step 7: Validate Task Definition
+Run evaluation on your test results:
 
 ```bash
-./tools/validate-task tasks/unit/my-skill/my-task
+# Evaluate specific agent's results
+./tools/evaluate.js evaluations/{timestamp}/{task-name}/{agent}
+
+# Evaluate entire task (all agents)
+./tools/evaluate.js evaluations/{timestamp}/{task-name}
+
+# Evaluate entire run (all tasks and agents)
+./tools/evaluate.js evaluations/{timestamp}
+
+# Options:
+#   --eval-agent claude-code    (default)
+#   --skip-dynamic              (skip LLM evaluation, generate prompt only)
+#   --clean                     (cleanup artifacts only)
 ```
 
-Validates:
-- All required fields present
-- Skills exist in `.claude/skills/`
-- Priorities are "high", "medium", or "low"
-- If `initial_state` specified, branch exists
+This runs:
+1. Static checks (deterministic, must pass)
+2. Optional checks (deterministic, warnings only)
+3. PR quality checks (if PR was opened)
+4. Dynamic evaluation (LLM-based quality assessment)
 
-## Why This Workflow Works
+### Step 7: Iterate
 
-### Benefits of Empirical Task Creation
+Based on evaluation results:
+1. Refine criteria
+2. Add missing checks
+3. Remove overly strict requirements
+4. Adjust priorities
 
-1. **Avoid over-specifying** - Only check what actually matters
-2. **Catch real issues** - Find problems you wouldn't predict
-3. **Proper categorization** - Clear which things are hard failures vs. nice-to-haves
-4. **Data-driven priorities** - Set priorities based on actual impact
-5. **Realistic expectations** - Understand what the agent can/can't do consistently
-
-### Example: Learning From Runs
-
-**Before running (guessing):**
-```yaml
-static_criteria:
-  files_exist:
-    - blocks/quote/quote.js
-    - blocks/quote/quote.css
-    - blocks/quote/README.md  # Assumed this was needed
-  required_workflow_steps:
-    - content-modeling
-    - implementation
-    - testing  # Assumed testing was required
-```
-
-**After 5 runs (reality):**
-```yaml
-static_criteria:
-  files_exist:
-    - blocks/quote/quote.js
-    - blocks/quote/quote.css
-    # Removed README - not critical
-  required_workflow_steps:
-    - content-modeling
-    - implementation
-    # Removed testing - not always applicable for simple blocks
-
-optional_static_criteria:
-  files_exist:
-    - blocks/quote/README.md  # Nice to have, moved here
-```
+Run the task again and re-evaluate until criteria accurately capture quality.
 
 ## Task Design Best Practices
 
-### 1. Realistic Task Descriptions
+### 1. Realistic Task Prompts
 
 ❌ **Bad - Too detailed:**
+
 ```yaml
 task: |
   Create a hero block that displays a large image, headline, and CTA button.
   The block should support:
   - Hero image (required) - should be first child
   - Headline text (required) - use h1 tag
-  - Subheading text (optional) - use p tag with class subheading
-  - CTA button with link (required) - use proper button element
-
-  Create the following content model:
-  | Image | Heading | Subheading | Button Text | Button Link |
-
-  Follow all AEM best practices for block development including...
-  [10 more paragraphs of requirements]
+  - Subheading text (optional) - use p tag
+  [10 more paragraphs of requirements...]
 ```
 
 ✅ **Good - Realistic:**
+
 ```yaml
 task: |
   Create a hero block with image, headline, and CTA button.
 ```
 
-The agent should figure out the details using the skills - that's what we're testing!
+The agent should figure out details using skills - that's what we're testing!
 
 ### 2. Three-Tier Checks
 
-**Static evaluation (required)** - Must pass or task fails:
+**Static** (required) - Must pass or task fails:
+
 ```yaml
 static_criteria:
   lint_passes: true
@@ -331,31 +242,28 @@ static_criteria:
     - blocks/hero/hero.css
 ```
 
-**Optional static evaluation** - Checked automatically, reported as warnings:
+**Optional static** (checked, warnings only):
+
 ```yaml
 optional_static_criteria:
   files_exist:
     - blocks/hero/README.md
-  required_patterns:
-    - pattern: "aria-"
-      in_files: ["blocks/hero/hero.js"]
-      message: "Consider ARIA attributes for accessibility"
 ```
 
-**Flexible** - LLM evaluates with priorities:
+**Dynamic** (LLM evaluates with priorities):
+
 ```yaml
 dynamic_criteria:
-  - name: code_quality
-    description: Clean, maintainable code following guidelines
+  - description: Evaluate code quality
     priority: high
-  - name: has_comments
-    description: Code includes helpful comments
+  - description: Check documentation clarity
     priority: low
 ```
 
 ### 3. Specific Dynamic Criteria
 
 ❌ **Bad:**
+
 ```yaml
 dynamic_criteria:
   - description: Code is good quality
@@ -363,129 +271,127 @@ dynamic_criteria:
 ```
 
 ✅ **Good:**
+
 ```yaml
 dynamic_criteria:
-  - description: Evaluate code quality - proper patterns, maintainability, and structure
+  - description: Evaluate code quality - proper patterns and maintainability
     details:
       - JavaScript uses proper decoration patterns
       - CSS is mobile-first with breakpoints (600px, 900px)
       - Selectors properly scoped
       - Semantic HTML elements used
-      - Code is maintainable
     priority: high
 ```
 
-### 4. Appropriate Priorities
+### 4. Expected Outcomes
+
+For research/documentation tasks, provide an expected outcome:
 
 ```yaml
-# For a test focused on following process:
-dynamic_criteria:
-  - description: Assess process adherence - agent followed skill workflows correctly
-    priority: high  # Most important for this test
-  - description: Evaluate code quality
-    priority: high
-  - description: Check completeness
-    priority: medium
-  - description: Evaluate autonomy
-    priority: low
-
-# For a test focused on code quality:
-dynamic_criteria:
-  - description: Evaluate code quality - proper patterns and maintainability
-    priority: high  # Most important for this test
-  - description: Check completeness - handles all requirements
-    priority: high
-  - description: Assess process adherence
-    priority: medium
-  - description: Evaluate autonomy
-    priority: low
+expected_outcome: |
+  Agent invokes the docs-search skill, finds relevant documentation pages,
+  fetches full content, and synthesizes information from multiple sources
+  with specific, actionable recommendations.
 ```
 
-### 5. Minimal Initial State
+This helps the evaluator assess quality against a reference standard.
 
-❌ **Bad** - Too much unnecessary context:
+### 5. Agent-Agnostic Language
+
+Avoid tool-specific names since different agents may use different tools:
+
+❌ **Bad:**
+- "Agent used WebFetch to read docs"
+- "Agent invoked WebSearch instead of docs-search"
+
+✅ **Good:**
+- "Agent fetched and read full documentation pages"
+- "Agent used docs-search skill (not general web search)"
+
+### 6. Minimal Initial State
+
+❌ **Bad** - Too much context:
 ```bash
 # Branch has entire repo with 20+ existing blocks
 ```
 
 ✅ **Good** - Just what's needed:
 ```bash
-# Branch has: package.json, basic scripts/, styles/, and linting config
+# Branch has: package.json, basic scripts/, styles/, linting config
 # No existing blocks (test is about creating one)
 ```
 
 ## Common Pitfalls
 
 ### 1. Over-specifying Tasks
-**Problem**: Agent doesn't need to think, just follow instructions
+**Problem**: Agent doesn't need to think, just follows instructions
 **Solution**: Write realistic prompts - clear goal, let agent figure out how
 
-### 2. Over-constrained Deterministic Checks
+### 2. Over-constrained Static Checks
 **Problem**: Penalizing valid alternative approaches
-**Solution**: Only require what's truly essential; use optional checks for nice-to-haves
+**Solution**: Only require what's essential; use optional checks for nice-to-haves
 
-### 3. Vague Flexible Criteria
+### 3. Vague Dynamic Criteria
 **Problem**: Evaluator doesn't know what to look for
-**Solution**: List specific things to check
+**Solution**: List specific things to check using `details` array
 
-### 4. Wrong Test Type
+### 4. Wrong Task Type
 **Problem**: Integration task in unit/ or vice versa
 **Solution**:
 - Unit = focused, single skill, quick
 - Integration = complete workflow, multiple skills
 
-### 5. Heavy Initial State
-**Problem**: Too much context makes test slow and brittle
-**Solution**: Minimal setup - only what's necessary
+### 5. Testing Non-Existent Features
+**Problem**: Criteria reference scripts or checks that don't exist
+**Solution**: Verify commands work before adding to criteria
 
-### 6. Agent vs Model Confusion in Criteria
-**Problem**: Criteria that reference "Agent" can be ambiguous when agents like cursor-cli and codex-cli use Claude as the underlying model
-**Example**: "if Agent isn't claude, run discover_skills" - evaluator may interpret this as the model rather than the specific agent
-**Solution**: Be explicit about agent names in criteria:
-```yaml
-# Bad - ambiguous
-- description: if Agent isn't claude, run discover_skills first
-  priority: high
+## Available Tools
 
-# Good - explicit
-- description: Assess skill discovery and usage
-  details:
-    - If agent is cursor-cli or codex-cli, run discover_skills to find available skills
-    - Agent correctly identified and used the appropriate skill
-  priority: high
+### Running Tasks
+
+```bash
+# Run by task name
+./tools/run-tasks.js --task tasks/unit/docs-search/best-practices
+
+# Run by tags
+./tools/run-tasks.js --tags documentation,research
+
+# Run by skills
+./tools/run-tasks.js --skills docs-search
+
+# Specify agents
+./tools/run-tasks.js --task my-task --agents claude-code,cursor-cli
+
+# Setup only (don't run, just prepare environment)
+./tools/run-tasks.js --task my-task --setup-only
 ```
-**Note**: This may indicate skills need better documentation about when discover_skills is required. Consider refining skill instructions separately.
 
-## Examples
+### Evaluating Results
 
-See these tasks for reference:
+```bash
+# Evaluate specific agent
+./tools/evaluate.js evaluations/{timestamp}/{task}/{agent}
 
-- `tasks/unit/building-blocks/create-simple-block/` - Basic unit task
+# Evaluate all agents for a task
+./tools/evaluate.js evaluations/{timestamp}/{task}
 
-## Checklist
+# Evaluate entire test run
+./tools/evaluate.js evaluations/{timestamp}
 
-Before considering a task complete:
-
-- [ ] Created minimal task.yaml (name, description, type, skills, task)
-- [ ] Created initial state branch if needed (minimal setup only)
-- [ ] **Ran task at least 5 times**
-- [ ] **Documented observations from all runs**
-- [ ] **Identified patterns in failures/successes**
-- [ ] Added static_criteria based on hard failures
-- [ ] Added optional_static_criteria for nice-to-haves
-- [ ] Added dynamic_criteria for quality variations
-- [ ] Set priorities based on impact observed in runs
-- [ ] Task README.md explains purpose and expectations
-- [ ] Task validated: `./tools/validate-task path/to/task`
+# Options
+./tools/evaluate.js <path> --eval-agent claude-code
+./tools/evaluate.js <path> --skip-dynamic  # Generate prompt only
+./tools/evaluate.js <path> --clean         # Cleanup artifacts only
+```
 
 ## Quick Start Example
 
 ```bash
 # 1. Create task directory
-mkdir -p tasks/unit/building-blocks/simple-task
+mkdir -p tasks/unit/building-blocks/quote-block
 
 # 2. Create minimal task.yaml
-cat > tests/unit/building-blocks/simple-test/task.yaml <<EOF
+cat > tasks/unit/building-blocks/quote-block/task.yaml <<EOF
 name: "Create quote block"
 description: "Evaluate basic block creation"
 type: unit
@@ -499,23 +405,23 @@ task: |
   Create a quote block with optional attribution.
 EOF
 
-# 3. Run it 5+ times, document everything
-for i in {1..5}; do
-  ./tools/run-tasks.js tasks/unit/building-blocks/simple-task > results/run-$i.txt
-done
+# 3. Run it multiple times
+./tools/run-tasks.js --task tasks/unit/building-blocks/quote-block --agents claude-code
 
-# 4. Review results, identify patterns
-# 5. Add criteria based on what you observed
-# 6. Document in README.md
-# 7. Validate
-./tools/validate-task tasks/unit/building-blocks/simple-task
+# 4. Evaluate results
+./tools/evaluate.js evaluations/{timestamp}/quote-block/claude-code
+
+# 5. Review output, add criteria based on observations
+# 6. Run again and iterate
 ```
 
 ## Next Steps
 
 After creating a task:
 
-1. Commit the task (even if criteria aren't perfect yet)
-2. Run tasks periodically as skills evolve
-3. Refine criteria based on ongoing observations
-4. Share patterns with other task creators
+1. Run it 5+ times with different agents
+2. Document patterns and failure modes
+3. Add criteria that catch real issues
+4. Avoid over-specifying based on assumptions
+5. Iterate based on evaluation feedback
+6. Share learnings with other task creators
