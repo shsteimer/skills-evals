@@ -1,0 +1,62 @@
+name: "Research multilingual sitemaps with hreflang"
+description: "Evaluates if agent can use docs-search skill to find and synthesize AEM feature documentation from multiple sources (docs, blog posts) and provide a complete implementation explanation."
+type: unit
+skills:
+  - docs-search
+tags:
+  - research
+  - documentation
+  - seo
+  - multilingual
+
+task: |
+  How do I set up sitemaps for a multilingual site in Edge Delivery Services? I need to support English, Spanish, and French with proper hreflang tags for SEO.
+
+expected_outcome: |
+  Agent invokes the docs-search skill with relevant keywords (multilingual, sitemaps, hreflang,
+  internationalization), runs the search script, then fetches and reads full documentation from
+  key pages including:
+  - Sitemaps documentation (/developer/sitemap)
+  - Translation and Localization (/docs/translation-and-localization)
+  - Multilingual blog post (/blog/future-proof-multilingual-website-edge-ensemble)
+  - Supporting SEO resources (go-live checklist)
+
+  Agent synthesizes information and provides a complete explanation covering:
+  - How Edge Delivery Services supports multiple sitemaps
+  - Three types of sitemaps (automatic, query-based, manual)
+  - How to configure hreflang in sitemaps with XML structure examples
+  - Content structure recommendations (language subfolders: /en/, /es/, /fr/)
+  - Relationship between indexes, placeholders, and sitemaps
+  - How each language subfolder gets its own sitemap based on indexes
+  - SEO benefits of proper hreflang configuration
+
+  Response provides concrete implementation steps, explains the "why" behind the approach,
+  and directly addresses the user's EN/ES/FR scenario with actionable guidance.
+
+static_criteria:
+  lint_passes: false  # No code expected, but check JIC
+
+dynamic_criteria:
+  - description: Skill usage - properly used docs-search workflow
+    details:
+      - Announced skill usage
+      - Ran search script with relevant keywords
+      - Fetched and read full documentation (not just search results)
+      - Found sitemap, translation/localization, and indexing docs
+    priority: high
+
+  - description: Technical accuracy - correct configuration with complete deployment context
+    details:
+      - YAML syntax correct (languages block with source/destination/hreflang/alternate)
+      - Mentions config service as deployment option (not just repo commit)
+      - Links to indexing docs (prerequisite for creating query-index.json)
+      - Explains query index → sitemap → hreflang relationship
+    priority: high
+
+  - description: Implementation guidance - actionable and complete
+    details:
+      - Provides concrete YAML tailored to EN/ES/FR scenario
+      - Covers prerequisites, configuration, and deployment
+      - Well-organized with clear sections
+      - Explains SEO benefits and content structure recommendations
+    priority: high
