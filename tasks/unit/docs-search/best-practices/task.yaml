@@ -1,6 +1,5 @@
 name: "Find security best practices documentation"
 description: "Evaluates if agent can effectively use docs-search skill to find and synthesize security best practices from AEM documentation, distinguishing between built-in features and required configuration."
-type: unit
 skills:
   - docs-search
 tags:

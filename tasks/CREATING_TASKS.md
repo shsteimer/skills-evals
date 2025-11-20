@@ -2,7 +2,7 @@
 
 This guide explains how to create effective evaluation tasks for the Agent Skills Evaluation Framework.
 
-## Task Types
+## Task Organization
 
 ### Unit Tasks
 - **Location**: `tasks/unit/{skill-name}/{task-name}/`
@@ -49,7 +49,6 @@ Start with just the essentials - you'll add criteria after running it.
 ```yaml
 name: "Your task name"
 description: "Brief description of what this evaluates"
-type: unit  # or integration
 skills:
   - skill-name
 tags:
@@ -335,11 +334,11 @@ Avoid tool-specific names since different agents may use different tools:
 **Problem**: Evaluator doesn't know what to look for
 **Solution**: List specific things to check using `details` array
 
-### 4. Wrong Task Type
-**Problem**: Integration task in unit/ or vice versa
+### 4. Wrong Task Location
+**Problem**: Task in wrong directory structure
 **Solution**:
-- Unit = focused, single skill, quick
-- Integration = complete workflow, multiple skills
+- Unit tasks → `tasks/unit/{skill-name}/` - focused, single skill, quick
+- Integration tasks → `tasks/integration/{workflow-name}/` - complete workflow, multiple skills
 
 ### 5. Testing Non-Existent Features
 **Problem**: Criteria reference scripts or checks that don't exist
@@ -394,7 +393,6 @@ mkdir -p tasks/unit/building-blocks/quote-block
 cat > tasks/unit/building-blocks/quote-block/task.yaml <<EOF
 name: "Create quote block"
 description: "Evaluate basic block creation"
-type: unit
 skills:
   - building-blocks
 tags:

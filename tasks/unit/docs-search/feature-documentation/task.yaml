@@ -1,6 +1,5 @@
 name: "Research multilingual sitemaps with hreflang"
 description: "Evaluates if agent can use docs-search skill to find and synthesize AEM feature documentation from multiple sources (docs, blog posts) and provide a complete implementation explanation."
-type: unit
 skills:
   - docs-search
 tags:
