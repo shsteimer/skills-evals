@@ -76,14 +76,12 @@ async function evaluateSingleAgent(agentDir, testDef, options) {
   // Generate outputs
   const { jsonPath, mdPath } = generateOutputs(agentDir, evaluationResults);
 
-  console.log(`\nStatus: ${staticResults.passed ? '✅ PASSED' : '❌ FAILED'}`);
-  console.log('Results saved to:');
+  console.log('\nResults saved to:');
   console.log(`  - ${jsonPath}`);
   console.log(`  - ${mdPath}`);
 
   return {
     agent,
-    passed: staticResults.passed,
     results: evaluationResults,
   };
 }
@@ -162,7 +160,6 @@ async function main() {
         allResults.push({
           agent: basename(agentDir),
           task: basename(dirname(agentDir)),
-          passed: false,
           error: error.message,
         });
       }
@@ -170,7 +167,7 @@ async function main() {
 
     // Print summary
     console.log(`\n${'='.repeat(60)}`);
-    console.log('Evaluation Summary');
+    console.log('Evaluation Complete');
     console.log('='.repeat(60));
 
     const grouped = {};
@@ -182,21 +179,21 @@ async function main() {
       grouped[taskName].push(result);
     }
 
+    console.log(`\nEvaluated ${allResults.length} agent result(s):`);
     for (const [taskName, results] of Object.entries(grouped)) {
       console.log(`\n${taskName}:`);
       for (const result of results) {
-        const status = result.passed ? '✅ PASSED' : '❌ FAILED';
-        console.log(`  ${result.agent}: ${status}`);
+        if (result.error) {
+          console.log(`  ${result.agent}: ❌ Error - ${result.error}`);
+        } else {
+          console.log(`  ${result.agent}: Reports generated`);
+        }
       }
     }
 
-    // Exit with failure if any agent failed
-    const allPassed = allResults.every((r) => r.passed);
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`Overall: ${allPassed ? '✅ ALL PASSED' : '❌ SOME FAILED'}`);
+    console.log('Review the evaluation reports for detailed assessment.');
     console.log('='.repeat(60));
-
-    process.exit(allPassed ? 0 : 1);
   } catch (error) {
     console.error('\n❌ Error:', error.message);
     console.error(error.stack);
