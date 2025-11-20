@@ -1,0 +1,82 @@
+name: "Research testimonial carousel implementation"
+description: "Evaluates if agent can effectively use block-collection-and-party skill to find and analyze similar block implementations for planning purposes."
+skills:
+  - block-collection-and-party
+tags:
+  - research
+  - blocks
+  - carousel
+  - planning
+
+task: |
+  I'm planning to build a testimonial carousel block for customer quotes. Before I start coding, help me research how similar blocks have been implemented. What patterns and approaches should I consider?
+
+expected_outcome: |
+  Agent invokes the block-collection-and-party skill to search for relevant examples.
+  Uses the search script to find carousel, testimonial, and related blocks from both
+  Block Collection and Block Party repositories.
+  
+  Fetches and analyzes actual block implementations, identifying:
+  - Common carousel patterns (navigation, auto-play, touch/swipe support)
+  - Testimonial-specific features (quotes, attribution, photos)
+  - CSS approaches for responsive layouts
+  - JavaScript decoration patterns
+  - Accessibility considerations (ARIA labels, keyboard navigation)
+  
+  Synthesizes findings into actionable recommendations with specific code examples
+  or patterns from the repositories. Provides links to relevant blocks for reference.
+  
+  Focuses on research and planning - does NOT create any code files.
+
+static_criteria:
+  lint_passes: false  # No code expected
+  files_not_exist:
+    - blocks/testimonial/**/*.js
+    - blocks/testimonial/**/*.css
+    - blocks/carousel/**/*.js
+    - blocks/carousel/**/*.css
+
+dynamic_criteria:
+  - description: Skill usage - properly invoked block-collection-and-party skill
+    details:
+      - Announced using the skill
+      - Ran search script with relevant keywords (carousel, testimonial, quotes, slider)
+      - Searched both Block Collection and Block Party repositories
+      - Fetched and read actual block code (not just search results)
+      - Found at least 3-4 relevant blocks
+    priority: high
+
+  - description: Analysis quality - identified key patterns and approaches
+    details:
+      - Carousel implementation patterns (navigation, transitions, responsive behavior)
+      - Testimonial-specific features (quote styling, attribution, images)
+      - Accessibility considerations (keyboard nav, ARIA, screen readers)
+      - Code examples or specific patterns from found blocks
+      - CSS approaches (mobile-first, breakpoints, animations)
+    priority: high
+
+  - description: Recommendations - actionable guidance for implementation
+    details:
+      - Specific patterns or approaches recommended with rationale
+      - References to actual blocks as examples (with links/paths)
+      - Identifies trade-offs or considerations (e.g., auto-play vs manual control)
+      - Well-organized with clear sections
+      - Distinguishes must-have vs nice-to-have features
+    priority: high
+
+  - description: Completeness - addressed key aspects of testimonial carousel
+    details:
+      - Carousel/slider functionality research
+      - Testimonial display patterns research
+      - Responsive design considerations
+      - Accessibility guidance
+      - Navigation/interaction patterns
+    priority: medium
+
+  - description: Restraint - focused on research, did not implement code
+    details:
+      - Did not create block files
+      - Did not write implementation code
+      - Focused on analysis and planning
+    priority: low
+
