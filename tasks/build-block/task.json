@@ -5,15 +5,5 @@
     "cdd",
     "blocks"
   ],
-  "startFrom": {
-    "org": "",
-    "repo": "",
-    "branch": ""
-  },
-  "augmentations": [
-    {
-      "source": "",
-      "target": "AGENTS.md"
-    }
-  ]
+  "startFrom": "https://github.com/adobe/aem-block-collection"
 }

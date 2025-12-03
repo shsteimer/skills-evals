@@ -1,0 +1,10 @@
+[
+  {
+    "source": "https://github.com/adobe/aem-boilerplate/blob/dd12ed29a04e807673240a34acb95331ca6f82a5/AGENTS.md",
+    "target": "AGENTS.md"
+  },
+  {
+    "source": "https://github.com/adobe/aem-boilerplate/blob/dd12ed29a04e807673240a34acb95331ca6f82a5/AGENTS.md",
+    "target": "CLAUDE.md"
+  }
+]
