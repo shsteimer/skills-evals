@@ -528,6 +528,18 @@ export function enrichTasks(tasks, agents, workspaceDir) {
   return enrichedTasks;
 }
 
+async function runTask(task) {
+  // TODO: Implement task execution
+}
+
+async function copyResults(task) {
+  // TODO: Implement copying results to task info folder
+}
+
+async function cleanUp(task) {
+  // TODO: Implement workspace cleanup
+}
+
 async function runTasks() {
   const args = parseArgs(process.argv);
   
