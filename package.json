@@ -7,13 +7,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "run-tasks": "node scripts/run-tasks.js",
-    "eval-tasks": "node scripts/eval-tasks.js"
+    "eval-tasks": "node scripts/eval-tasks.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "author": "",
   "engines": {
     "node": ">=22.0.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.15",
+    "eslint": "^9.0.0",
+    "@eslint/js": "^9.0.0"
   }
 }

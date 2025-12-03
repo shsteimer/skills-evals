@@ -1,3 +1,17 @@
+import { parseArgs, findTasks, createTaskInfoFolder, createTaskWorkspace } from './run-tasks.js';
+
+async function runTask(_task) {
+  // TODO: Implement task execution
+}
+
+async function copyResults(_task) {
+  // TODO: Implement copying results to task info folder
+}
+
+async function cleanUp(_task) {
+  // TODO: Implement workspace cleanup
+}
+
 async function evalTasks() {
   const args = parseArgs(process.argv);
   const tasks = await findTasks(args);

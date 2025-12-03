@@ -16,7 +16,7 @@ const testWorkspaceRoot = path.join(__dirname, 'fixtures', 'workspaces');
 
 // Helper to mock git clone
 const mockGitClone = () => {
-  execSync.mockImplementation((cmd, opts) => {
+  execSync.mockImplementation((cmd) => {
     // Synchronously create directories when git clone is called
     if (cmd.includes('git clone')) {
       const match = cmd.match(/git clone[^"]*"([^"]+)"/);
@@ -179,8 +179,8 @@ describe('createTaskWorkspace', () => {
       };
 
       // Mock git clone to detect commit hash handling
-      let cloneCommands = [];
-      execSync.mockImplementation((cmd, opts) => {
+      const cloneCommands = [];
+      execSync.mockImplementation((cmd) => {
         cloneCommands.push(cmd);
         if (cmd.includes('git clone')) {
           const match = cmd.match(/git clone[^"]*"([^"]+)"/);

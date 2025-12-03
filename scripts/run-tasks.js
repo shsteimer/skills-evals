@@ -2,6 +2,10 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import { sanitizeName, getCurrentTimestamp } from './utils/string-utils.js';
+import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
+import { cloneRepository, checkoutBranch, addAndCommit } from './utils/git-utils.js';
+import { downloadFromGitHub } from './utils/github-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,166 +108,14 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
   return filteredTasks;
 }
 
-function sanitizeName(name) {
-  // Replace spaces with hyphens and remove special characters
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
-}
-
-function getCurrentTimestamp() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  
-  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
-}
-
-async function copyDirectoryRecursive(src, dest) {
-  // Create destination directory
-  await fs.mkdir(dest, { recursive: true });
-  
-  // Read all entries in source directory
-  const entries = await fs.readdir(src, { withFileTypes: true });
-  
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
-    
-    if (entry.isDirectory()) {
-      // Recursively copy subdirectory
-      await copyDirectoryRecursive(srcPath, destPath);
-    } else {
-      // Copy file
-      await fs.copyFile(srcPath, destPath);
-    }
-  }
-}
-
-async function downloadFromGitHub(source, destPath, mode = 'merge') {
-  // Parse GitHub URL to extract org, repo, branch/commit, and path
-  // Supports:
-  //   - https://github.com/org/repo/blob/branch/path/to/file.txt (file)
-  //   - https://github.com/org/repo/blob/commit-hash/path/to/file.txt (file at specific commit)
-  //   - https://github.com/org/repo/tree/branch/path/to/folder (folder)
-  //   - https://raw.githubusercontent.com/org/repo/branch/path/to/file.txt (raw file)
-  
-  // Strategy: Clone repo to temp folder, copy what we need, delete temp folder
-  // This uses user's existing git credentials and has no rate limits
-  
-  let org, repo, branch, itemPath;
-  
-  const url = new URL(source);
-  const pathParts = url.pathname.split('/').filter(p => p);
-  
-  if (url.hostname === 'raw.githubusercontent.com') {
-    // Raw file URL: raw.githubusercontent.com/org/repo/branch/path/to/file
-    org = pathParts[0];
-    repo = pathParts[1];
-    branch = pathParts[2];
-    itemPath = pathParts.slice(3).join('/');
-  } else if (url.hostname.includes('github.com')) {
-    // Regular GitHub URL
-    org = pathParts[0];
-    repo = pathParts[1];
-    
-    if (pathParts[2] === 'tree') {
-      // Folder: github.com/org/repo/tree/branch/path/to/folder
-      branch = pathParts[3];
-      itemPath = pathParts.slice(4).join('/');
-    } else if (pathParts[2] === 'blob') {
-      // File: github.com/org/repo/blob/branch/path/to/file
-      branch = pathParts[3];
-      itemPath = pathParts.slice(4).join('/');
-    } else {
-      throw new Error(`Unsupported GitHub URL format: ${source}`);
-    }
-  } else {
-    throw new Error(`Invalid GitHub URL: ${source}`);
-  }
-  
-  // Clone repo to temp directory
-  const { execSync } = await import('child_process');
-  const tempDir = path.join(os.tmpdir(), `gh-aug-${Date.now()}`);
-  const cloneUrl = `https://github.com/${org}/${repo}.git`;
-  
-  try {
-    try {
-      // Check if branch looks like a commit hash (40 character hex string)
-      const isCommitHash = /^[0-9a-f]{40}$/i.test(branch);
-      
-      if (isCommitHash) {
-        // For commit hashes, clone without depth and checkout the specific commit
-        execSync(`git clone ${cloneUrl} "${tempDir}"`, {
-          stdio: 'pipe'
-        });
-        execSync(`git checkout ${branch}`, {
-          cwd: tempDir,
-          stdio: 'pipe'
-        });
-      } else {
-        // For branches, use --depth 1 for faster cloning
-        execSync(`git clone --depth 1 --branch ${branch} ${cloneUrl} "${tempDir}"`, {
-          stdio: 'pipe'
-        });
-      }
-    } catch (error) {
-      const refType = /^[0-9a-f]{40}$/i.test(branch) ? 'commit' : 'branch';
-      throw new Error(
-        `Failed to clone repository for augmentation from ${source}.\n` +
-        `Make sure the repository exists, you have access, and the ${refType} '${branch}' exists.\n` +
-        `Error: ${error.message}`
-      );
-    }
-    
-    // Source path within the cloned repo
-    const sourcePath = path.join(tempDir, itemPath);
-    
-    // Check if source exists
-    let stats;
-    try {
-      stats = await fs.stat(sourcePath);
-    } catch (error) {
-      throw new Error(
-        `Path '${itemPath}' not found in repository ${org}/${repo} on branch '${branch}'.\n` +
-        `Make sure the path exists in the repository.`
-      );
-    }
-    
-    if (stats.isDirectory()) {
-      // Handle replace mode for directories
-      if (mode === 'replace') {
-        await fs.rm(destPath, { recursive: true, force: true });
-      }
-      
-      // Copy directory recursively
-      await copyDirectoryRecursive(sourcePath, destPath);
-    } else {
-      // Handle single file
-      await fs.mkdir(path.dirname(destPath), { recursive: true });
-      await fs.copyFile(sourcePath, destPath);
-    }
-  } finally {
-    // Clean up temp directory
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
 export async function createTaskWorkspace(task) {
   // Create workspace directory
-  await fs.mkdir(task.workspaceDir, { recursive: true });
+  await ensureDir(task.workspaceDir);
   
   // Setup git repository - startFrom is required
   if (!task.startFrom) {
     throw new Error('startFrom is required');
   }
-  
-  const { execSync } = await import('child_process');
   
   {
     // Parse GitHub URL
@@ -298,9 +150,7 @@ export async function createTaskWorkspace(task) {
     const tempDir = path.join(os.tmpdir(), `clone-${Date.now()}`);
     
     try {
-      execSync(`git clone --branch ${branch} ${cloneUrl} "${tempDir}"`, {
-        stdio: 'pipe' // Suppress git output unless there's an error
-      });
+      cloneRepository(cloneUrl, tempDir, { branch });
     } catch (error) {
       throw new Error(
         `Failed to clone repository from ${task.startFrom}.\n` +
@@ -370,14 +220,14 @@ export async function createTaskWorkspace(task) {
           if (stats.isDirectory()) {
             // Handle replace mode for directories
             if (mode === 'replace') {
-              await fs.rm(targetPath, { recursive: true, force: true });
+              await cleanupDir(targetPath);
             }
             
             // Copy directory recursively
             await copyDirectoryRecursive(sourcePath, targetPath);
           } else {
             // Handle single file
-            await fs.mkdir(path.dirname(targetPath), { recursive: true });
+            await ensureDir(path.dirname(targetPath));
             await fs.copyFile(sourcePath, targetPath);
           }
         }
@@ -385,25 +235,17 @@ export async function createTaskWorkspace(task) {
     }
     
     // Commit augmentations
-    try {
-      // Add all augmented files
-      execSync('git add .', { cwd: task.workspaceDir });
-      
-      // Commit with message
-      execSync('git commit -m "Add task augmentations"', { cwd: task.workspaceDir });
-    } catch (error) {
-      // If nothing to commit, that's okay
-    }
+    addAndCommit(task.workspaceDir, 'Add task augmentations');
   }
   
   // Create and checkout new branch for the agent (after augmentations are committed)
   const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}`;
-  execSync(`git checkout -b ${agentBranch}`, { cwd: task.workspaceDir });
+  checkoutBranch(task.workspaceDir, agentBranch, true);
 }
 
 export async function createTaskInfoFolder(task) {
   // Create the directory structure
-  await fs.mkdir(task.taskInfoFolder, { recursive: true });
+  await ensureDir(task.taskInfoFolder);
   
   // Build task.json with all runtime information
   // Use task data directly (includes global + task-specific augmentations)
@@ -528,15 +370,15 @@ export function enrichTasks(tasks, agents, workspaceDir) {
   return enrichedTasks;
 }
 
-async function runTask(task) {
+async function runTask(_task) {
   // TODO: Implement task execution
 }
 
-async function copyResults(task) {
+async function copyResults(_task) {
   // TODO: Implement copying results to task info folder
 }
 
-async function cleanUp(task) {
+async function cleanUp(_task) {
   // TODO: Implement workspace cleanup
 }
 
