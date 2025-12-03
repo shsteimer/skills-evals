@@ -82,7 +82,7 @@ Tasks are defined in the `tasks/` directory. Each task is a folder containing:
 ## Augmentations
 
 Augmentations add files to the workspace before running tasks. Use them to provide:
-- Context documents (README, AGENTS.md, etc.)
+- Context documents (README, AGENTS.md, skills, etc.)
 - Instructions or guidelines
 - Utility files or helpers
 - Different skill/knowledge levels for testing
