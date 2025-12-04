@@ -1,4 +1,7 @@
 - hello.txt file exists
 - File contains "Hello World"
+- File the agents name
+- no other changes were modified, created, or removed
+- no git commits were made
 
 
