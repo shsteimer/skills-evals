@@ -241,6 +241,18 @@ export async function createTaskWorkspace(task) {
   // Create and checkout new branch for the agent (after augmentations are committed)
   const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}`;
   checkoutBranch(task.workspaceDir, agentBranch, true);
+  
+  // Install dependencies if package.json exists
+  const packageJsonPath = path.join(task.workspaceDir, 'package.json');
+  try {
+    await fs.access(packageJsonPath);
+    // package.json exists, run npm ci
+    const { execAsync } = await import('./utils/process-utils.js');
+    await execAsync('npm ci', { cwd: task.workspaceDir });
+  } catch (error) {
+    // package.json doesn't exist or npm ci failed - continue anyway
+    // The agent might not need dependencies, or might install them themselves
+  }
 }
 
 export async function createTaskInfoFolder(task) {
@@ -370,16 +382,225 @@ export function enrichTasks(tasks, agents, workspaceDir) {
   return enrichedTasks;
 }
 
-async function runTask(_task) {
-  // TODO: Implement task execution
+async function runTask(task) {
+  // Dynamically load the handler for the specified agent
+  const handlerPath = `./handlers/${sanitizeName(task.agent)}.js`;
+  
+  try {
+    const handler = await import(handlerPath);
+    const runHandler = handler.default;
+    
+    if (typeof runHandler !== 'function') {
+      throw new Error(`Handler at ${handlerPath} does not export a default function`);
+    }
+    
+    await runHandler(task);
+  } catch (error) {
+    if (error.code === 'ERR_MODULE_NOT_FOUND') {
+      throw new Error(`No handler found for agent '${task.agent}'. Expected handler at ${handlerPath}`);
+    }
+    throw error;
+  }
 }
 
-async function copyResults(_task) {
-  // TODO: Implement copying results to task info folder
+async function captureResults(task) {
+  const { execAsync } = await import('./utils/process-utils.js');
+  const results = {};
+  
+  // Check if package.json exists and has a lint script
+  const packageJsonPath = path.join(task.workspaceDir, 'package.json');
+  let hasLintScript = false;
+  try {
+    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+    hasLintScript = packageJson.scripts && packageJson.scripts.lint;
+  } catch (error) {
+    // package.json doesn't exist or can't be read
+  }
+  
+  // Run npm run lint and capture status (if lint script exists)
+  if (hasLintScript) {
+    try {
+      const { stdout, stderr } = await execAsync('npm run lint', {
+        cwd: task.workspaceDir
+      });
+      results.lint = {
+        success: true,
+        exitCode: 0,
+        stdout,
+        stderr
+      };
+    } catch (error) {
+      results.lint = {
+        success: false,
+        exitCode: error.code || 1,
+        stdout: error.stdout || '',
+        stderr: error.stderr || error.message
+      };
+    }
+  } else {
+    results.lint = {
+      skipped: true,
+      reason: 'No lint script found in package.json'
+    };
+  }
+  
+  // Capture diff of all changes (including agent commits and untracked files)
+  // Find the augmentations commit and diff from there
+  try {
+    // Find the commit with message "Add task augmentations"
+    // This is the base before the agent started working
+    const { stdout: augmentationsCommit } = await execAsync(
+      'git log --grep="Add task augmentations" --format=%H -n 1',
+      { cwd: task.workspaceDir }
+    );
+    
+    let diff = '';
+    
+    if (augmentationsCommit.trim()) {
+      // Get diff from augmentations commit to current state (tracked changes + staged)
+      const { stdout: trackedDiff } = await execAsync(
+        `git diff ${augmentationsCommit.trim()} HEAD`,
+        { cwd: task.workspaceDir }
+      );
+      diff += trackedDiff;
+      
+      // Also get uncommitted changes
+      const { stdout: uncommittedDiff } = await execAsync(
+        'git diff HEAD',
+        { cwd: task.workspaceDir }
+      );
+      if (uncommittedDiff) {
+        diff += '\n' + uncommittedDiff;
+      }
+    } else {
+      // Fallback: just get all uncommitted changes
+      const { stdout: uncommittedDiff } = await execAsync(
+        'git diff HEAD',
+        { cwd: task.workspaceDir }
+      );
+      diff = uncommittedDiff;
+    }
+    
+    // Also capture untracked files as diffs
+    const { stdout: untrackedFiles } = await execAsync(
+      'git ls-files --others --exclude-standard',
+      { cwd: task.workspaceDir }
+    );
+    
+    if (untrackedFiles.trim()) {
+      const files = untrackedFiles.trim().split('\n');
+      for (const file of files) {
+        try {
+          const { stdout: fileContent } = await execAsync(
+            `git diff --no-index /dev/null "${file}"`,
+            { cwd: task.workspaceDir }
+          );
+          diff += '\n' + fileContent;
+        } catch (error) {
+          // git diff exits with code 1 when there are differences, which is expected
+          if (error.stdout) {
+            diff += '\n' + error.stdout;
+          }
+        }
+      }
+    }
+    
+    results.diff = diff;
+  } catch (error) {
+    results.diff = `Error capturing diff: ${error.message}`;
+  }
+  
+  // Capture git commit history (agent's commits)
+  try {
+    // Get commits after the augmentations commit
+    const { stdout: augmentationsCommit } = await execAsync(
+      'git log --grep="Add task augmentations" --format=%H -n 1',
+      { cwd: task.workspaceDir }
+    );
+    
+    if (augmentationsCommit.trim()) {
+      const { stdout: commits } = await execAsync(
+        `git log ${augmentationsCommit.trim()}..HEAD --format="%H|%an|%ae|%ai|%s"`,
+        { cwd: task.workspaceDir }
+      );
+      
+      results.commits = commits.trim().split('\n')
+        .filter(line => line)
+        .map(line => {
+          const [hash, author, email, date, ...messageParts] = line.split('|');
+          return {
+            hash,
+            author,
+            email,
+            date,
+            message: messageParts.join('|')
+          };
+        });
+    } else {
+      results.commits = [];
+    }
+  } catch (error) {
+    results.commits = [];
+  }
+  
+  // Run tests if test script exists
+  if (hasLintScript) {
+    try {
+      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+      if (packageJson.scripts && packageJson.scripts.test) {
+        try {
+          const { stdout, stderr } = await execAsync('npm test', {
+            cwd: task.workspaceDir
+          });
+          results.tests = {
+            success: true,
+            exitCode: 0,
+            stdout,
+            stderr
+          };
+        } catch (error) {
+          results.tests = {
+            success: false,
+            exitCode: error.code || 1,
+            stdout: error.stdout || '',
+            stderr: error.stderr || error.message
+          };
+        }
+      }
+    } catch (error) {
+      // Ignore test errors
+    }
+  }
+  
+  // Write lint results to separate file
+  const lintPath = path.join(task.taskInfoFolder, 'lint-results.json');
+  await fs.writeFile(lintPath, JSON.stringify(results.lint, null, 2), 'utf-8');
+  
+  // Write test results if they exist
+  if (results.tests) {
+    const testsPath = path.join(task.taskInfoFolder, 'test-results.json');
+    await fs.writeFile(testsPath, JSON.stringify(results.tests, null, 2), 'utf-8');
+  }
+  
+  // Write git commits if any
+  if (results.commits && results.commits.length > 0) {
+    const commitsPath = path.join(task.taskInfoFolder, 'commits.json');
+    await fs.writeFile(commitsPath, JSON.stringify(results.commits, null, 2), 'utf-8');
+  }
+  
+  // Write diff as separate file
+  const diffPath = path.join(task.taskInfoFolder, 'changes.diff');
+  await fs.writeFile(diffPath, results.diff || '', 'utf-8');
 }
 
-async function cleanUp(_task) {
-  // TODO: Implement workspace cleanup
+async function cleanUp(task) {
+  // Remove the workspace directory
+  try {
+    await cleanupDir(task.workspaceDir);
+  } catch (error) {
+    // Log error but don't fail - workspace cleanup is best-effort
+    console.error(`Warning: Failed to cleanup workspace ${task.workspaceDir}: ${error.message}`);
+  }
 }
 
 async function runTasks() {
@@ -402,7 +623,7 @@ async function runTasks() {
   // Run the tasks for each enriched task
   for (const task of enrichedTasks) {
     await runTask(task);
-    await copyResults(task);
+    await captureResults(task);
     await cleanUp(task);
   }
 }

@@ -30,3 +30,4 @@ export async function cleanupDir(dirPath) {
   await fs.rm(dirPath, { recursive: true, force: true });
 }
 
+
