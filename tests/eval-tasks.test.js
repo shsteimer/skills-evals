@@ -127,14 +127,7 @@ describe('evalTask - log support', () => {
       json: async () => ({
         choices: [{
           message: {
-            content: JSON.stringify({
-              success: true,
-              score: 100,
-              reasoning: 'Test evaluation',
-              criteriaResults: [],
-              strengths: [],
-              weaknesses: []
-            })
+            content: '# Evaluation Results\n\n**Task:** test-task\n**Agent:** claude\n**Overall Success:** Yes\n\n## Summary\n\nTest evaluation\n\n## Detailed Analysis\n\nThe agent performed well.'
           }
         }]
       })
@@ -171,13 +164,21 @@ describe('evalTask - log support', () => {
 
   it('should include log in eval prompt when output.jsonl exists', async () => {
     // Run evaluation
-    await evalTask(taskResult);
+    const result = await evalTask(taskResult);
 
     // Check that eval-prompt.txt was created and contains the log
     const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
     const evalPrompt = await fs.readFile(evalPromptPath, 'utf-8');
     
     expect(evalPrompt).toContain('test log output');
+    
+    // Check that final-result.md was created
+    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
+    const finalResult = await fs.readFile(finalResultPath, 'utf-8');
+    
+    expect(finalResult).toContain('Evaluation Results');
+    expect(finalResult).toContain('**Overall Success:** Yes');
+    expect(result.markdown).toBeTruthy();
   });
 
   it('should handle missing log gracefully', async () => {
@@ -185,13 +186,20 @@ describe('evalTask - log support', () => {
     await fs.unlink(path.join(taskResult.resultPath, 'output.jsonl'));
 
     // Run evaluation
-    await evalTask(taskResult);
+    const result = await evalTask(taskResult);
 
     // Check that eval-prompt.txt contains fallback text
     const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
     const evalPrompt = await fs.readFile(evalPromptPath, 'utf-8');
     
     expect(evalPrompt).toContain('(No log available)');
+    
+    // Check that final-result.md was created
+    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
+    const finalResult = await fs.readFile(finalResultPath, 'utf-8');
+    
+    expect(finalResult).toContain('Evaluation Results');
+    expect(result.markdown).toBeTruthy();
   });
 });
 

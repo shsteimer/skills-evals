@@ -5,6 +5,7 @@ You are evaluating the results of an agent skills task. Your task is to assess t
 ## Task Information
 
 **Task Name:** {{TASK_NAME}}
+**Agent:** {{AGENT}}
 **Description:** {{DESCRIPTION}}
 **Task Prompt:** {{PROMPT}}
 
@@ -56,19 +57,40 @@ Consider all of this in context of the evaluation criteria specified above and t
 
 ## Output Format
 
-Provide your evaluation in the following JSON format:
-{
-  "success": true/false,
-  "reasoning": "Detailed explanation of your evaluation",
-  "criteriaResults": [
-    {
-      "criterion": "exact criterion text",
-      "met": true/false,
-      "notes": "explanation"
-    }
-  ],
-  "strengths": ["list of things done well"],
-  "weaknesses": ["list of issues or missing elements"]
-}
+Provide your evaluation as a complete markdown document that will be read by a human to understand how well the agent performed.
+
+You can follow this format:
+
+# Evaluation Results
+
+**Task:** {{TASK_NAME}}
+**Agent:** {{AGENT}}
+**Overall Success:** Yes/No
+
+## Summary
+
+[Provide a brief summary of the overall performance]
+
+## Detailed Analysis
+
+[Provide detailed analysis of the agent's work]
+
+### Criteria Evaluation
+
+[For each criterion, provide a subsection with:]
+- **[Criterion name]**: Met/Not Met
+  - [Detailed notes and explanation]
+
+### Strengths
+
+[List and explain things done well]
+
+### Weaknesses
+
+[List and explain issues or missing elements]
+
+### Notable Observations
+
+[Any other important observations about the agent's approach or decisions]
 
 

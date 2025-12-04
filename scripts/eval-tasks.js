@@ -155,10 +155,29 @@ ${commits.map(c => `- ${c.hash.substring(0, 7)}: ${c.message}`).join('\n')}
   return template;
 }
 
+async function cleanupEvalArtifacts(resultPath) {
+  const artifactsToClean = [
+    'eval-prompt.txt',
+    'eval-result.json',
+    'final-result.md'
+  ];
+  
+  for (const artifact of artifactsToClean) {
+    try {
+      await fs.unlink(path.join(resultPath, artifact));
+    } catch (error) {
+      // Ignore if file doesn't exist
+    }
+  }
+}
+
 export async function evalTask(taskResult) {
   console.log(`\nEvaluating: ${taskResult.folderName}`);
   console.log(`Task: ${taskResult.name}`);
   console.log(`Agent: ${taskResult.agent}`);
+  
+  // Clean up any previous evaluation artifacts
+  await cleanupEvalArtifacts(taskResult.resultPath);
   
   // Read additional files
   const changesPath = path.join(taskResult.resultPath, 'changes.diff');
@@ -213,16 +232,14 @@ export async function evalTask(taskResult) {
   
   // Call LLM API for evaluation
   try {
-    const evaluation = await callLLMForEvaluation(evalPrompt);
+    const markdown = await callLLMForEvaluation(evalPrompt);
     
-    // Write evaluation result
-    const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
-    await fs.writeFile(evalResultPath, JSON.stringify(evaluation, null, 2), 'utf-8');
+    // Write final result
+    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
+    await fs.writeFile(finalResultPath, markdown, 'utf-8');
     console.log('  ✓ Evaluation complete');
-    console.log(`    Success: ${evaluation.success}`);
-    console.log(`    Score: ${evaluation.score}/100`);
     
-    return evaluation;
+    return { markdown };
   } catch (error) {
     console.error(`  ✗ Evaluation failed: ${error.message}`);
     throw error;
@@ -256,8 +273,7 @@ async function callLLMForEvaluation(prompt) {
           content: prompt
         }
       ],
-      temperature: config.temperature,
-      response_format: { type: 'json_object' }
+      temperature: config.temperature
     })
   });
   
@@ -267,7 +283,7 @@ async function callLLMForEvaluation(prompt) {
   }
   
   const data = await response.json();
-  const result = JSON.parse(data.choices[0].message.content);
+  const result = data.choices[0].message.content;
   
   return result;
 }
