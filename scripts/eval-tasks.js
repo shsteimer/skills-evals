@@ -119,7 +119,7 @@ export async function findTaskResults(args, resultsBaseDir = null) {
   return taskResults;
 }
 
-async function createEvalPrompt(taskResult, changes, lintResults, testResults, commits) {
+async function createEvalPrompt(taskResult, changes, lintResults, testResults, commits, log) {
   // Read template file
   const templatePath = path.join(__dirname, 'eval-prompt-template.txt');
   let template = await fs.readFile(templatePath, 'utf-8');
@@ -149,6 +149,9 @@ ${commits.map(c => `- ${c.hash.substring(0, 7)}: ${c.message}`).join('\n')}
 ` : '';
   template = template.replace('{{COMMITS}}', commitsSection);
   
+  // Handle log
+  template = template.replace('{{Log}}', log || '(No log available)');
+  
   return template;
 }
 
@@ -162,11 +165,13 @@ export async function evalTask(taskResult) {
   const lintPath = path.join(taskResult.resultPath, 'lint-results.json');
   const testPath = path.join(taskResult.resultPath, 'test-results.json');
   const commitsPath = path.join(taskResult.resultPath, 'commits.json');
+  const logPath = path.join(taskResult.resultPath, 'output.jsonl');
   
   let changes = '';
   let lintResults = null;
   let testResults = null;
   let commits = null;
+  let log = '';
   
   try {
     changes = await fs.readFile(changesPath, 'utf-8');
@@ -192,8 +197,14 @@ export async function evalTask(taskResult) {
     // Commits are optional
   }
   
+  try {
+    log = await fs.readFile(logPath, 'utf-8');
+  } catch (error) {
+    console.log('  Warning: No output.jsonl found');
+  }
+  
   // Create evaluation prompt
-  const evalPrompt = await createEvalPrompt(taskResult, changes, lintResults, testResults, commits);
+  const evalPrompt = await createEvalPrompt(taskResult, changes, lintResults, testResults, commits, log);
   
   // Write eval prompt to file
   const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');

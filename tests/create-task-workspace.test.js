@@ -6,9 +6,14 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 
 // Mock child_process
-vi.mock('child_process', () => ({
-  execSync: vi.fn()
-}));
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    execSync: vi.fn(),
+    exec: vi.fn()
+  };
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
