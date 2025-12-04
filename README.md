@@ -134,7 +134,9 @@ Results are stored at `results/{timestamp}/{task-agent}/`:
 - `prompt.txt` - The prompt given to the agent
 - `criteria.txt` - Evaluation criteria
 
-The workspace for each run is at: `{workspace-root}/{timestamp}/{task-agent}/`
+The workspace for each run is at: `{workspace-dir}/{timestamp}/{task-agent}/`
+- Default workspace directory is system temp directory
+- Can be customized with `--workspace` flag
 
 ## Testing
 
