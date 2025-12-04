@@ -1,0 +1,9 @@
+{
+  "name": "build-block",
+  "description": "Build a basic block and evaluate how agents perform at the task",
+  "tags": [
+    "cdd",
+    "blocks"
+  ],
+  "startFrom": "https://github.com/adobe/aem-block-collection"
+}

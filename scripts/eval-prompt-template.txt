@@ -1,0 +1,74 @@
+# Agent Skills Task Evaluation
+
+You are evaluating the results of an agent skills task. Your task is to assess the agent's performance based on the dynamic criteria defined for this task.
+
+## Task Information
+
+**Task Name:** {{TASK_NAME}}
+**Description:** {{DESCRIPTION}}
+**Task Prompt:** {{PROMPT}}
+
+## Evaluation Criteria
+
+You will evaluate based following criteria:
+
+{{CRITERIA}}
+
+## Artifacts to Review
+
+### Diff Result
+
+```diff
+{{CHANGES}}
+```
+
+### Lint Result
+```json
+{{LINT_RESULTS}}
+```
+
+### Test Results
+{{TEST_RESULTS}}
+
+### Commits Made
+
+{{COMMITS}}
+
+### Agent Log
+
+{{Log}}
+
+## Your Task
+
+Assess the agent's overall performance and report on how well it completed the task.
+
+Think carefully about both the overall agent output (code changes made, final response delivered to the user) and the steps the agent took to get there (tools used, decisions made, approach taken).
+
+Consider all of this in context of the evaluation criteria specified above and the expected outcome. Then provide a report that highlights strengths, weaknesses, issues, and notable observations.
+
+## Guidelines
+
+- Provide a holistic assessment, not just a checklist
+- Be specific with examples from the artifacts
+- Consider the criteria priorities but organize naturally
+- Acknowledge when multiple approaches are valid
+- Be constructive and fair in your judgment
+
+## Output Format
+
+Provide your evaluation in the following JSON format:
+{
+  "success": true/false,
+  "reasoning": "Detailed explanation of your evaluation",
+  "criteriaResults": [
+    {
+      "criterion": "exact criterion text",
+      "met": true/false,
+      "notes": "explanation"
+    }
+  ],
+  "strengths": ["list of things done well"],
+  "weaknesses": ["list of issues or missing elements"]
+}
+
+
