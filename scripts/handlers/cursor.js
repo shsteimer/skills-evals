@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
+import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
 
 /**
  * Run a task using the Cursor CLI agent
@@ -8,10 +9,24 @@ import path from 'path';
  */
 export default async function runCursor(task) {
   return new Promise((resolve, reject) => {
-    const cursor = spawn('cursor-agent', [
+    const config = getAgentConfig('cursor');
+    
+    // Build arguments array
+    const args = [
       '--force',
       '--output-format', 'stream-json'
-    ], {
+    ];
+    
+    // Add model if specified
+    if (config.model) {
+      args.push('--model', config.model);
+    }
+    
+    // Add any additional arguments
+    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+    args.push(...additionalArgs);
+    
+    const cursor = spawn('cursor-agent', args, {
       cwd: task.workspaceDir,
       stdio: ['pipe', 'pipe', 'inherit']
     });

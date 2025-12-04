@@ -1,0 +1,9 @@
+{
+  "name": "hello-world",
+  "description": "Simple test task to verify agent handlers work correctly",
+  "tags": [
+    "test"
+  ],
+  "startFrom": "https://github.com/adobe/aem-block-collection"
+}
+

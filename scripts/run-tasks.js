@@ -4,8 +4,9 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { sanitizeName, getCurrentTimestamp } from './utils/string-utils.js';
 import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
-import { cloneRepository, checkoutBranch, addAndCommit } from './utils/git-utils.js';
+import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
 import { downloadFromGitHub } from './utils/github-utils.js';
+import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -404,39 +405,11 @@ async function runTask(task) {
 }
 
 async function captureResults(task) {
-  const { execAsync } = await import('./utils/process-utils.js');
   const results = {};
   
-  // Check if package.json exists and has a lint script
-  const packageJsonPath = path.join(task.workspaceDir, 'package.json');
-  let hasLintScript = false;
-  try {
-    const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-    hasLintScript = packageJson.scripts && packageJson.scripts.lint;
-  } catch (error) {
-    // package.json doesn't exist or can't be read
-  }
-  
   // Run npm run lint and capture status (if lint script exists)
-  if (hasLintScript) {
-    try {
-      const { stdout, stderr } = await execAsync('npm run lint', {
-        cwd: task.workspaceDir
-      });
-      results.lint = {
-        success: true,
-        exitCode: 0,
-        stdout,
-        stderr
-      };
-    } catch (error) {
-      results.lint = {
-        success: false,
-        exitCode: error.code || 1,
-        stdout: error.stdout || '',
-        stderr: error.stderr || error.message
-      };
-    }
+  if (await hasNpmScript(task.workspaceDir, 'lint')) {
+    results.lint = await runNpmScript(task.workspaceDir, 'lint');
   } else {
     results.lint = {
       skipped: true,
@@ -444,132 +417,15 @@ async function captureResults(task) {
     };
   }
   
-  // Capture diff of all changes (including agent commits and untracked files)
-  // Find the augmentations commit and diff from there
-  try {
-    // Find the commit with message "Add task augmentations"
-    // This is the base before the agent started working
-    const { stdout: augmentationsCommit } = await execAsync(
-      'git log --grep="Add task augmentations" --format=%H -n 1',
-      { cwd: task.workspaceDir }
-    );
-    
-    let diff = '';
-    
-    if (augmentationsCommit.trim()) {
-      // Get diff from augmentations commit to current state (tracked changes + staged)
-      const { stdout: trackedDiff } = await execAsync(
-        `git diff ${augmentationsCommit.trim()} HEAD`,
-        { cwd: task.workspaceDir }
-      );
-      diff += trackedDiff;
-      
-      // Also get uncommitted changes
-      const { stdout: uncommittedDiff } = await execAsync(
-        'git diff HEAD',
-        { cwd: task.workspaceDir }
-      );
-      if (uncommittedDiff) {
-        diff += '\n' + uncommittedDiff;
-      }
-    } else {
-      // Fallback: just get all uncommitted changes
-      const { stdout: uncommittedDiff } = await execAsync(
-        'git diff HEAD',
-        { cwd: task.workspaceDir }
-      );
-      diff = uncommittedDiff;
-    }
-    
-    // Also capture untracked files as diffs
-    const { stdout: untrackedFiles } = await execAsync(
-      'git ls-files --others --exclude-standard',
-      { cwd: task.workspaceDir }
-    );
-    
-    if (untrackedFiles.trim()) {
-      const files = untrackedFiles.trim().split('\n');
-      for (const file of files) {
-        try {
-          const { stdout: fileContent } = await execAsync(
-            `git diff --no-index /dev/null "${file}"`,
-            { cwd: task.workspaceDir }
-          );
-          diff += '\n' + fileContent;
-        } catch (error) {
-          // git diff exits with code 1 when there are differences, which is expected
-          if (error.stdout) {
-            diff += '\n' + error.stdout;
-          }
-        }
-      }
-    }
-    
-    results.diff = diff;
-  } catch (error) {
-    results.diff = `Error capturing diff: ${error.message}`;
-  }
+  // Capture diff of all changes from augmentations commit
+  results.diff = await captureGitChanges(task.workspaceDir, 'Add task augmentations');
   
   // Capture git commit history (agent's commits)
-  try {
-    // Get commits after the augmentations commit
-    const { stdout: augmentationsCommit } = await execAsync(
-      'git log --grep="Add task augmentations" --format=%H -n 1',
-      { cwd: task.workspaceDir }
-    );
-    
-    if (augmentationsCommit.trim()) {
-      const { stdout: commits } = await execAsync(
-        `git log ${augmentationsCommit.trim()}..HEAD --format="%H|%an|%ae|%ai|%s"`,
-        { cwd: task.workspaceDir }
-      );
-      
-      results.commits = commits.trim().split('\n')
-        .filter(line => line)
-        .map(line => {
-          const [hash, author, email, date, ...messageParts] = line.split('|');
-          return {
-            hash,
-            author,
-            email,
-            date,
-            message: messageParts.join('|')
-          };
-        });
-    } else {
-      results.commits = [];
-    }
-  } catch (error) {
-    results.commits = [];
-  }
+  results.commits = await captureGitCommits(task.workspaceDir, 'Add task augmentations');
   
   // Run tests if test script exists
-  if (hasLintScript) {
-    try {
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
-      if (packageJson.scripts && packageJson.scripts.test) {
-        try {
-          const { stdout, stderr } = await execAsync('npm test', {
-            cwd: task.workspaceDir
-          });
-          results.tests = {
-            success: true,
-            exitCode: 0,
-            stdout,
-            stderr
-          };
-        } catch (error) {
-          results.tests = {
-            success: false,
-            exitCode: error.code || 1,
-            stdout: error.stdout || '',
-            stderr: error.stderr || error.message
-          };
-        }
-      }
-    } catch (error) {
-      // Ignore test errors
-    }
+  if (await hasNpmScript(task.workspaceDir, 'test')) {
+    results.tests = await runNpmScript(task.workspaceDir, 'test');
   }
   
   // Write lint results to separate file

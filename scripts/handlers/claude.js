@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
+import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
 
 /**
  * Run a task using the Claude CLI agent
@@ -8,11 +9,25 @@ import path from 'path';
  */
 export default async function runClaude(task) {
   return new Promise((resolve, reject) => {
-    const claude = spawn('claude', [
+    const config = getAgentConfig('claude');
+    
+    // Build arguments array
+    const args = [
       '--verbose',
       '--output-format', 'stream-json',
       '--dangerously-skip-permissions'
-    ], {
+    ];
+    
+    // Add model if specified
+    if (config.model) {
+      args.push('--model', config.model);
+    }
+    
+    // Add any additional arguments
+    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+    args.push(...additionalArgs);
+    
+    const claude = spawn('claude', args, {
       cwd: task.workspaceDir,
       stdio: ['pipe', 'pipe', 'inherit']
     });

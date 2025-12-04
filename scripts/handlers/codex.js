@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
+import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
 
 /**
  * Run a task using the Codex CLI agent
@@ -8,11 +9,25 @@ import path from 'path';
  */
 export default async function runCodex(task) {
   return new Promise((resolve, reject) => {
-    const codex = spawn('codex', [
+    const config = getAgentConfig('codex');
+    
+    // Build arguments array
+    const args = [
       'exec',
       '--dangerously-bypass-approvals-and-sandbox',
       '--json'
-    ], {
+    ];
+    
+    // Add model if specified
+    if (config.model) {
+      args.push('--model', config.model);
+    }
+    
+    // Add any additional arguments
+    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+    args.push(...additionalArgs);
+    
+    const codex = spawn('codex', args, {
       cwd: task.workspaceDir,
       stdio: ['pipe', 'pipe', 'inherit']
     });

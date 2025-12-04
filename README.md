@@ -22,6 +22,10 @@ This framework allows you to:
 # Install dependencies
 npm install
 
+# Set up environment variables
+# Create a .env file based on the example in .env.example
+# and add your API keys and settings
+
 # Run all tasks with default agents (claude, cursor, codex)
 npm run run-tasks
 
