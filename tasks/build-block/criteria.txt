@@ -1,0 +1,45 @@
+# Success Criteria
+
+## Block Implementation
+
+### File Structure (10 points)
+- Block files created in blocks/testimonials/ directory
+- block directoryr contains only testimonials.js and testimonials.css
+
+### Core Functionality
+- Displays testimonial quotes
+- Renders testimonial images
+- Handles optional attribution fields (name, company, title)
+- Shows attribution only when provided
+- Gracefully handles missing image or attribution
+
+### Carousel Behavior
+- Implements navigation between testimonials (prev/next buttons or similar)
+- Shows one testimonial at a time
+- Provides visual indicator of position (e.g., dots, counter)
+- Testimonials cycle appropriately
+- Uses vanialla js and css for carousel behavior, not a third-party library
+
+### Authoring
+
+- Block is authored with one quote per row
+- Each row has 2 columns, 1 for the image, one for the quote content
+- semantic elements used to delinate quote from attribution
+
+## Code Quality
+
+### Standards Compliance
+- Follows AEM Block Collection patterns and conventions
+- Uses semantic HTML structure
+- JavaScript is clean and maintainable
+
+### CSS Implementation
+- Styling is responsive and works on mobile
+- Uses modern CSS practices
+- Maintains visual hierarchy (image, quote, attribution)
+- All styles are scoped to the block and don't leak outside of it
+
+## Testing
+
+- sample/demo content was created or identified to test the block
+- agent tested it's implementation in a browser/browser like environment

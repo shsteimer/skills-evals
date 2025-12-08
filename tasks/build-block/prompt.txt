@@ -1,1 +1,3 @@
-build a block
+Create a testimonials carousel block for displaying customer quotes.
+
+Each testimonial should have an image and the quote, with optional attribution (name, company, title)
