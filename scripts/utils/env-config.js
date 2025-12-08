@@ -54,8 +54,7 @@ export function getAgentConfig(agentName) {
 export function getEvalConfig() {
   return {
     apiKey: getRequiredEnv('OPENAI_API_KEY'),
-    model: getEnv('EVAL_MODEL', 'gpt-4o'),
-    temperature: parseFloat(getEnv('EVAL_TEMPERATURE', '0.1'))
+    model: getEnv('EVAL_MODEL', 'gpt-5-mini')
   };
 }
 

@@ -254,8 +254,8 @@ async function callLLMForEvaluation(prompt) {
   const systemPromptPath = path.join(__dirname, 'eval-system-prompt.txt');
   const systemPrompt = await fs.readFile(systemPromptPath, 'utf-8');
   
-  // Call OpenAI API
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Call OpenAI Responses API
+  const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -263,17 +263,8 @@ async function callLLMForEvaluation(prompt) {
     },
     body: JSON.stringify({
       model: config.model,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt.trim()
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: config.temperature
+      instructions: systemPrompt.trim(),
+      input: prompt
     })
   });
   
@@ -283,9 +274,19 @@ async function callLLMForEvaluation(prompt) {
   }
   
   const data = await response.json();
-  const result = data.choices[0].message.content;
   
-  return result;
+  // Extract text from responses API output structure
+  const messageOutput = data.output.find(item => item.type === 'message');
+  if (!messageOutput || !messageOutput.content || messageOutput.content.length === 0) {
+    throw new Error('API response missing message content');
+  }
+  
+  const textContent = messageOutput.content.find(item => item.type === 'output_text');
+  if (!textContent || !textContent.text) {
+    throw new Error('API response missing text content');
+  }
+  
+  return textContent.text;
 }
 
 async function evalTasks() {

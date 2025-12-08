@@ -125,11 +125,17 @@ describe('evalTask - log support', () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        choices: [{
-          message: {
-            content: '# Evaluation Results\n\n**Task:** test-task\n**Agent:** claude\n**Overall Success:** Yes\n\n## Summary\n\nTest evaluation\n\n## Detailed Analysis\n\nThe agent performed well.'
+        output: [
+          {
+            type: 'message',
+            content: [
+              {
+                type: 'output_text',
+                text: '# Evaluation Results\n\n**Task:** test-task\n**Agent:** claude\n**Overall Success:** Yes\n\n## Summary\n\nTest evaluation\n\n## Detailed Analysis\n\nThe agent performed well.'
+              }
+            ]
           }
-        }]
+        ]
       })
     });
 

@@ -77,25 +77,21 @@ describe('env-config', () => {
     it('returns eval config with all settings', () => {
       process.env.OPENAI_API_KEY = 'test-api-key';
       process.env.EVAL_MODEL = 'gpt-4-turbo';
-      process.env.EVAL_TEMPERATURE = '0.5';
       
       const config = getEvalConfig();
       
       expect(config.apiKey).toBe('test-api-key');
       expect(config.model).toBe('gpt-4-turbo');
-      expect(config.temperature).toBe(0.5);
     });
     
     it('uses default values when not set', () => {
       process.env.OPENAI_API_KEY = 'test-api-key';
       delete process.env.EVAL_MODEL;
-      delete process.env.EVAL_TEMPERATURE;
       
       const config = getEvalConfig();
       
       expect(config.apiKey).toBe('test-api-key');
-      expect(config.model).toBe('gpt-4o');
-      expect(config.temperature).toBe(0.1);
+      expect(config.model).toBe('gpt-5-mini');
     });
     
     it('throws error when OPENAI_API_KEY not set', () => {
