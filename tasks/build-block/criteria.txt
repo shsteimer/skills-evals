@@ -1,45 +1,59 @@
 # Success Criteria
 
+<scoring_rubric>
+Start with 10 points.
+<critical> items: Deduct 2 points for each unmet criterion.
+<important> items: Deduct 1 point for each unmet criterion.
+Minimum score: 0.
+</scoring_rubric>
+
 ## Block Implementation
 
-### File Structure (10 points)
-- Block files created in blocks/testimonials/ directory
-- block directoryr contains only testimonials.js and testimonials.css
-
-### Core Functionality
-- Displays testimonial quotes
-- Renders testimonial images
+<critical>
+- Block files created in `blocks/testimonials/` directory (or a similar name)
+- Block directory contains only `testimonials.js` and `testimonials.css`
+- Displays testimonial quotes and renders images
 - Handles optional attribution fields (name, company, title)
-- Shows attribution only when provided
 - Gracefully handles missing image or attribution
+- Implements navigation between testimonials (prev/next)
+- Testimonials cycle appropriately
+- Uses vanilla JS and CSS for carousel behavior (no third-party libraries)
+</critical>
 
-### Carousel Behavior
-- Implements navigation between testimonials (prev/next buttons or similar)
+<important>
 - Shows one testimonial at a time
 - Provides visual indicator of position (e.g., dots, counter)
-- Testimonials cycle appropriately
-- Uses vanialla js and css for carousel behavior, not a third-party library
+</important>
 
-### Authoring
+## Authoring
 
+<critical>
 - Block is authored with one quote per row
-- Each row has 2 columns, 1 for the image, one for the quote content
-- semantic elements used to delinate quote from attribution
+- Each row has 2 columns: 1 for image, 1 for quote content
+- Uses semantic elements (e.g., headings, strong, em, etc.) to delineate quote from attribution
+</critical>
 
 ## Code Quality
 
-### Standards Compliance
-- Follows AEM Block Collection patterns and conventions
-- Uses semantic HTML structure
-- JavaScript is clean and maintainable
+<critical>
+- Uses semantic HTML structure throughout
+- All styles are scoped to the block and do not leak
+</critical>
 
-### CSS Implementation
-- Styling is responsive and works on mobile
-- Uses modern CSS practices
+<important>
+- JavaScript is clean and maintainable
+- Styling is responsive and works across devices
 - Maintains visual hierarchy (image, quote, attribution)
-- All styles are scoped to the block and don't leak outside of it
+- Uses modern CSS practices
+</important>
 
 ## Testing
 
-- sample/demo content was created or identified to test the block
-- agent tested it's implementation in a browser/browser like environment
+<critical>
+- Agent tested implementation in a browser or browser-like environment
+- Agent ran a lint check and fixed any issues found
+</critical>
+
+<important>
+- Sample/demo content was created or identified to test the block
+</important>

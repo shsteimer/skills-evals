@@ -40,8 +40,6 @@ export default async function runCursor(task) {
     cursor.stdout.on('data', (data) => {
       const chunk = data.toString();
       outputData += chunk;
-      // Also write to console for monitoring
-      process.stdout.write(chunk);
     });
     
     cursor.on('error', (error) => {

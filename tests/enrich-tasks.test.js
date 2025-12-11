@@ -166,5 +166,83 @@ describe('enrichTasks', () => {
       expect(enriched[0].timestamp).toMatch(/^\d{8}-\d{6}$/);
     });
   });
+
+  describe('iteration parameter', () => {
+    it('should always include iteration number in folder name', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir, 1);
+
+      expect(enriched).toHaveLength(1);
+      expect(enriched[0].iteration).toBe(1);
+      expect(enriched[0].taskInfoFolder).toContain('build-block-claude-1');
+      expect(enriched[0].workspaceDir).toContain('build-block-claude-1');
+    });
+
+    it('should create multiple enriched tasks when times is greater than 1', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir, 3);
+
+      expect(enriched).toHaveLength(3);
+      expect(enriched[0].iteration).toBe(1);
+      expect(enriched[0].taskInfoFolder).toContain('build-block-claude-1');
+      expect(enriched[0].workspaceDir).toContain('build-block-claude-1');
+      
+      expect(enriched[1].iteration).toBe(2);
+      expect(enriched[1].taskInfoFolder).toContain('build-block-claude-2');
+      expect(enriched[1].workspaceDir).toContain('build-block-claude-2');
+      
+      expect(enriched[2].iteration).toBe(3);
+      expect(enriched[2].taskInfoFolder).toContain('build-block-claude-3');
+      expect(enriched[2].workspaceDir).toContain('build-block-claude-3');
+    });
+
+    it('should create tasks for all task/agent/iteration combinations', () => {
+      const tasks = [
+        { name: 'build-block' },
+        { name: 'deploy-service' }
+      ];
+      const agents = ['claude', 'cursor'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir, 2);
+
+      // 2 tasks * 2 agents * 2 iterations = 8 enriched tasks
+      // Ordered by: task -> iteration -> agent (for parallel execution)
+      expect(enriched).toHaveLength(8);
+      expect(enriched[0].name).toBe('build-block');
+      expect(enriched[0].agent).toBe('claude');
+      expect(enriched[0].iteration).toBe(1);
+      
+      expect(enriched[1].name).toBe('build-block');
+      expect(enriched[1].agent).toBe('cursor');
+      expect(enriched[1].iteration).toBe(1);
+      
+      expect(enriched[2].name).toBe('build-block');
+      expect(enriched[2].agent).toBe('claude');
+      expect(enriched[2].iteration).toBe(2);
+      
+      expect(enriched[3].name).toBe('build-block');
+      expect(enriched[3].agent).toBe('cursor');
+      expect(enriched[3].iteration).toBe(2);
+    });
+
+    it('should default times to 1 when parameter not provided', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir);
+
+      expect(enriched).toHaveLength(1);
+      expect(enriched[0].iteration).toBe(1);
+      expect(enriched[0].taskInfoFolder).toContain('build-block-claude-1');
+    });
+  });
 });
 

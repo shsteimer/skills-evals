@@ -107,15 +107,16 @@ describe('createTaskWorkspace', () => {
         name: 'test-task',
         agent: 'claude',
         timestamp: '20231215-143022',
+        iteration: 1,
         workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
         startFrom: 'https://github.com/adobe/aem-boilerplate'
       };
 
       await createTaskWorkspace(task);
 
-      // Verify git checkout was called with agent branch
+      // Verify git checkout was called with agent branch including iteration
       expect(execSync).toHaveBeenCalledWith(
-        'git checkout -b claude-20231215-143022',
+        'git checkout -b claude-20231215-143022-1',
         expect.objectContaining({ cwd: task.workspaceDir })
       );
     });

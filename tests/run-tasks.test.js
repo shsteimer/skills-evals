@@ -143,5 +143,39 @@ describe('parseArgs', () => {
       expect(result.showHelp).toBe(false);
     });
   });
+
+  describe('times parameter', () => {
+    it('should default to 1 when not specified', () => {
+      const args = ['node', 'script.js'];
+      const result = parseArgs(args);
+      
+      expect(result.times).toBe(1);
+    });
+
+    it('should parse times value with --times flag', () => {
+      const args = ['node', 'script.js', '--times', '3'];
+      const result = parseArgs(args);
+      
+      expect(result.times).toBe(3);
+    });
+
+    it('should throw error for non-numeric times value', () => {
+      const args = ['node', 'script.js', '--times', 'abc'];
+      
+      expect(() => parseArgs(args)).toThrow('--times must be a positive integer');
+    });
+
+    it('should throw error for negative times value', () => {
+      const args = ['node', 'script.js', '--times', '-1'];
+      
+      expect(() => parseArgs(args)).toThrow('--times must be a positive integer');
+    });
+
+    it('should throw error for zero times value', () => {
+      const args = ['node', 'script.js', '--times', '0'];
+      
+      expect(() => parseArgs(args)).toThrow('--times must be a positive integer');
+    });
+  });
 });
 

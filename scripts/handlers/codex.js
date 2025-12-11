@@ -41,8 +41,6 @@ export default async function runCodex(task) {
     codex.stdout.on('data', (data) => {
       const chunk = data.toString();
       outputData += chunk;
-      // Also write to console for monitoring
-      process.stdout.write(chunk);
     });
     
     codex.on('error', (error) => {

@@ -29,6 +29,28 @@ describe('parseArgs', () => {
     expect(result.resultDir).toBe(null);
     expect(result.showHelp).toBe(false);
   });
+
+  it('should default parallel to 3', () => {
+    const result = parseArgs(['node', 'eval-tasks.js']);
+    expect(result.parallel).toBe(3);
+  });
+
+  it('should parse --parallel flag', () => {
+    const result = parseArgs(['node', 'eval-tasks.js', '--parallel', '5']);
+    expect(result.parallel).toBe(5);
+  });
+
+  it('should throw error for non-numeric parallel value', () => {
+    expect(() => parseArgs(['node', 'eval-tasks.js', '--parallel', 'abc'])).toThrow('--parallel must be a positive integer');
+  });
+
+  it('should throw error for negative parallel value', () => {
+    expect(() => parseArgs(['node', 'eval-tasks.js', '--parallel', '-1'])).toThrow('--parallel must be a positive integer');
+  });
+
+  it('should throw error for zero parallel value', () => {
+    expect(() => parseArgs(['node', 'eval-tasks.js', '--parallel', '0'])).toThrow('--parallel must be a positive integer');
+  });
 });
 
 describe('findTaskResults', () => {

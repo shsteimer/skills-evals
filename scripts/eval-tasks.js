@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getEvalConfig } from './utils/env-config.js';
+import { runInParallel } from './utils/progress-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,7 @@ const __dirname = path.dirname(__filename);
 export function parseArgs(argv) {
   const result = {
     resultDir: null,
+    parallel: 3, // Default concurrency
     showHelp: false
   };
 
@@ -18,6 +20,12 @@ export function parseArgs(argv) {
     
     if (arg === '--help' || arg === '-h') {
       result.showHelp = true;
+    } else if (arg === '--parallel' && i + 1 < argv.length) {
+      const value = parseInt(argv[++i], 10);
+      if (isNaN(value) || value < 1) {
+        throw new Error('--parallel must be a positive integer');
+      }
+      result.parallel = value;
     } else if (!arg.startsWith('-')) {
       // Positional argument - path to results folder
       result.resultDir = arg;
@@ -29,18 +37,20 @@ export function parseArgs(argv) {
 
 function showHelp() {
   console.log(`
-Usage: npm run eval-tasks [path]
+Usage: npm run eval-tasks [path] [options]
 
 Arguments:
   path                 Path to results folder (defaults to most recent in results/)
 
 Options:
+  --parallel <number>  Number of evaluations to run concurrently (default: 3)
   -h, --help           Show this help message
 
 Examples:
   npm run eval-tasks
   npm run eval-tasks results/20251204-074135
   npm run eval-tasks /absolute/path/to/results
+  npm run eval-tasks --parallel 5
 `);
 }
 
@@ -171,11 +181,11 @@ async function cleanupEvalArtifacts(resultPath) {
   }
 }
 
+function getEvalTaskId(taskResult) {
+  return taskResult.folderName;
+}
+
 export async function evalTask(taskResult) {
-  console.log(`\nEvaluating: ${taskResult.folderName}`);
-  console.log(`Task: ${taskResult.name}`);
-  console.log(`Agent: ${taskResult.agent}`);
-  
   // Clean up any previous evaluation artifacts
   await cleanupEvalArtifacts(taskResult.resultPath);
   
@@ -195,13 +205,13 @@ export async function evalTask(taskResult) {
   try {
     changes = await fs.readFile(changesPath, 'utf-8');
   } catch (error) {
-    console.log('  Warning: No changes.diff found');
+    // changes.diff not found - continue
   }
   
   try {
     lintResults = JSON.parse(await fs.readFile(lintPath, 'utf-8'));
   } catch (error) {
-    console.log('  Warning: No lint-results.json found');
+    // lint-results.json not found - continue
   }
   
   try {
@@ -219,7 +229,7 @@ export async function evalTask(taskResult) {
   try {
     log = await fs.readFile(logPath, 'utf-8');
   } catch (error) {
-    console.log('  Warning: No output.jsonl found');
+    // output.jsonl not found - continue
   }
   
   // Create evaluation prompt
@@ -228,22 +238,15 @@ export async function evalTask(taskResult) {
   // Write eval prompt to file
   const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
   await fs.writeFile(evalPromptPath, evalPrompt, 'utf-8');
-  console.log('  ✓ Created eval-prompt.txt');
   
   // Call LLM API for evaluation
-  try {
-    const markdown = await callLLMForEvaluation(evalPrompt);
-    
-    // Write final result
-    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
-    await fs.writeFile(finalResultPath, markdown, 'utf-8');
-    console.log('  ✓ Evaluation complete');
-    
-    return { markdown };
-  } catch (error) {
-    console.error(`  ✗ Evaluation failed: ${error.message}`);
-    throw error;
-  }
+  const markdown = await callLLMForEvaluation(evalPrompt);
+  
+  // Write final result
+  const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
+  await fs.writeFile(finalResultPath, markdown, 'utf-8');
+  
+  return { markdown };
 }
 
 async function callLLMForEvaluation(prompt) {
@@ -306,8 +309,12 @@ async function evalTasks() {
   
   console.log(`Found ${taskResults.length} task result(s) to evaluate\n`);
   
-  for (const taskResult of taskResults) {
-    await evalTask(taskResult);
+  // Run evaluations in parallel
+  const hasFailures = await runInParallel(taskResults, args.parallel, evalTask, getEvalTaskId);
+  
+  // Exit with non-zero code if any evaluations failed
+  if (hasFailures) {
+    process.exit(1);
   }
 }
 

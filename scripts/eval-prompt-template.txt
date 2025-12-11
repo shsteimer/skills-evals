@@ -11,7 +11,7 @@ You are evaluating the results of an agent skills task. Your task is to assess t
 
 ## Evaluation Criteria
 
-You will evaluate based following criteria:
+You will evaluate based on the following criteria:
 
 {{CRITERIA}}
 
@@ -45,7 +45,7 @@ Assess the agent's overall performance and report on how well it completed the t
 
 Think carefully about both the overall agent output (code changes made, final response delivered to the user) and the steps the agent took to get there (tools used, decisions made, approach taken).
 
-Consider all of this in context of the evaluation criteria specified above and the expected outcome. Then provide a report that highlights strengths, weaknesses, issues, and notable observations.
+Consider all of this in context of the evaluation criteria specified above and the expected outcome. Then provide a report that includes an overall score from 0-10 and highlights strengths, weaknesses, issues, and notable observations.
 
 ## Guidelines
 
@@ -65,11 +65,11 @@ You can follow this format:
 
 **Task:** {{TASK_NAME}}
 **Agent:** {{AGENT}}
-**Overall Success:** Yes/No
+**Score:** 0-10
 
 ## Summary
 
-[Provide a brief summary of the overall performance]
+[Provide a brief summary of the overall performance that justifies the score given with specific reasons]
 
 ## Detailed Analysis
 
@@ -91,6 +91,6 @@ You can follow this format:
 
 ### Notable Observations
 
-[Any other important observations about the agent's approach or decisions]
+[Any other important observations about the agent's approach or decisions. These do not neccessarily have to correspond to the criteria given.]
 
 

@@ -7,6 +7,7 @@ import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.
 import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
 import { downloadFromGitHub } from './utils/github-utils.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
+import { runInParallel } from './utils/progress-utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -211,8 +212,17 @@ export async function createTaskWorkspace(task) {
           if (path.isAbsolute(aug.source)) {
             sourcePath = aug.source;
           } else {
-            // Relative path - resolve from taskPath
-            sourcePath = path.join(task.taskPath, aug.source);
+            // Relative path - could be relative to taskPath (task-specific) or CWD (global)
+            const taskRelativePath = path.join(task.taskPath, aug.source);
+            const cwdRelativePath = path.resolve(process.cwd(), aug.source);
+            
+            try {
+              await fs.access(taskRelativePath);
+              sourcePath = taskRelativePath;
+            } catch {
+              // If not found in task path, assume it's relative to CWD
+              sourcePath = cwdRelativePath;
+            }
           }
           
           // Check if source exists and is file or directory
@@ -240,7 +250,7 @@ export async function createTaskWorkspace(task) {
   }
   
   // Create and checkout new branch for the agent (after augmentations are committed)
-  const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}`;
+  const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}-${task.iteration}`;
   checkoutBranch(task.workspaceDir, agentBranch, true);
   
   // Install dependencies if package.json exists
@@ -297,6 +307,7 @@ export function parseArgs(argv) {
     agents: [],
     workspaceDir: path.join(os.tmpdir(), 'skills-evals-workspace'),
     augmentationsFile: null, // Only load if explicitly specified
+    times: 1, // Number of times to run each task
     showHelp: false
   };
 
@@ -325,6 +336,12 @@ export function parseArgs(argv) {
       result.workspaceDir = argv[++i];
     } else if (arg === '--augmentations' && i + 1 < argv.length) {
       result.augmentationsFile = argv[++i];
+    } else if (arg === '--times' && i + 1 < argv.length) {
+      const value = parseInt(argv[++i], 10);
+      if (isNaN(value) || value < 1) {
+        throw new Error('--times must be a positive integer');
+      }
+      result.times = value;
     }
   }
 
@@ -345,6 +362,7 @@ Options:
   --tag <tag>         Filter tasks by tag(s) - matches ANY tag (can be used multiple times or comma-separated)
   --agents <name>     Agent(s) to run tasks with (default: claude,cursor,codex)
   --workspace <path>  Directory to create task workspaces (default: system temp)
+  --times <number>    Number of times to run each task (default: 1)
   -h, --help          Show this help message
 
 Examples:
@@ -353,30 +371,35 @@ Examples:
   npm run run-tasks --tag cdd --tag blocks
   npm run run-tasks --agents claude --task build-block
   npm run run-tasks --workspace /tmp/my-workspace --task build-block
+  npm run run-tasks --task build-block --times 3
 `);
 }
 
-export function enrichTasks(tasks, agents, workspaceDir) {
+export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
   // Generate timestamp once for the entire run
   const timestamp = getCurrentTimestamp();
   const resultsBaseDir = path.join(__dirname, '..', 'results');
   
-  // Create enriched task objects for each task/agent combination
+  // Create enriched task objects for each task/agent/iteration combination
+  // Order by iteration first, then agent - this ensures parallel execution spreads across agents
   const enrichedTasks = [];
   for (const task of tasks) {
-    for (const agent of agents) {
-      const sanitizedAgent = sanitizeName(agent);
-      const folderName = `${task.name}-${sanitizedAgent}`;
-      
-      const enrichedTask = {
-        ...task,
-        agent,
-        timestamp,
-        taskInfoFolder: path.join(resultsBaseDir, timestamp, folderName),
-        workspaceDir: path.join(workspaceDir, timestamp, folderName)
-      };
-      
-      enrichedTasks.push(enrichedTask);
+    for (let iteration = 1; iteration <= times; iteration++) {
+      for (const agent of agents) {
+        const sanitizedAgent = sanitizeName(agent);
+        const folderName = `${task.name}-${sanitizedAgent}-${iteration}`;
+        
+        const enrichedTask = {
+          ...task,
+          agent,
+          timestamp,
+          iteration,
+          taskInfoFolder: path.join(resultsBaseDir, timestamp, folderName),
+          workspaceDir: path.join(workspaceDir, timestamp, folderName)
+        };
+        
+        enrichedTasks.push(enrichedTask);
+      }
     }
   }
   
@@ -459,6 +482,16 @@ async function cleanUp(task) {
   }
 }
 
+function getTaskId(task) {
+  return `${task.name}-${sanitizeName(task.agent)}-${task.iteration}`;
+}
+
+async function processTask(task) {
+  await runTask(task);
+  await captureResults(task);
+  await cleanUp(task);
+}
+
 async function runTasks() {
   const args = parseArgs(process.argv);
   
@@ -468,7 +501,7 @@ async function runTasks() {
   }
   
   const tasks = await findTasks(args);
-  const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir);
+  const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir, args.times);
   
   // Prepare task folders for each enriched task
   for (const task of enrichedTasks) {
@@ -476,11 +509,13 @@ async function runTasks() {
     await createTaskWorkspace(task);
   }
 
-  // Run the tasks for each enriched task
-  for (const task of enrichedTasks) {
-    await runTask(task);
-    await captureResults(task);
-    await cleanUp(task);
+  // Run the tasks in parallel
+  const concurrency = args.agents.length;
+  const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId);
+  
+  // Exit with non-zero code if any tasks failed
+  if (hasFailures) {
+    process.exit(1);
   }
 }
 

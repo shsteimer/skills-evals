@@ -41,8 +41,6 @@ export default async function runClaude(task) {
     claude.stdout.on('data', (data) => {
       const chunk = data.toString();
       outputData += chunk;
-      // Also write to console for monitoring
-      process.stdout.write(chunk);
     });
     
     claude.on('error', (error) => {
