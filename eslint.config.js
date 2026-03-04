@@ -1,6 +1,12 @@
 import js from '@eslint/js';
 
 export default [
+  {
+    ignores: [
+      'tasks/**/buggy-*/',
+      'tasks/**/source-*/',
+    ],
+  },
   js.configs.recommended,
   {
     languageOptions: {

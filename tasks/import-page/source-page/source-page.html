@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acme Cloud Platform — Enterprise Cloud Solutions</title>
+  <meta name="description" content="Acme Cloud Platform delivers scalable, secure cloud infrastructure for modern enterprises.">
+  <meta property="og:title" content="Acme Cloud Platform — Enterprise Cloud Solutions">
+  <meta property="og:description" content="Scalable, secure cloud infrastructure for modern enterprises.">
+  <meta property="og:image" content="https://example.com/images/hero-cloud.jpg">
+  <style>
+    /* Original page styles — included for reference during import */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; color: #333; line-height: 1.6; }
+
+    .hero { background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; padding: 6rem 2rem; text-align: center; }
+    .hero h1 { font-size: 3rem; margin-bottom: 1rem; }
+    .hero p { font-size: 1.25rem; max-width: 600px; margin: 0 auto 2rem; }
+    .hero .cta-button { display: inline-block; background: #e94560; color: white; padding: 1rem 2rem; border-radius: 4px; text-decoration: none; font-weight: bold; }
+
+    .features { padding: 4rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .features h2 { text-align: center; margin-bottom: 3rem; font-size: 2rem; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+    .feature-card { padding: 2rem; border: 1px solid #eee; border-radius: 8px; text-align: center; }
+    .feature-card img { width: 64px; height: 64px; margin-bottom: 1rem; }
+    .feature-card h3 { margin-bottom: 0.5rem; }
+
+    .testimonials { background: #f8f9fa; padding: 4rem 2rem; }
+    .testimonials h2 { text-align: center; margin-bottom: 3rem; font-size: 2rem; }
+    .testimonial-list { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 2rem; }
+    .testimonial { padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .testimonial blockquote { font-style: italic; margin-bottom: 1rem; font-size: 1.1rem; }
+    .testimonial .author { font-weight: bold; }
+    .testimonial .role { color: #666; }
+
+    .cta-banner { background: #1a1a2e; color: white; padding: 4rem 2rem; text-align: center; }
+    .cta-banner h2 { margin-bottom: 1rem; font-size: 2rem; }
+    .cta-banner p { margin-bottom: 2rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+    .cta-banner a { display: inline-block; background: #e94560; color: white; padding: 1rem 2rem; border-radius: 4px; text-decoration: none; font-weight: bold; }
+
+    footer { background: #111; color: #aaa; padding: 3rem 2rem; }
+    .footer-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; }
+    .footer-col h4 { color: white; margin-bottom: 1rem; }
+    .footer-col ul { list-style: none; }
+    .footer-col li { margin-bottom: 0.5rem; }
+    .footer-col a { color: #aaa; text-decoration: none; }
+    .footer-bottom { text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #333; }
+  </style>
+</head>
+<body>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <h1>Build Without Limits</h1>
+    <p>Acme Cloud Platform gives your team the infrastructure to ship faster, scale effortlessly, and stay secure — all without managing servers.</p>
+    <a href="/get-started" class="cta-button">Start Free Trial</a>
+  </section>
+
+  <!-- Features Grid -->
+  <section class="features">
+    <h2>Why Teams Choose Acme</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-scale.svg" alt="Auto-scaling icon">
+        <h3>Auto-Scaling</h3>
+        <p>Automatically scale up or down based on traffic. No manual intervention needed.</p>
+      </div>
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-security.svg" alt="Security icon">
+        <h3>Enterprise Security</h3>
+        <p>SOC 2 certified with end-to-end encryption, role-based access, and audit logging.</p>
+      </div>
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-deploy.svg" alt="Deployment icon">
+        <h3>One-Click Deploy</h3>
+        <p>Push to production in seconds with integrated CI/CD pipelines and rollback support.</p>
+      </div>
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-monitor.svg" alt="Monitoring icon">
+        <h3>Real-Time Monitoring</h3>
+        <p>Full observability with dashboards, alerts, and distributed tracing built in.</p>
+      </div>
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-global.svg" alt="Global CDN icon">
+        <h3>Global CDN</h3>
+        <p>Content delivered from 200+ edge locations worldwide for sub-50ms response times.</p>
+      </div>
+      <div class="feature-card">
+        <img src="https://example.com/images/icon-api.svg" alt="API icon">
+        <h3>API-First</h3>
+        <p>Every feature is API-accessible. Build custom integrations and workflows effortlessly.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="testimonials">
+    <h2>Trusted by Engineering Teams</h2>
+    <div class="testimonial-list">
+      <div class="testimonial">
+        <blockquote>"We migrated our entire infrastructure to Acme in two weeks. Deployment time went from 45 minutes to under 2."</blockquote>
+        <div class="author">Sarah Chen</div>
+        <div class="role">VP Engineering, TechCorp</div>
+      </div>
+      <div class="testimonial">
+        <blockquote>"The auto-scaling alone saved us $200K in the first quarter. We no longer over-provision for traffic spikes."</blockquote>
+        <div class="author">Marcus Johnson</div>
+        <div class="role">CTO, ScaleUp Inc.</div>
+      </div>
+      <div class="testimonial">
+        <blockquote>"Acme's security features gave us SOC 2 compliance out of the box. Our security audit went from 3 months to 3 weeks."</blockquote>
+        <div class="author">Priya Patel</div>
+        <div class="role">Head of Security, FinServe</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner -->
+  <section class="cta-banner">
+    <h2>Ready to Ship Faster?</h2>
+    <p>Join 2,000+ teams already building on Acme Cloud Platform. Start your free trial today — no credit card required.</p>
+    <a href="/get-started">Get Started Free</a>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/pricing">Pricing</a></li>
+          <li><a href="/docs">Documentation</a></li>
+          <li><a href="/changelog">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="/about">About</a></li>
+          <li><a href="/blog">Blog</a></li>
+          <li><a href="/careers">Careers</a></li>
+          <li><a href="/contact">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/guides">Guides</a></li>
+          <li><a href="/webinars">Webinars</a></li>
+          <li><a href="/case-studies">Case Studies</a></li>
+          <li><a href="/community">Community</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="/privacy">Privacy Policy</a></li>
+          <li><a href="/terms">Terms of Service</a></li>
+          <li><a href="/sla">SLA</a></li>
+          <li><a href="/security">Security</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Acme Cloud Platform. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

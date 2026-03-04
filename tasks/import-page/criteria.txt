@@ -1,0 +1,46 @@
+# Success Criteria
+
+<scoring_rubric>
+Start with 10 points.
+<critical> items: Deduct 2 points for each unmet criterion.
+<important> items: Deduct 1 point for each unmet criterion.
+<bonus> items: Add points as indicated.
+Minimum score: 0.
+</scoring_rubric>
+
+## Content Mapping
+
+<critical>
+- All source content is accounted for (nothing dropped from the original page)
+- Correct identification of what becomes AEM blocks vs default content
+- Content structure is author-friendly (clean, editable in a document)
+</critical>
+
+<important>
+- Uses existing blocks from the project where applicable (e.g., hero, columns, cards)
+- Proper metadata extraction (title, description, OG tags)
+- Images handled correctly (referenced or optimized)
+</important>
+
+## Testing
+
+<critical>
+- Output renders correctly in an AEM preview
+</critical>
+
+## Process
+
+<important>
+- Agent ran a lint check and fixed any issues found
+- PR with preview link was created or mentioned
+</important>
+
+## Skill Discovery
+
+<important>
+- Agent follows a structured import workflow (analyze → identify blocks → map content → generate output)
+</important>
+
+<bonus>
+- (+1) Creates documentation or notes for authors on how to edit the migrated content
+</bonus>

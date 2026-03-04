@@ -1,0 +1,15 @@
+{
+  "name": "import-page",
+  "description": "Import/migrate a static HTML page into an EDS site using blocks and content structure",
+  "tags": [
+    "import",
+    "content"
+  ],
+  "startFrom": "https://github.com/adobe/aem-boilerplate",
+  "augmentations": [
+    {
+      "source": "source-page",
+      "target": "import"
+    }
+  ]
+}

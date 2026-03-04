@@ -1,3 +1,1 @@
-Create a testimonials carousel block for displaying customer quotes.
-
-Each testimonial should have an image and the quote, with optional attribution (name, company, title)
+Create a product cards block that displays a grid of product cards. Each card should show an image, product name, short description, and a call-to-action link. The grid should be responsive with a max of 3 columns of desktop but scaling down based on available space to 1 on mobile.

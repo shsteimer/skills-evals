@@ -1,0 +1,61 @@
+# Success Criteria
+
+<scoring_rubric>
+Start with 10 points.
+<critical> items: Deduct 2 points for each unmet criterion.
+<important> items: Deduct 1 point for each unmet criterion.
+<bonus> items: Add points as indicated.
+Minimum score: 0.
+</scoring_rubric>
+
+## Variant Implementation
+
+<critical>
+- Horizontal variant works: image on the left, content on the right, side by side
+- Default stacked layout still works correctly (not broken by changes)
+- Variant activated via block table class name (e.g., `Cards (horizontal)`) which maps to a CSS class on the block element
+</critical>
+
+<important>
+- Responsive behavior: horizontal on desktop, stacks on mobile
+- Layout change is CSS-only (no JavaScript needed for the layout switch)
+- Existing cards CSS not broken or unnecessarily rewritten
+</important>
+
+## Testing
+
+<critical>
+- Tested in a browser or browser-like environment
+- Agent tested across multiple breakpoints to verify responsive behavior
+</critical>
+
+## Process
+
+<critical>
+- Agent ran a lint check and fixed any issues found
+</critical>
+
+<important>
+- PR with preview link was created or mentioned
+</important>
+
+## Content Modeling
+
+<critical>
+- Variant uses the AEM variant pattern (class on block table header → classList on block element)
+</critical>
+
+<important>
+- No changes to the content model required — same authoring table works for both variants
+</important>
+
+## Code Quality
+
+<important>
+- Minimal changes: only adds what's needed for the variant, doesn't rewrite the whole block
+- Uses semantic HTML and scoped CSS
+</important>
+
+<bonus>
+- (+1) Sample content created to demonstrate and test both variants side by side
+</bonus>
