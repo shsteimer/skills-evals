@@ -7,8 +7,8 @@ import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function loadDisallowedTools() {
-  const configPath = path.join(__dirname, '..', '..', 'config', 'disallowed-tools.json');
+async function loadToolList(filename) {
+  const configPath = path.join(__dirname, '..', '..', 'config', filename);
   try {
     return JSON.parse(await fs.readFile(configPath, 'utf-8'));
   } catch {
@@ -22,17 +22,20 @@ async function loadDisallowedTools() {
  */
 export default async function runClaude(task) {
   const config = getAgentConfig('claude');
-  const disallowedTools = await loadDisallowedTools();
+  const allowedTools = await loadToolList('allowed-tools.json');
+  const disallowedTools = await loadToolList('disallowed-tools.json');
 
   return new Promise((resolve, reject) => {
-
     const args = [
       '--verbose',
       '--output-format', 'stream-json',
-      '--dangerously-skip-permissions',
       // Isolate from user's personal settings (~/.claude/CLAUDE.md, ~/.claude/settings.json)
       '--setting-sources', 'project',
     ];
+
+    if (allowedTools.length > 0) {
+      args.push('--allowedTools', ...allowedTools);
+    }
 
     if (disallowedTools.length > 0) {
       args.push('--disallowedTools', ...disallowedTools);
@@ -50,11 +53,9 @@ export default async function runClaude(task) {
       stdio: ['pipe', 'pipe', 'inherit']
     });
 
-    // Write prompt to stdin
     claude.stdin.write(task.prompt);
     claude.stdin.end();
 
-    // Capture stdout (JSON output)
     let outputData = '';
     claude.stdout.on('data', (data) => {
       const chunk = data.toString();
