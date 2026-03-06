@@ -57,7 +57,20 @@ Consider all of this in context of the evaluation criteria specified above and t
 
 ## Output Format
 
-Provide your evaluation as a complete markdown document that will be read by a human to understand how well the agent performed.
+Provide your evaluation in two parts:
+1) A JSON object (first) for machine parsing.
+2) A complete markdown report for humans.
+
+### JSON requirements
+
+- Must be valid JSON (no markdown fencing around it).
+- Required fields:
+  - `score`: number in the range `0.000` to `10.000` with exactly 3 decimal places of precision.
+  - `overallSuccess`: boolean.
+  - `summary`: short string.
+  - `criteriaChecks`: array of objects with `name`, `met` (boolean), and `notes`.
+- Precision rule: do not return only integer scores unless truly exact; prefer granular scoring (for example `9.375`).
+- Output the JSON object first, then a blank line, then the markdown report.
 
 You can follow this format:
 
@@ -65,7 +78,7 @@ You can follow this format:
 
 **Task:** {{TASK_NAME}}
 **Agent:** {{AGENT}}
-**Score:** 0-10
+**Score:** x.xxx / 10.000
 
 ## Summary
 

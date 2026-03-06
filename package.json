@@ -8,6 +8,7 @@
     "test:watch": "vitest",
     "run-tasks": "node scripts/run-tasks.js",
     "eval-tasks": "node scripts/eval-tasks.js",
+    "compare-runs": "node scripts/compare-runs.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { evalTask, findTaskResults, parseArgs } from '../scripts/eval-tasks.js';
+import { evalTask, findTaskResults, parseArgs, parseEvaluationMarkdown } from '../scripts/eval-tasks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -206,6 +206,10 @@ describe('evalTask - log support', () => {
     
     expect(finalResult).toContain('Evaluation Results');
     expect(finalResult).toContain('**Overall Success:** Yes');
+    const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
+    const evalResult = JSON.parse(await fs.readFile(evalResultPath, 'utf-8'));
+    expect(evalResult.score).toBeNull();
+    expect(evalResult.overallSuccess).toBe(true);
     expect(result.markdown).toBeTruthy();
   });
 
@@ -231,3 +235,32 @@ describe('evalTask - log support', () => {
   });
 });
 
+describe('parseEvaluationMarkdown', () => {
+  it('should parse score and success from markdown format', () => {
+    const parsed = parseEvaluationMarkdown('**Score:** 8.5\n\n**Overall Success:** Yes');
+    expect(parsed.score).toBe(8.5);
+    expect(parsed.overallSuccess).toBe(true);
+  });
+
+  it('should parse score format with /10', () => {
+    const parsed = parseEvaluationMarkdown('**Score:** **9/10**');
+    expect(parsed.score).toBe(9);
+  });
+
+  it('should parse json style fields when present', () => {
+    const parsed = parseEvaluationMarkdown('{"score":7,"overallSuccess":false}');
+    expect(parsed.score).toBe(7);
+    expect(parsed.overallSuccess).toBe(false);
+  });
+
+  it('should return nulls when no structured fields are found', () => {
+    const parsed = parseEvaluationMarkdown('No explicit score given');
+    expect(parsed.score).toBeNull();
+    expect(parsed.overallSuccess).toBeNull();
+  });
+
+  it('should infer success from met/not met fallback', () => {
+    const parsed = parseEvaluationMarkdown('Criteria A: Met\nCriteria B: Met\nCriteria C: Not Met');
+    expect(parsed.overallSuccess).toBe(false);
+  });
+});

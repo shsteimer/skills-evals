@@ -8,6 +8,7 @@ import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captu
 import { downloadFromGitHub } from './utils/github-utils.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
+import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -427,7 +428,7 @@ async function runTask(task) {
   }
 }
 
-async function captureResults(task) {
+async function captureResults(task, runMetrics = null) {
   const results = {};
   
   // Run npm run lint and capture status (if lint script exists)
@@ -470,6 +471,32 @@ async function captureResults(task) {
   // Write diff as separate file
   const diffPath = path.join(task.taskInfoFolder, 'changes.diff');
   await fs.writeFile(diffPath, results.diff || '', 'utf-8');
+
+  // Capture agent output usage metrics if available
+  const outputPath = path.join(task.taskInfoFolder, 'output.jsonl');
+  let outputMetrics = null;
+  try {
+    const output = await fs.readFile(outputPath, 'utf-8');
+    outputMetrics = extractAgentMetricsFromOutput(output);
+  } catch {
+    // output.jsonl may be missing for failed/incomplete runs
+  }
+
+  if (runMetrics || outputMetrics) {
+    const runMetricsPath = path.join(task.taskInfoFolder, 'run-metrics.json');
+    await fs.writeFile(
+      runMetricsPath,
+      JSON.stringify(
+        {
+          ...(runMetrics || {}),
+          ...(outputMetrics || {})
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+  }
 }
 
 async function cleanUp(task) {
@@ -487,8 +514,12 @@ function getTaskId(task) {
 }
 
 async function processTask(task) {
+  const startedAt = new Date().toISOString();
+  const start = Date.now();
   await runTask(task);
-  await captureResults(task);
+  const finishedAt = new Date().toISOString();
+  const durationMs = Date.now() - start;
+  await captureResults(task, { startedAt, finishedAt, durationMs });
   await cleanUp(task);
 }
 

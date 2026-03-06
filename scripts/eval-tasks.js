@@ -35,6 +35,67 @@ export function parseArgs(argv) {
   return result;
 }
 
+export function parseEvaluationMarkdown(markdown) {
+  if (!markdown || typeof markdown !== 'string') {
+    return { score: null, overallSuccess: null };
+  }
+
+  const scorePatterns = [
+    /\*\*Score:\*\*\s*\*\*([0-9]+(?:\.[0-9]+)?)\s*\/\s*10\*\*/i,
+    /\*\*Score:\*\*\s*([0-9]+(?:\.[0-9]+)?)\s*\/\s*10/i,
+    /\*\*Score:\*\*\s*([0-9]+(?:\.[0-9]+)?)/i,
+    /"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i
+  ];
+
+  let score = null;
+  for (const pattern of scorePatterns) {
+    const match = markdown.match(pattern);
+    if (match) {
+      score = Number(match[1]);
+      break;
+    }
+  }
+
+  const successPatterns = [
+    /\*\*Overall Success:\*\*\s*(yes|no)/i,
+    /\*\*Overall Success:\*\*\s*\*\*(yes|no)\*\*/i,
+    /\bOverall Success\b[^a-zA-Z0-9]*(yes|no)\b/i,
+    /"overallSuccess"\s*:\s*(true|false)/i
+  ];
+
+  let overallSuccess = null;
+  for (const pattern of successPatterns) {
+    const match = markdown.match(pattern);
+    if (match) {
+      const value = match[1].toLowerCase();
+      overallSuccess = value === 'yes' || value === 'true';
+      break;
+    }
+  }
+
+  // Fallback heuristic for judge formats that omit explicit overall success.
+  if (overallSuccess === null) {
+    const metCount = (markdown.match(/\b(?:\*{0,2})Met(?:\*{0,2})\b/gi) || []).length;
+    const notMetCount = (markdown.match(/\b(?:\*{0,2})Not Met(?:\*{0,2})\b/gi) || []).length;
+    if (metCount > 0 || notMetCount > 0) {
+      overallSuccess = notMetCount === 0 && metCount > 0;
+    }
+  }
+
+  return { score, overallSuccess };
+}
+
+function normalizeScore(score) {
+  if (typeof score !== 'number' || Number.isNaN(score)) {
+    return { score: null, scoreDisplay: null };
+  }
+  const rounded = Math.round(score * 1000) / 1000;
+  return {
+    score: rounded,
+    scoreDisplay: rounded.toFixed(3)
+  };
+}
+
 function showHelp() {
   console.log(`
 Usage: npm run eval-tasks [path] [options]
@@ -241,12 +302,32 @@ export async function evalTask(taskResult) {
   
   // Call LLM API for evaluation
   const markdown = await callLLMForEvaluation(evalPrompt);
-  
+  const parsedResult = parseEvaluationMarkdown(markdown);
+  const normalizedScore = normalizeScore(parsedResult.score);
+
+  // Write machine-readable eval result for automated comparisons
+  const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
+  await fs.writeFile(
+    evalResultPath,
+    JSON.stringify(
+      {
+        task: taskResult.name,
+        agent: taskResult.agent,
+        score: normalizedScore.score,
+        scoreDisplay: normalizedScore.scoreDisplay,
+        overallSuccess: parsedResult.overallSuccess
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+
   // Write final result
   const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
   await fs.writeFile(finalResultPath, markdown, 'utf-8');
-  
-  return { markdown };
+
+  return { markdown, parsedResult };
 }
 
 async function callLLMForEvaluation(prompt) {
