@@ -5,7 +5,7 @@
     "blocks",
     "variants"
   ],
-  "startFrom": "https://github.com/adobe/aem-boilerplate",
+  "startFrom": "https://github.com/shsteimer/aem-boilerplate-evals",
   "augmentations": [
     {
       "source": "https://github.com/adobe/aem-block-collection/tree/main/blocks/cards",
