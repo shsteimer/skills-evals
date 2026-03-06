@@ -34,6 +34,10 @@
   .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
   .score-banner.pass .score-bar-fill { background: var(--green); }
   .score-banner.fail .score-bar-fill { background: var(--red); }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 0.625rem 0.875rem; }
+  .metric-val { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric-label { font-size: 0.6875rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
   .summary { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 0.5rem; }
   .criteria-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
   .criteria-table th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border); font-weight: 600; }
@@ -62,15 +66,16 @@
 <div id="root"></div>
 <script>
 const data = /*__EVAL_DATA__*/null;
+const metrics = /*__RUN_METRICS__*/null;
 
-function render(d) {
+function render(d, m) {
   if (!d) { document.getElementById('root').innerHTML = '<p>No evaluation data.</p>'; return; }
 
   const pass = d.overallSuccess;
   const scoreFmt = typeof d.score === 'number' ? d.score.toFixed(3) : 'N/A';
   const pct = typeof d.score === 'number' ? (d.score / 10 * 100) : 0;
 
-  document.title = `${d.task} — ${d.agent} — ${scoreFmt}`;
+  document.title = `${d.task} \u2014 ${d.agent} \u2014 ${scoreFmt}`;
 
   let html = `
     <h1>${esc(d.task)}</h1>
@@ -83,6 +88,19 @@ function render(d) {
       <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%"></div></div>
       <div class="badge ${pass ? 'met' : 'not-met'}">${pass ? 'PASS' : 'FAIL'}</div>
     </div>`;
+
+  // Run metrics
+  if (m) {
+    const dur = typeof m.durationMs === 'number' ? (m.durationMs / 1000).toFixed(1) + 's' : null;
+    const tok = m.tokenUsage;
+    html += '<div class="metrics">';
+    if (dur) html += `<div class="metric"><div class="metric-val">${dur}</div><div class="metric-label">Duration</div></div>`;
+    if (tok?.totalTokens) html += `<div class="metric"><div class="metric-val">${tok.totalTokens.toLocaleString()}</div><div class="metric-label">Total Tokens</div></div>`;
+    if (tok?.inputTokens) html += `<div class="metric"><div class="metric-val">${tok.inputTokens.toLocaleString()}</div><div class="metric-label">Input Tokens</div></div>`;
+    if (tok?.outputTokens) html += `<div class="metric"><div class="metric-val">${tok.outputTokens.toLocaleString()}</div><div class="metric-label">Output Tokens</div></div>`;
+    if (tok?.costUsd) html += `<div class="metric"><div class="metric-val">$${tok.costUsd.toFixed(4)}</div><div class="metric-label">Est. Cost</div></div>`;
+    html += '</div>';
+  }
 
   if (d.summary) {
     html += `<div class="summary">${esc(d.summary)}</div>`;
@@ -125,7 +143,7 @@ function esc(s) {
   return el.innerHTML;
 }
 
-render(data);
+render(data, metrics);
 </script>
 </body>
 </html>

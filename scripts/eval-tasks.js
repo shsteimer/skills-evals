@@ -58,10 +58,12 @@ export function parseEvalResult(text) {
   }
 }
 
-async function renderEvalHtml(evalResult) {
+async function renderEvalHtml(evalResult, runMetrics = null) {
   const templatePath = path.join(__dirname, 'report', 'eval-template.html');
   const template = await fs.readFile(templatePath, 'utf-8');
-  return template.replace('/*__EVAL_DATA__*/', JSON.stringify(evalResult, null, 2));
+  return template
+    .replace('/*__EVAL_DATA__*/', JSON.stringify(evalResult, null, 2))
+    .replace('/*__RUN_METRICS__*/', JSON.stringify(runMetrics, null, 2));
 }
 
 function showHelp() {
@@ -284,12 +286,21 @@ export async function evalTask(taskResult) {
   evalResult.task = taskResult.name;
   evalResult.agent = taskResult.agent;
 
+  // Read run metrics if available
+  let runMetrics = null;
+  try {
+    const metricsPath = path.join(taskResult.resultPath, 'run-metrics.json');
+    runMetrics = JSON.parse(await fs.readFile(metricsPath, 'utf-8'));
+  } catch {
+    // run-metrics.json is optional
+  }
+
   // Write structured eval result
   const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
   await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), 'utf-8');
 
   // Generate HTML report
-  const html = await renderEvalHtml(evalResult);
+  const html = await renderEvalHtml(evalResult, runMetrics);
   const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
   await fs.writeFile(htmlPath, html, 'utf-8');
 

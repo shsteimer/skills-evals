@@ -224,6 +224,21 @@ describe('evalTask', () => {
     expect(html).toContain('"overallSuccess": true');
   });
 
+  it('should include run metrics in html when run-metrics.json exists', async () => {
+    await fs.writeFile(
+      path.join(taskResult.resultPath, 'run-metrics.json'),
+      JSON.stringify({ durationMs: 45000, tokenUsage: { totalTokens: 12345, inputTokens: 10000, outputTokens: 2345 } })
+    );
+
+    await evalTask(taskResult);
+
+    const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
+    const html = await fs.readFile(htmlPath, 'utf-8');
+
+    expect(html).toContain('"durationMs": 45000');
+    expect(html).toContain('"totalTokens": 12345');
+  });
+
   it('should include log in eval prompt when output.jsonl exists', async () => {
     await evalTask(taskResult);
 
