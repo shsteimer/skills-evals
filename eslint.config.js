@@ -5,6 +5,7 @@ export default [
     ignores: [
       'tasks/**/buggy-*/',
       'tasks/**/source-*/',
+      'results/',
     ],
   },
   js.configs.recommended,

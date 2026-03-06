@@ -214,7 +214,8 @@ function getEvalTaskId(taskResult) {
   return taskResult.folderName;
 }
 
-export async function evalTask(taskResult) {
+export async function evalTask(taskResult, onActivity) {
+  if (onActivity) onActivity('cleaning up previous artifacts...');
   // Clean up any previous evaluation artifacts
   await cleanupEvalArtifacts(taskResult.resultPath);
   
@@ -269,6 +270,7 @@ export async function evalTask(taskResult) {
   await fs.writeFile(evalPromptPath, evalPrompt, 'utf-8');
   
   // Call LLM API for evaluation
+  if (onActivity) onActivity('calling eval LLM...');
   const rawResponse = await callLLMForEvaluation(evalPrompt);
   const evalResult = parseEvalResult(rawResponse);
 
@@ -296,6 +298,7 @@ export async function evalTask(taskResult) {
   const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
   await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), 'utf-8');
 
+  if (onActivity) onActivity('writing results...');
   // Write data JS file and copy static HTML template
   const dataJsPath = path.join(taskResult.resultPath, 'eval-data.js');
   await fs.writeFile(dataJsPath, buildEvalDataJs(evalResult, runMetrics), 'utf-8');

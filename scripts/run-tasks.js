@@ -109,6 +109,12 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
       }
       return args.tags.some(tag => task.tags.includes(tag));
     });
+  } else if (!args.tasks || args.tasks.length === 0) {
+    // When no tags or task names specified, exclude diagnostic tasks
+    filteredTasks = filteredTasks.filter(task => {
+      if (!task.tags || !Array.isArray(task.tags)) return true;
+      return !task.tags.includes('diagnostic');
+    });
   }
   
   return filteredTasks;
