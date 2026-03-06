@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
-import { sanitizeName, getCurrentTimestamp } from './utils/string-utils.js';
+import { sanitizeName, getCurrentTimestamp, computeTaskHash } from './utils/string-utils.js';
 import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
 import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
 import { downloadFromGitHub } from './utils/github-utils.js';
@@ -292,6 +292,18 @@ export async function createTaskInfoFolder(task) {
   // Create the directory structure
   await ensureDir(task.taskInfoFolder);
   
+  // Compute a content hash from the source task definition files
+  // so results can be grouped by task version
+  const sourcePromptPath = path.join(task.taskPath, 'prompt.txt');
+  const sourceCriteriaPath = path.join(task.taskPath, 'criteria.txt');
+  const sourceTaskJsonPath = path.join(task.taskPath, 'task.json');
+  const [sourcePrompt, sourceCriteria, sourceTaskJsonContent] = await Promise.all([
+    fs.readFile(sourcePromptPath, 'utf-8'),
+    fs.readFile(sourceCriteriaPath, 'utf-8'),
+    fs.readFile(sourceTaskJsonPath, 'utf-8')
+  ]);
+  const taskHash = computeTaskHash(sourcePrompt, sourceCriteria, sourceTaskJsonContent);
+
   // Build task.json with all runtime information
   // Use task data directly (includes global + task-specific augmentations)
   const taskJson = {
@@ -302,20 +314,18 @@ export async function createTaskInfoFolder(task) {
     augmentations: task.augmentations, // This includes global + task-specific
     agent: task.agent,
     timestamp: task.timestamp,
-    workspaceDir: task.workspaceDir
+    workspaceDir: task.workspaceDir,
+    taskHash
   };
-  
+
   // Write task.json to task info folder
   const destTaskJsonPath = path.join(task.taskInfoFolder, 'task.json');
   await fs.writeFile(destTaskJsonPath, JSON.stringify(taskJson, null, 2), 'utf-8');
-  
-  // Copy prompt.txt
-  const sourcePromptPath = path.join(task.taskPath, 'prompt.txt');
+
+  // Copy prompt.txt and criteria.txt
   const destPromptPath = path.join(task.taskInfoFolder, 'prompt.txt');
   await fs.copyFile(sourcePromptPath, destPromptPath);
-  
-  // Copy criteria.txt
-  const sourceCriteriaPath = path.join(task.taskPath, 'criteria.txt');
+
   const destCriteriaPath = path.join(task.taskInfoFolder, 'criteria.txt');
   await fs.copyFile(sourceCriteriaPath, destCriteriaPath);
   

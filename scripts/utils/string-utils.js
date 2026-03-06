@@ -1,3 +1,13 @@
+import { createHash } from 'crypto';
+
+export function computeTaskHash(prompt, criteria, taskJson) {
+  const hash = createHash('sha256');
+  hash.update(prompt);
+  hash.update(criteria);
+  hash.update(taskJson);
+  return hash.digest('hex').slice(0, 12);
+}
+
 export function sanitizeName(name) {
   // Replace spaces with hyphens and remove special characters
   return name
