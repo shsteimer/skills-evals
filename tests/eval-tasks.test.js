@@ -2,10 +2,23 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { evalTask, findTaskResults, parseArgs, parseEvaluationMarkdown } from '../scripts/eval-tasks.js';
+import { evalTask, findTaskResults, parseArgs, parseEvalResult } from '../scripts/eval-tasks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const MOCK_EVAL_JSON = {
+  score: 8.250,
+  overallSuccess: true,
+  summary: 'The agent performed well on the test task.',
+  strengths: ['Good code quality'],
+  weaknesses: ['Missing edge case handling'],
+  observations: ['Used an iterative approach'],
+  criteriaChecks: [
+    { name: 'File exists', priority: 'critical', met: true, deduction: 0, notes: 'File was created correctly' },
+    { name: 'Content correct', priority: 'important', met: false, deduction: 1, notes: 'Missing agent name' }
+  ]
+};
 
 describe('parseArgs', () => {
   it('should parse result directory from positional argument', () => {
@@ -55,7 +68,7 @@ describe('parseArgs', () => {
 
 describe('findTaskResults', () => {
   const fixturesDir = path.join(__dirname, 'fixtures', 'eval-tasks');
-  
+
   beforeEach(async () => {
     // Create test fixtures
     await fs.mkdir(path.join(fixturesDir, '20251204-074135', 'hello-world-claude'), { recursive: true });
@@ -81,7 +94,7 @@ describe('findTaskResults', () => {
   it('should find task results in specified directory', async () => {
     const args = { resultDir: path.join(fixturesDir, '20251204-074135') };
     const results = await findTaskResults(args, fixturesDir);
-    
+
     expect(results).toHaveLength(1);
     expect(results[0].name).toBe('hello-world');
     expect(results[0].agent).toBe('claude');
@@ -107,7 +120,7 @@ describe('findTaskResults', () => {
 
     const args = { resultDir: null };
     const results = await findTaskResults(args, fixturesDir);
-    
+
     expect(results).toHaveLength(1);
     expect(results[0].name).toBe('test-task');
     expect(results[0].agent).toBe('cursor');
@@ -116,33 +129,32 @@ describe('findTaskResults', () => {
   it('should return empty array when no results directories exist', async () => {
     const emptyDir = path.join(fixturesDir, 'empty');
     await fs.mkdir(emptyDir, { recursive: true });
-    
+
     const args = { resultDir: null };
     const results = await findTaskResults(args, emptyDir);
-    
+
     expect(results).toEqual([]);
   });
 
   it('should skip folders without required files', async () => {
     // Create a folder without task.json
     await fs.mkdir(path.join(fixturesDir, '20251204-074135', 'incomplete-task'), { recursive: true });
-    
+
     const args = { resultDir: path.join(fixturesDir, '20251204-074135') };
     const results = await findTaskResults(args, fixturesDir);
-    
+
     // Should only find the complete task
     expect(results).toHaveLength(1);
     expect(results[0].name).toBe('hello-world');
   });
 });
 
-describe('evalTask - log support', () => {
+describe('evalTask', () => {
   const fixturesDir = path.join(__dirname, 'fixtures', 'eval-tasks-log');
   let taskResult;
   let originalFetch;
 
   beforeEach(async () => {
-    // Mock fetch to avoid actual API calls
     originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -153,7 +165,7 @@ describe('evalTask - log support', () => {
             content: [
               {
                 type: 'output_text',
-                text: '# Evaluation Results\n\n**Task:** test-task\n**Agent:** claude\n**Overall Success:** Yes\n\n## Summary\n\nTest evaluation\n\n## Detailed Analysis\n\nThe agent performed well.'
+                text: JSON.stringify(MOCK_EVAL_JSON)
               }
             ]
           }
@@ -161,13 +173,11 @@ describe('evalTask - log support', () => {
       })
     });
 
-    // Mock environment variable
     process.env.OPENAI_API_KEY = 'test-key';
 
-    // Create test fixtures
     const taskDir = path.join(fixturesDir, 'test-task');
     await fs.mkdir(taskDir, { recursive: true });
-    
+
     taskResult = {
       name: 'test-task',
       agent: 'claude',
@@ -178,7 +188,6 @@ describe('evalTask - log support', () => {
       folderName: 'test-task'
     };
 
-    // Create required files
     await fs.writeFile(path.join(taskDir, 'changes.diff'), 'test changes');
     await fs.writeFile(path.join(taskDir, 'lint-results.json'), '{}');
     await fs.writeFile(path.join(taskDir, 'output.jsonl'), 'test log output');
@@ -190,77 +199,98 @@ describe('evalTask - log support', () => {
     await fs.rm(fixturesDir, { recursive: true, force: true });
   });
 
-  it('should include log in eval prompt when output.jsonl exists', async () => {
-    // Run evaluation
+  it('should write eval-result.json with structured data', async () => {
     const result = await evalTask(taskResult);
 
-    // Check that eval-prompt.txt was created and contains the log
-    const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
-    const evalPrompt = await fs.readFile(evalPromptPath, 'utf-8');
-    
-    expect(evalPrompt).toContain('test log output');
-    
-    // Check that final-result.md was created
-    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
-    const finalResult = await fs.readFile(finalResultPath, 'utf-8');
-    
-    expect(finalResult).toContain('Evaluation Results');
-    expect(finalResult).toContain('**Overall Success:** Yes');
     const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
     const evalResult = JSON.parse(await fs.readFile(evalResultPath, 'utf-8'));
-    expect(evalResult.score).toBeNull();
+
+    expect(evalResult.score).toBe(8.250);
     expect(evalResult.overallSuccess).toBe(true);
-    expect(result.markdown).toBeTruthy();
+    expect(evalResult.task).toBe('test-task');
+    expect(evalResult.agent).toBe('claude');
+    expect(evalResult.criteriaChecks).toHaveLength(2);
+    expect(result.evalResult.score).toBe(8.250);
+  });
+
+  it('should write eval-result.html', async () => {
+    await evalTask(taskResult);
+
+    const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
+    const html = await fs.readFile(htmlPath, 'utf-8');
+
+    expect(html).toContain('<!DOCTYPE html>');
+    expect(html).toContain('"score": 8.25');
+    expect(html).toContain('"overallSuccess": true');
+  });
+
+  it('should include log in eval prompt when output.jsonl exists', async () => {
+    await evalTask(taskResult);
+
+    const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
+    const evalPrompt = await fs.readFile(evalPromptPath, 'utf-8');
+
+    expect(evalPrompt).toContain('test log output');
   });
 
   it('should handle missing log gracefully', async () => {
-    // Remove the log file
     await fs.unlink(path.join(taskResult.resultPath, 'output.jsonl'));
 
-    // Run evaluation
-    const result = await evalTask(taskResult);
+    await evalTask(taskResult);
 
-    // Check that eval-prompt.txt contains fallback text
     const evalPromptPath = path.join(taskResult.resultPath, 'eval-prompt.txt');
     const evalPrompt = await fs.readFile(evalPromptPath, 'utf-8');
-    
+
     expect(evalPrompt).toContain('(No log available)');
-    
-    // Check that final-result.md was created
-    const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
-    const finalResult = await fs.readFile(finalResultPath, 'utf-8');
-    
-    expect(finalResult).toContain('Evaluation Results');
-    expect(result.markdown).toBeTruthy();
+  });
+
+  it('should throw when LLM returns unparseable response', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'output_text', text: 'This is not JSON at all' }]
+          }
+        ]
+      })
+    });
+
+    await expect(evalTask(taskResult)).rejects.toThrow('Failed to parse evaluation JSON');
+
+    // Should have written raw response for debugging
+    const rawPath = path.join(taskResult.resultPath, 'eval-raw-response.txt');
+    const raw = await fs.readFile(rawPath, 'utf-8');
+    expect(raw).toBe('This is not JSON at all');
   });
 });
 
-describe('parseEvaluationMarkdown', () => {
-  it('should parse score and success from markdown format', () => {
-    const parsed = parseEvaluationMarkdown('**Score:** 8.5\n\n**Overall Success:** Yes');
-    expect(parsed.score).toBe(8.5);
-    expect(parsed.overallSuccess).toBe(true);
+describe('parseEvalResult', () => {
+  it('should parse valid JSON', () => {
+    const result = parseEvalResult(JSON.stringify(MOCK_EVAL_JSON));
+    expect(result.score).toBe(8.250);
+    expect(result.overallSuccess).toBe(true);
+    expect(result.criteriaChecks).toHaveLength(2);
   });
 
-  it('should parse score format with /10', () => {
-    const parsed = parseEvaluationMarkdown('**Score:** **9/10**');
-    expect(parsed.score).toBe(9);
+  it('should strip markdown code fences', () => {
+    const fenced = '```json\n' + JSON.stringify(MOCK_EVAL_JSON) + '\n```';
+    const result = parseEvalResult(fenced);
+    expect(result.score).toBe(8.250);
   });
 
-  it('should parse json style fields when present', () => {
-    const parsed = parseEvaluationMarkdown('{"score":7,"overallSuccess":false}');
-    expect(parsed.score).toBe(7);
-    expect(parsed.overallSuccess).toBe(false);
+  it('should normalize score to 3 decimal places', () => {
+    const result = parseEvalResult('{"score": 7.33333333, "overallSuccess": true}');
+    expect(result.score).toBe(7.333);
   });
 
-  it('should return nulls when no structured fields are found', () => {
-    const parsed = parseEvaluationMarkdown('No explicit score given');
-    expect(parsed.score).toBeNull();
-    expect(parsed.overallSuccess).toBeNull();
+  it('should return null for non-JSON input', () => {
+    expect(parseEvalResult('This is not JSON')).toBeNull();
   });
 
-  it('should infer success from met/not met fallback', () => {
-    const parsed = parseEvaluationMarkdown('Criteria A: Met\nCriteria B: Met\nCriteria C: Not Met');
-    expect(parsed.overallSuccess).toBe(false);
+  it('should return null for empty input', () => {
+    expect(parseEvalResult('')).toBeNull();
+    expect(parseEvalResult(null)).toBeNull();
   });
 });

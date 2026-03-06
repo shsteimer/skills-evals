@@ -35,65 +35,33 @@ export function parseArgs(argv) {
   return result;
 }
 
-export function parseEvaluationMarkdown(markdown) {
-  if (!markdown || typeof markdown !== 'string') {
-    return { score: null, overallSuccess: null };
+export function parseEvalResult(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
   }
 
-  const scorePatterns = [
-    /\*\*Score:\*\*\s*\*\*([0-9]+(?:\.[0-9]+)?)\s*\/\s*10\*\*/i,
-    /\*\*Score:\*\*\s*([0-9]+(?:\.[0-9]+)?)\s*\/\s*10/i,
-    /\*\*Score:\*\*\s*([0-9]+(?:\.[0-9]+)?)/i,
-    /"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i
-  ];
+  // Strip markdown code fences if the LLM wrapped the JSON
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  }
 
-  let score = null;
-  for (const pattern of scorePatterns) {
-    const match = markdown.match(pattern);
-    if (match) {
-      score = Number(match[1]);
-      break;
+  try {
+    const parsed = JSON.parse(cleaned);
+    // Normalize score to 3 decimal places
+    if (typeof parsed.score === 'number' && Number.isFinite(parsed.score)) {
+      parsed.score = Math.round(parsed.score * 1000) / 1000;
     }
+    return parsed;
+  } catch {
+    return null;
   }
-
-  const successPatterns = [
-    /\*\*Overall Success:\*\*\s*(yes|no)/i,
-    /\*\*Overall Success:\*\*\s*\*\*(yes|no)\*\*/i,
-    /\bOverall Success\b[^a-zA-Z0-9]*(yes|no)\b/i,
-    /"overallSuccess"\s*:\s*(true|false)/i
-  ];
-
-  let overallSuccess = null;
-  for (const pattern of successPatterns) {
-    const match = markdown.match(pattern);
-    if (match) {
-      const value = match[1].toLowerCase();
-      overallSuccess = value === 'yes' || value === 'true';
-      break;
-    }
-  }
-
-  // Fallback heuristic for judge formats that omit explicit overall success.
-  if (overallSuccess === null) {
-    const metCount = (markdown.match(/\b(?:\*{0,2})Met(?:\*{0,2})\b/gi) || []).length;
-    const notMetCount = (markdown.match(/\b(?:\*{0,2})Not Met(?:\*{0,2})\b/gi) || []).length;
-    if (metCount > 0 || notMetCount > 0) {
-      overallSuccess = notMetCount === 0 && metCount > 0;
-    }
-  }
-
-  return { score, overallSuccess };
 }
 
-function normalizeScore(score) {
-  if (typeof score !== 'number' || Number.isNaN(score)) {
-    return { score: null, scoreDisplay: null };
-  }
-  const rounded = Math.round(score * 1000) / 1000;
-  return {
-    score: rounded,
-    scoreDisplay: rounded.toFixed(3)
-  };
+async function renderEvalHtml(evalResult) {
+  const templatePath = path.join(__dirname, 'report', 'eval-template.html');
+  const template = await fs.readFile(templatePath, 'utf-8');
+  return template.replace('/*__EVAL_DATA__*/', JSON.stringify(evalResult, null, 2));
 }
 
 function showHelp() {
@@ -230,7 +198,8 @@ async function cleanupEvalArtifacts(resultPath) {
   const artifactsToClean = [
     'eval-prompt.txt',
     'eval-result.json',
-    'final-result.md'
+    'eval-result.html',
+    'eval-raw-response.txt'
   ];
   
   for (const artifact of artifactsToClean) {
@@ -301,33 +270,30 @@ export async function evalTask(taskResult) {
   await fs.writeFile(evalPromptPath, evalPrompt, 'utf-8');
   
   // Call LLM API for evaluation
-  const markdown = await callLLMForEvaluation(evalPrompt);
-  const parsedResult = parseEvaluationMarkdown(markdown);
-  const normalizedScore = normalizeScore(parsedResult.score);
+  const rawResponse = await callLLMForEvaluation(evalPrompt);
+  const evalResult = parseEvalResult(rawResponse);
 
-  // Write machine-readable eval result for automated comparisons
+  if (!evalResult) {
+    // Write raw response for debugging if JSON parsing failed
+    const rawPath = path.join(taskResult.resultPath, 'eval-raw-response.txt');
+    await fs.writeFile(rawPath, rawResponse, 'utf-8');
+    throw new Error('Failed to parse evaluation JSON from LLM response');
+  }
+
+  // Add task metadata to the result
+  evalResult.task = taskResult.name;
+  evalResult.agent = taskResult.agent;
+
+  // Write structured eval result
   const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
-  await fs.writeFile(
-    evalResultPath,
-    JSON.stringify(
-      {
-        task: taskResult.name,
-        agent: taskResult.agent,
-        score: normalizedScore.score,
-        scoreDisplay: normalizedScore.scoreDisplay,
-        overallSuccess: parsedResult.overallSuccess
-      },
-      null,
-      2
-    ),
-    'utf-8'
-  );
+  await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), 'utf-8');
 
-  // Write final result
-  const finalResultPath = path.join(taskResult.resultPath, 'final-result.md');
-  await fs.writeFile(finalResultPath, markdown, 'utf-8');
+  // Generate HTML report
+  const html = await renderEvalHtml(evalResult);
+  const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
+  await fs.writeFile(htmlPath, html, 'utf-8');
 
-  return { markdown, parsedResult };
+  return { evalResult };
 }
 
 async function callLLMForEvaluation(prompt) {
