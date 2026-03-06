@@ -76,6 +76,22 @@ describe('compareRuns', () => {
     expect(result.qualityRegressions).toBe(0);
     expect(result.measurableGains).toBe(1);
     expect(result.comparisons[0].tokenGainWithStableQuality).toBe(true);
+    expect(result.comparisons[0].efficiencyGain).toBe(true);
+  });
+
+  it('should count equal quality with lower duration as measurable gain', () => {
+    const baseline = new Map([
+      ['task::codex::1', { task: 'task', agent: 'codex', iteration: 1, score: 8, overallSuccess: true, durationMs: 60000 }]
+    ]);
+    const candidate = new Map([
+      ['task::codex::1', { task: 'task', agent: 'codex', iteration: 1, score: 8, overallSuccess: true, durationMs: 45000 }]
+    ]);
+
+    const result = compareRuns(baseline, candidate);
+    expect(result.qualityRegressions).toBe(0);
+    expect(result.measurableGains).toBe(1);
+    expect(result.comparisons[0].durationGainWithStableQuality).toBe(true);
+    expect(result.comparisons[0].efficiencyGain).toBe(true);
   });
 
   it('should count lower score as quality regression', () => {

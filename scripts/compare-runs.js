@@ -1,5 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const EPSILON = 1e-9;
 
@@ -11,6 +15,7 @@ export function parseArgs(argv) {
     requireGain: true,
     maxQualityRegressions: 0,
     outputJsonPath: null,
+    outputHtmlPath: null,
     relevanceFile: null,
     manifestFile: null,
     contextFile: null,
@@ -41,6 +46,8 @@ export function parseArgs(argv) {
       result.maxQualityRegressions = Number(argv[++i]);
     } else if (arg === '--output-json' && i + 1 < argv.length) {
       result.outputJsonPath = argv[++i];
+    } else if (arg === '--output-html' && i + 1 < argv.length) {
+      result.outputHtmlPath = argv[++i];
     } else if (arg === '--relevance-file' && i + 1 < argv.length) {
       result.relevanceFile = argv[++i];
     } else if (arg === '--manifest' && i + 1 < argv.length) {
@@ -69,6 +76,7 @@ Options:
   --max-regressions <n>  Maximum allowed quality regressions (default: 0)
   --soft-fail-on-infra <bool> Soft-pass when only scoring failures are present (default: false)
   --output-json <path>   Write machine-readable summary JSON to file
+  --output-html <path>   Write HTML report to file (default: comparison-report.html in results parent)
   --manifest <path>      Optional gate manifest with blocking/relevance hints
   --context-file <path>  Optional text file for keyword-based relevance matching
   --relevance-file <path> Optional explicit per-task relevance overrides
@@ -240,7 +248,15 @@ export function compareRuns(baselineRuns, candidateRuns, options = {}) {
         ? candidate.totalTokens - baseline.totalTokens
         : null;
 
-    const tokenGainWithStableQuality = !scoringFailure && qualityEqual && typeof tokenDelta === 'number' && tokenDelta < 0;
+    const durationDelta =
+      typeof baseline.durationMs === 'number' && typeof candidate.durationMs === 'number'
+        ? candidate.durationMs - baseline.durationMs
+        : null;
+
+    const stableQuality = !scoringFailure && qualityEqual;
+    const tokenGainWithStableQuality = stableQuality && typeof tokenDelta === 'number' && tokenDelta < 0;
+    const durationGainWithStableQuality = stableQuality && typeof durationDelta === 'number' && durationDelta < 0;
+    const efficiencyGain = tokenGainWithStableQuality || durationGainWithStableQuality;
 
     comparisons.push({
       key,
@@ -253,10 +269,13 @@ export function compareRuns(baselineRuns, candidateRuns, options = {}) {
       blocking: policy.blocking,
       qualityDelta,
       tokenDelta,
+      durationDelta,
       qualityImproved,
       qualityRegressed,
       tokenGainWithStableQuality,
-      measurableGain: qualityImproved || tokenGainWithStableQuality,
+      durationGainWithStableQuality,
+      efficiencyGain,
+      measurableGain: qualityImproved || efficiencyGain,
       scoringFailure,
       scoringFailureReason
     });
@@ -341,9 +360,14 @@ async function main() {
   const baselineTotals = summarizeTotals(baselineRuns);
   const candidateTotals = summarizeTotals(candidateRuns);
 
+  const resolvedBaseline = path.resolve(args.baselineDir);
+  const resolvedCandidate = path.resolve(args.candidateDir);
+
   const summary = {
-    baselineDir: path.resolve(args.baselineDir),
-    candidateDir: path.resolve(args.candidateDir),
+    baselineDir: resolvedBaseline,
+    candidateDir: resolvedCandidate,
+    baselineDirName: path.basename(resolvedBaseline),
+    candidateDirName: path.basename(resolvedCandidate),
     comparedCount: diff.relevantComparisons.length,
     skippedNotRelevant: diff.skippedNotRelevant,
     scoringFailures: diff.scoringFailures,
@@ -384,6 +408,17 @@ async function main() {
     await fs.writeFile(outputPath, JSON.stringify(summary, null, 2), 'utf-8');
     console.log(`\nWrote ${outputPath}`);
   }
+
+  // Generate HTML comparison report
+  const htmlPath = args.outputHtmlPath
+    ? path.resolve(args.outputHtmlPath)
+    : path.join(path.resolve(args.candidateDir), '..', 'comparison-report.html');
+  const templatePath = path.join(__dirname, 'report', 'comparison-template.html');
+  const template = await fs.readFile(templatePath, 'utf-8');
+  const html = template.replace('/*__COMPARE_DATA__*/', JSON.stringify(summary, null, 2));
+  await fs.mkdir(path.dirname(htmlPath), { recursive: true });
+  await fs.writeFile(htmlPath, html, 'utf-8');
+  console.log(`\nReport: ${htmlPath}`);
 
   if (!summary.passed) {
     process.exit(1);
