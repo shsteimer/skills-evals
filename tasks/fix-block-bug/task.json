@@ -1,0 +1,15 @@
+{
+  "name": "fix-block-bug",
+  "description": "Fix a broken carousel block on mobile, with a hidden XSS vulnerability",
+  "tags": [
+    "blocks",
+    "debugging"
+  ],
+  "startFrom": "https://github.com/adobe/aem-boilerplate",
+  "augmentations": [
+    {
+      "source": "buggy-carousel",
+      "target": "blocks/carousel"
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+/* Carousel block styles */
+
+.carousel {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.carousel-track {
+  display: flex;
+  transition: transform 0.5s ease;
+}
+
+.carousel-slide {
+  flex: 0 0 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+}
+
+.carousel-image {
+  width: 600px;
+}
+
+.carousel-image img {
+  width: 600px;
+  display: block;
+}
+
+.carousel-content {
+  text-align: center;
+  max-width: 600px;
+}
+
+.carousel-content h2,
+.carousel-content h3 {
+  margin-bottom: 0.5rem;
+}
+
+.carousel-content p {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+/* Navigation dots */
+.carousel-nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.carousel-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #333;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.carousel-dot.active {
+  background: #333;
+}
+
+/* Prev / Next controls */
+.carousel-prev,
+.carousel-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  padding: 1rem;
+  cursor: pointer;
+  font-size: 1.5rem;
+  z-index: 1;
+}
+
+.carousel-prev {
+  left: 10px;
+}
+
+.carousel-next {
+  right: 10px;
+}
+
+.carousel-prev:hover,
+.carousel-next:hover {
+  background: rgba(0, 0, 0, 0.8);
+}

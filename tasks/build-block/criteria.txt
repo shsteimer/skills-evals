@@ -4,56 +4,60 @@
 Start with 10 points.
 <critical> items: Deduct 2 points for each unmet criterion.
 <important> items: Deduct 1 point for each unmet criterion.
+<bonus> items: Add points as indicated.
 Minimum score: 0.
 </scoring_rubric>
 
 ## Block Implementation
 
 <critical>
-- Block files created in `blocks/testimonials/` directory (or a similar name)
-- Block directory contains only `testimonials.js` and `testimonials.css`
-- Displays testimonial quotes and renders images
-- Handles optional attribution fields (name, company, title)
-- Gracefully handles missing image or attribution
-- Implements navigation between testimonials (prev/next)
-- Testimonials cycle appropriately
-- Uses vanilla JS and CSS for carousel behavior (no third-party libraries)
+- Block files created in `blocks/cards/` directory (or similar name like `product-cards`)
+- Block directory contains a `{block-name}.js` and `{block-name}.css` file following AEM naming conventions
+- js exports a `decorate()` function as the default block entry point
+- Displays a responsive grid: 3 columns on desktop and 1 on mobile. Ideally it uses css grid with `auto-fit` or `auto-fill` to automatically size the columns rather than discrete breakpoints.
+- Each card shows an image, product name, description, and CTA link
+- Uses `createOptimizedPicture()` from aem.js for image optimization
 </critical>
 
 <important>
-- Shows one testimonial at a time
-- Provides visual indicator of position (e.g., dots, counter)
+- Uses semantic HTML structure (e.g., `<ul>/<li>`, headings, `<p>`, `<a>`)
+- All styles are scoped to the block and do not leak to other elements
+- Handles missing fields gracefully (e.g., card without image or description still renders)
+- Lazy loading for images
+- Uses modern CSS practices (grid or flexbox for layout)
 </important>
 
-## Authoring
+## Content Modeling & Authoring
 
 <critical>
-- Block is authored with one quote per row
-- Each row has 2 columns: 1 for image, 1 for quote content
-- Uses semantic elements (e.g., headings, strong, em, etc.) to delineate quote from attribution
-</critical>
-
-## Code Quality
-
-<critical>
-- Uses semantic HTML structure throughout
-- All styles are scoped to the block and do not leak
+- Author-friendly content model: one card per row in the block table
+- Content structure uses columns appropriately (e.g., image in one column, text content in another)
 </critical>
 
 <important>
-- JavaScript is clean and maintainable
-- Styling is responsive and works across devices
-- Maintains visual hierarchy (image, quote, attribution)
-- Uses modern CSS practices
+- Sample/demo content was created or identified to test the block
 </important>
 
 ## Testing
 
 <critical>
 - Agent tested implementation in a browser or browser-like environment
+- Agent tested across multiple breakpoints to verify responsive design
+</critical>
+
+## Process
+
+<critical>
 - Agent ran a lint check and fixed any issues found
 </critical>
 
 <important>
-- Sample/demo content was created or identified to test the block
+- PR with preview link was created or mentioned
 </important>
+
+## Skill Discovery
+
+<bonus>
+- (+1) Agent followed a structured workflow (analyze → content model → build → test → review) without being told
+- (+1) PSI check run or self-review performed before submitting
+</bonus>

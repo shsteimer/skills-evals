@@ -1,0 +1,1 @@
+We need a horizontal layout option for the cards block — image on the left, content on the right, side by side. Authors should be able to choose between the default stacked layout and this new horizontal one.

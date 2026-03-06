@@ -1,0 +1,1 @@
+The carousel block is broken on mobile — images overflow the container and swiping doesn't work. Can you fix it?
