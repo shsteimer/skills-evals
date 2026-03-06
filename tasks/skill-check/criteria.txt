@@ -1,0 +1,11 @@
+<scoring_rubric>
+<critical>
+- Agent wrote an agent-report.md file
+- Report includes a list of available skills (or states none are available)
+- Report includes a list of available tools
+</critical>
+<important>
+- Report includes information about project-level settings/context files
+- Report includes information about active plugins
+</important>
+</scoring_rubric>

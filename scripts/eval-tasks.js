@@ -58,12 +58,8 @@ export function parseEvalResult(text) {
   }
 }
 
-async function renderEvalHtml(evalResult, runMetrics = null) {
-  const templatePath = path.join(__dirname, 'report', 'eval-template.html');
-  const template = await fs.readFile(templatePath, 'utf-8');
-  return template
-    .replace('/*__EVAL_DATA__*/', JSON.stringify(evalResult, null, 2))
-    .replace('/*__RUN_METRICS__*/', JSON.stringify(runMetrics, null, 2));
+function buildEvalDataJs(evalResult, runMetrics = null) {
+  return `const evalData = ${JSON.stringify(evalResult, null, 2)};\nconst runMetrics = ${JSON.stringify(runMetrics, null, 2)};\n`;
 }
 
 function showHelp() {
@@ -201,6 +197,7 @@ async function cleanupEvalArtifacts(resultPath) {
     'eval-prompt.txt',
     'eval-result.json',
     'eval-result.html',
+    'eval-data.js',
     'eval-raw-response.txt'
   ];
   
@@ -299,10 +296,12 @@ export async function evalTask(taskResult) {
   const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
   await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), 'utf-8');
 
-  // Generate HTML report
-  const html = await renderEvalHtml(evalResult, runMetrics);
+  // Write data JS file and copy static HTML template
+  const dataJsPath = path.join(taskResult.resultPath, 'eval-data.js');
+  await fs.writeFile(dataJsPath, buildEvalDataJs(evalResult, runMetrics), 'utf-8');
+  const templatePath = path.join(__dirname, 'report', 'eval-template.html');
   const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
-  await fs.writeFile(htmlPath, html, 'utf-8');
+  await fs.copyFile(templatePath, htmlPath);
 
   return { evalResult };
 }

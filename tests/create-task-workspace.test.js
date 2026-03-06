@@ -260,7 +260,7 @@ describe('createTaskWorkspace', () => {
 
       // Verify git commit was called
       expect(execSync).toHaveBeenCalledWith(
-        'git commit -m "Add task augmentations"',
+        'git commit -m "Workspace setup"',
         expect.objectContaining({ cwd: task.workspaceDir })
       );
     });
@@ -355,7 +355,7 @@ describe('createTaskWorkspace', () => {
 
       // Verify git commit was called for the augmentations
       const commitCalls = execSync.mock.calls.filter(call => 
-        call[0].includes('git commit') && call[0].includes('Add task augmentations')
+        call[0].includes('git commit') && call[0].includes('Workspace setup')
       );
       expect(commitCalls.length).toBe(1);
     });

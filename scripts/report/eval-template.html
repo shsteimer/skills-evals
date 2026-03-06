@@ -64,10 +64,8 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="./eval-data.js"></script>
 <script>
-const data = /*__EVAL_DATA__*/null;
-const metrics = /*__RUN_METRICS__*/null;
-
 function render(d, m) {
   if (!d) { document.getElementById('root').innerHTML = '<p>No evaluation data.</p>'; return; }
 
@@ -143,7 +141,7 @@ function esc(s) {
   return el.innerHTML;
 }
 
-render(data, metrics);
+render(typeof evalData !== 'undefined' ? evalData : null, typeof runMetrics !== 'undefined' ? runMetrics : null);
 </script>
 </body>
 </html>

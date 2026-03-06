@@ -410,14 +410,15 @@ async function main() {
   }
 
   // Generate HTML comparison report
-  const htmlPath = args.outputHtmlPath
-    ? path.resolve(args.outputHtmlPath)
-    : path.join(path.resolve(args.candidateDir), '..', 'comparison-report.html');
+  const reportDir = args.outputHtmlPath
+    ? path.dirname(path.resolve(args.outputHtmlPath))
+    : path.join(path.resolve(args.candidateDir), '..');
+  const htmlPath = path.join(reportDir, 'comparison-report.html');
+  const dataJsPath = path.join(reportDir, 'compare-data.js');
   const templatePath = path.join(__dirname, 'report', 'comparison-template.html');
-  const template = await fs.readFile(templatePath, 'utf-8');
-  const html = template.replace('/*__COMPARE_DATA__*/', JSON.stringify(summary, null, 2));
-  await fs.mkdir(path.dirname(htmlPath), { recursive: true });
-  await fs.writeFile(htmlPath, html, 'utf-8');
+  await fs.mkdir(reportDir, { recursive: true });
+  await fs.writeFile(dataJsPath, `const compareData = ${JSON.stringify(summary, null, 2)};\n`, 'utf-8');
+  await fs.copyFile(templatePath, htmlPath);
   console.log(`\nReport: ${htmlPath}`);
 
   if (!summary.passed) {

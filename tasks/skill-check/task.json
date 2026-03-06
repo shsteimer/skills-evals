@@ -1,0 +1,8 @@
+{
+  "name": "skill-check",
+  "description": "Diagnostic task to verify agent isolation — checks what skills/tools/context the agent has access to",
+  "tags": [
+    "diagnostic"
+  ],
+  "startFrom": "https://github.com/shsteimer/aem-boilerplate-evals"
+}

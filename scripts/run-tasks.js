@@ -9,9 +9,12 @@ import { downloadFromGitHub } from './utils/github-utils.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
+import { getEnv } from './utils/env-config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function findTasks(args, tasksDir = null, augmentationsFile = null) {
   // Validate that both task names and tags are not specified
@@ -246,11 +249,23 @@ export async function createTaskWorkspace(task) {
       }
     }
     
-    // Commit augmentations
-    addAndCommit(task.workspaceDir, 'Add task augmentations');
   }
-  
-  // Create and checkout new branch for the agent (after augmentations are committed)
+
+  // Copy agent-specific settings into workspace if they exist
+  const agentSettingsPath = path.join(__dirname, '..', 'config', `${sanitizeName(task.agent)}-settings.json`);
+  try {
+    await fs.access(agentSettingsPath);
+    const dotClaudeDir = path.join(task.workspaceDir, '.claude');
+    await ensureDir(dotClaudeDir);
+    await fs.copyFile(agentSettingsPath, path.join(dotClaudeDir, 'settings.json'));
+  } catch {
+    // No agent settings file - that's fine
+  }
+
+  // Single commit for all workspace setup (augmentations + agent settings)
+  addAndCommit(task.workspaceDir, 'Workspace setup');
+
+  // Create and checkout new branch for the agent (after setup commits)
   const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}-${task.iteration}`;
   checkoutBranch(task.workspaceDir, agentBranch, true);
   
@@ -407,19 +422,19 @@ export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
   return enrichedTasks;
 }
 
-async function runTask(task) {
+async function runTask(task, onActivity, signal) {
   // Dynamically load the handler for the specified agent
   const handlerPath = `./handlers/${sanitizeName(task.agent)}.js`;
-  
+
   try {
     const handler = await import(handlerPath);
     const runHandler = handler.default;
-    
+
     if (typeof runHandler !== 'function') {
       throw new Error(`Handler at ${handlerPath} does not export a default function`);
     }
-    
-    await runHandler(task);
+
+    await runHandler(task, onActivity, signal);
   } catch (error) {
     if (error.code === 'ERR_MODULE_NOT_FOUND') {
       throw new Error(`No handler found for agent '${task.agent}'. Expected handler at ${handlerPath}`);
@@ -442,10 +457,10 @@ async function captureResults(task, runMetrics = null) {
   }
   
   // Capture diff of all changes from augmentations commit
-  results.diff = await captureGitChanges(task.workspaceDir, 'Add task augmentations');
+  results.diff = await captureGitChanges(task.workspaceDir, 'Workspace setup');
   
   // Capture git commit history (agent's commits)
-  results.commits = await captureGitCommits(task.workspaceDir, 'Add task augmentations');
+  results.commits = await captureGitCommits(task.workspaceDir, 'Workspace setup');
   
   // Run tests if test script exists
   if (await hasNpmScript(task.workspaceDir, 'test')) {
@@ -513,14 +528,31 @@ function getTaskId(task) {
   return `${task.name}-${sanitizeName(task.agent)}-${task.iteration}`;
 }
 
-async function processTask(task) {
+async function processTask(task, onActivity) {
+  const timeoutMs = parseInt(getEnv('AGENT_TIMEOUT_MS', ''), 10) || DEFAULT_AGENT_TIMEOUT_MS;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+
   const startedAt = new Date().toISOString();
   const start = Date.now();
-  await runTask(task);
+  let runError = null;
+  let timedOut = false;
+  try {
+    await runTask(task, onActivity, ac.signal);
+  } catch (error) {
+    timedOut = ac.signal.aborted;
+    runError = timedOut
+      ? new Error(`Agent timed out after ${timeoutMs / 1000}s`)
+      : error;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (onActivity) onActivity(timedOut ? 'timed out, capturing partial results...' : 'capturing results...');
   const finishedAt = new Date().toISOString();
   const durationMs = Date.now() - start;
-  await captureResults(task, { startedAt, finishedAt, durationMs });
+  await captureResults(task, { startedAt, finishedAt, durationMs, timedOut });
   await cleanUp(task);
+  if (runError) throw runError;
 }
 
 async function runTasks() {

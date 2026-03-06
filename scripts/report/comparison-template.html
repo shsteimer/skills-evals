@@ -66,9 +66,8 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="./compare-data.js"></script>
 <script>
-const data = /*__COMPARE_DATA__*/null;
-
 function render(d) {
   if (!d) { document.getElementById('root').innerHTML = '<p>No comparison data.</p>'; return; }
 
@@ -179,7 +178,7 @@ function esc(s) {
   return el.innerHTML;
 }
 
-render(data);
+render(typeof compareData !== 'undefined' ? compareData : null);
 </script>
 </body>
 </html>

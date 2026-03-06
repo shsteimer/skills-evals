@@ -1,6 +1,6 @@
 [
   {
-    "source": "https://github.com/adobe/skills/tree/main/eds",
-    "target": ".skills/"
+    "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services",
+    "target": ".claude/"
   }
 ]

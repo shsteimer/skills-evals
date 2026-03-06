@@ -22,6 +22,11 @@ export default [
         URL: 'readonly',
         fetch: 'readonly',
         require: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        AbortController: 'readonly',
       },
     },
     rules: {

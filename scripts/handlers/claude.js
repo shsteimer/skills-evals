@@ -1,57 +1,111 @@
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Summarize a tool call for activity display
+ */
+function describeToolUse(block) {
+  const tool = block.name || 'unknown';
+  const input = block.input || {};
 
-async function loadToolList(filename) {
-  const configPath = path.join(__dirname, '..', '..', 'config', filename);
-  try {
-    return JSON.parse(await fs.readFile(configPath, 'utf-8'));
-  } catch {
-    return [];
+  switch (tool) {
+    case 'Bash':
+      return `$ ${(input.command || '').slice(0, 60)}`;
+    case 'Read':
+      return `reading ${path.basename(input.file_path || '')}`;
+    case 'Write':
+      return `writing ${path.basename(input.file_path || '')}`;
+    case 'Edit':
+      return `editing ${path.basename(input.file_path || '')}`;
+    case 'Glob':
+      return `searching ${input.pattern || ''}`;
+    case 'Grep':
+      return `grep ${input.pattern || ''}`;
+    case 'WebFetch':
+      return `fetching ${input.url || ''}`.slice(0, 80);
+    default:
+      return tool;
   }
 }
 
 /**
- * Run a task using the Claude CLI agent
- * @param {Object} task - The enriched task object
+ * Parse stream-json chunks and extract tool use activity
  */
-export default async function runClaude(task) {
+function parseStreamActivity(chunk, onActivity) {
+  if (!onActivity) return;
+
+  const lines = chunk.split('\n').filter(Boolean);
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (obj.type !== 'assistant') continue;
+
+      const content = obj.message?.content;
+      if (!Array.isArray(content)) continue;
+
+      for (const block of content) {
+        if (block.type === 'tool_use') {
+          onActivity(describeToolUse(block));
+        } else if (block.type === 'text' && block.text?.trim()) {
+          const text = block.text.trim().slice(0, 80);
+          if (text) onActivity(text);
+        }
+      }
+    } catch {
+      // Not valid JSON or incomplete chunk - skip
+    }
+  }
+}
+
+/**
+ * Run a task using the Claude CLI agent.
+ * @param {Object} task - The enriched task object
+ * @param {Function} [onActivity] - Optional callback for activity updates
+ * @param {AbortSignal} [signal] - Optional signal to abort/kill the agent
+ */
+export default async function runClaude(task, onActivity, signal) {
   const config = getAgentConfig('claude');
-  const allowedTools = await loadToolList('allowed-tools.json');
-  const disallowedTools = await loadToolList('disallowed-tools.json');
+
+  const args = [
+    '--verbose',
+    '--output-format', 'stream-json',
+    // Isolate from user's personal settings (~/.claude/CLAUDE.md, ~/.claude/settings.json)
+    // Permissions and tool lists are managed via config/claude-settings.json,
+    // copied into the workspace as .claude/settings.json during bootstrapping
+    '--setting-sources', 'project',
+  ];
+
+  if (config.model) {
+    args.push('--model', config.model);
+  }
+
+  const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+  args.push(...additionalArgs);
+
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
 
   return new Promise((resolve, reject) => {
-    const args = [
-      '--verbose',
-      '--output-format', 'stream-json',
-      // Isolate from user's personal settings (~/.claude/CLAUDE.md, ~/.claude/settings.json)
-      '--setting-sources', 'project',
-    ];
-
-    if (allowedTools.length > 0) {
-      args.push('--allowedTools', ...allowedTools);
-    }
-
-    if (disallowedTools.length > 0) {
-      args.push('--disallowedTools', ...disallowedTools);
-    }
-
-    if (config.model) {
-      args.push('--model', config.model);
-    }
-
-    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
-    args.push(...additionalArgs);
-
     const claude = spawn('claude', args, {
       cwd: task.workspaceDir,
-      stdio: ['pipe', 'pipe', 'inherit']
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env,
     });
+
+    if (signal) {
+      const onAbort = () => {
+        claude.kill('SIGTERM');
+        setTimeout(() => claude.kill('SIGKILL'), 5000);
+      };
+      if (signal.aborted) {
+        claude.kill('SIGTERM');
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+        claude.on('close', () => signal.removeEventListener('abort', onAbort));
+      }
+    }
 
     claude.stdin.write(task.prompt);
     claude.stdin.end();
@@ -60,6 +114,7 @@ export default async function runClaude(task) {
     claude.stdout.on('data', (data) => {
       const chunk = data.toString();
       outputData += chunk;
+      parseStreamActivity(chunk, onActivity);
     });
 
     claude.on('error', (error) => {
@@ -67,16 +122,18 @@ export default async function runClaude(task) {
     });
 
     claude.on('close', async (code) => {
+      // Save output regardless of exit code — partial results are useful
+      try {
+        const outputPath = path.join(task.taskInfoFolder, 'output.jsonl');
+        await fs.writeFile(outputPath, outputData, 'utf-8');
+      } catch {
+        // best-effort save
+      }
+
       if (code !== 0) {
         reject(new Error(`Claude CLI exited with code ${code}`));
       } else {
-        try {
-          const outputPath = path.join(task.taskInfoFolder, 'output.jsonl');
-          await fs.writeFile(outputPath, outputData, 'utf-8');
-          resolve();
-        } catch (error) {
-          reject(new Error(`Failed to save output: ${error.message}`));
-        }
+        resolve();
       }
     });
   });
