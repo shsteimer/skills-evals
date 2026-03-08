@@ -35,6 +35,13 @@
 4. Invoke compare skill → analyzes differences across runs (mechanical + judgment)
 ```
 
+## Implementation order
+
+1. **Review/improve remaining tasks** — get criteria right before building eval tooling around them (modify-block, import-page)
+2. **Run tasks several times** — validate updated tasks work (augmentations apply, bugs are findable, agents don't crash). Run only, don't evaluate — saves cost since the current API evaluator is being replaced.
+3. **Build the eval skill** — evaluate the runs from step 2 using subagent with workspace access
+4. **Build the compare skill** — judgment-augmented comparison across run sets
+
 ## Next: Eval skill (subagent evaluator)
 
 ### Principle
