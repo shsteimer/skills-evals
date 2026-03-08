@@ -87,6 +87,8 @@ export default async function runClaude(task, onActivity, signal) {
   const env = { ...process.env };
   delete env.CLAUDECODE;
 
+  const IDLE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
   return new Promise((resolve, reject) => {
     const claude = spawn('claude', args, {
       cwd: task.workspaceDir,
@@ -94,12 +96,33 @@ export default async function runClaude(task, onActivity, signal) {
       env,
     });
 
+    // Idle timeout — kill if no stdout output for IDLE_TIMEOUT_MS
+    let idledOut = false;
+
+    function startIdleTimer() {
+      return setTimeout(() => {
+        idledOut = true;
+        if (onActivity) onActivity('idle timeout, killing...');
+        claude.kill('SIGTERM');
+        setTimeout(() => claude.kill('SIGKILL'), 5000);
+      }, IDLE_TIMEOUT_MS);
+    }
+
+    let idleTimer = startIdleTimer();
+
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      idleTimer = startIdleTimer();
+    }
+
     if (signal) {
       const onAbort = () => {
+        clearTimeout(idleTimer);
         claude.kill('SIGTERM');
         setTimeout(() => claude.kill('SIGKILL'), 5000);
       };
       if (signal.aborted) {
+        clearTimeout(idleTimer);
         claude.kill('SIGTERM');
       } else {
         signal.addEventListener('abort', onAbort, { once: true });
@@ -112,16 +135,20 @@ export default async function runClaude(task, onActivity, signal) {
 
     let outputData = '';
     claude.stdout.on('data', (data) => {
+      resetIdleTimer();
       const chunk = data.toString();
       outputData += chunk;
       parseStreamActivity(chunk, onActivity);
     });
 
     claude.on('error', (error) => {
+      clearTimeout(idleTimer);
       reject(new Error(`Failed to spawn claude CLI: ${error.message}`));
     });
 
     claude.on('close', async (code) => {
+      clearTimeout(idleTimer);
+
       // Save output regardless of exit code — partial results are useful
       try {
         const outputPath = path.join(task.taskInfoFolder, 'output.jsonl');
@@ -130,7 +157,9 @@ export default async function runClaude(task, onActivity, signal) {
         // best-effort save
       }
 
-      if (code !== 0) {
+      if (idledOut) {
+        reject(new Error(`Agent idle for ${IDLE_TIMEOUT_MS / 1000}s with no output`));
+      } else if (code !== 0) {
         reject(new Error(`Claude CLI exited with code ${code}`));
       } else {
         resolve();
