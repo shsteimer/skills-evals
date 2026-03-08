@@ -109,5 +109,5 @@ The LLM evaluator should only do what requires judgment. Anything deterministic 
 
 ## Other tasks to review
 - `modify-block` — not yet analyzed for criteria quality
-- `import-page` — not yet analyzed
+- `import-page` — removed; requires specialized EDS import skills not yet available to agents
 - `hello-world` and `skill-check` — diagnostic tasks, likely fine as-is

@@ -68,7 +68,6 @@ Measures ability to diagnose issues and apply targeted fixes.
 | build-block | Primary | Primary | Primary | Primary | Primary | |
 | fix-block-bug | | Primary | Primary | | | Primary |
 | modify-block | Primary | Primary | Primary | | Primary | |
-| import-page | | | Primary | Primary | Primary | |
 
 ## Scoring Approach
 
