@@ -546,6 +546,10 @@ function getTaskId(task) {
 }
 
 async function processTask(task, onActivity) {
+  // Bootstrap workspace just-in-time so setup pipelines with other tasks running
+  if (onActivity) onActivity('bootstrapping workspace...');
+  await createTaskWorkspace(task);
+
   const timeoutMs = parseInt(getEnv('AGENT_TIMEOUT_MS', ''), 10) || DEFAULT_AGENT_TIMEOUT_MS;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -583,10 +587,9 @@ async function runTasks() {
   const tasks = await findTasks(args);
   const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir, args.times);
   
-  // Prepare task folders for each enriched task
+  // Create result folders up front so the full run is visible immediately
   for (const task of enrichedTasks) {
     await createTaskInfoFolder(task);
-    await createTaskWorkspace(task);
   }
 
   // Set up run logger
