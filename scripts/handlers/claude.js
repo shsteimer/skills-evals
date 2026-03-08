@@ -1,7 +1,48 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
-import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
+import { fileURLToPath } from 'url';
+import { getAgentConfig, parseAdditionalArgs, getEnv } from '../utils/env-config.js';
+
+/**
+ * Kill any processes whose working directory is inside the given path.
+ * This catches orphaned child processes (e.g., dev servers) that were
+ * spawned by the agent's Bash tool in their own process groups.
+ */
+function killOrphanedProcesses(workspaceDir) {
+  try {
+    // lsof +D is expensive on large dirs; use lsof -c to find by cwd instead
+    // `ps -eo pid,lstart,command` + filter is simpler but doesn't give cwd.
+    // Use `lsof +d` on the workspace to find processes with files open there.
+    const output = execSync(
+      `lsof +d "${workspaceDir}" -t 2>/dev/null || true`,
+      { encoding: 'utf-8', timeout: 5000 }
+    ).trim();
+    if (!output) return;
+
+    const pids = [...new Set(output.split('\n').map(p => parseInt(p, 10)).filter(p => p > 0))];
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // already dead
+      }
+    }
+
+    // Escalate after a short delay
+    setTimeout(() => {
+      for (const pid of pids) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // already dead
+        }
+      }
+    }, 3000);
+  } catch {
+    // best-effort cleanup
+  }
+}
 
 /**
  * Summarize a tool call for activity display
@@ -65,9 +106,11 @@ function parseStreamActivity(chunk, onActivity) {
  * @param {Function} [onActivity] - Optional callback for activity updates
  * @param {AbortSignal} [signal] - Optional signal to abort/kill the agent
  */
-export default async function runClaude(task, onActivity, signal) {
-  const config = getAgentConfig('claude');
-
+/**
+ * Build the CLI args array for the claude command.
+ * Exported for testing.
+ */
+export async function buildArgs(configDir) {
   const args = [
     '--verbose',
     '--output-format', 'stream-json',
@@ -77,6 +120,19 @@ export default async function runClaude(task, onActivity, signal) {
     '--setting-sources', 'project',
   ];
 
+  // Append system prompt from config file if it exists
+  const systemPromptPath = path.join(configDir, 'claude-system-prompt-append.txt');
+  try {
+    const systemPrompt = (await fs.readFile(systemPromptPath, 'utf-8')).trim();
+    if (systemPrompt) {
+      args.push('--append-system-prompt', systemPrompt);
+    }
+  } catch {
+    // No system prompt file — that's fine
+  }
+
+  const config = getAgentConfig('claude');
+
   if (config.model) {
     args.push('--model', config.model);
   }
@@ -84,10 +140,18 @@ export default async function runClaude(task, onActivity, signal) {
   const additionalArgs = parseAdditionalArgs(config.additionalArgs);
   args.push(...additionalArgs);
 
+  return args;
+}
+
+const defaultConfigDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'config');
+
+export default async function runClaude(task, onActivity, signal) {
+  const args = await buildArgs(defaultConfigDir);
+
   const env = { ...process.env };
   delete env.CLAUDECODE;
 
-  const IDLE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+  const IDLE_TIMEOUT_MS = parseInt(getEnv('AGENT_IDLE_TIMEOUT_MS', ''), 10) || 2 * 60 * 1000;
 
   return new Promise((resolve, reject) => {
     const claude = spawn('claude', args, {
@@ -148,6 +212,9 @@ export default async function runClaude(task, onActivity, signal) {
 
     claude.on('close', async (code) => {
       clearTimeout(idleTimer);
+
+      // Kill orphaned child processes (e.g., dev servers started by the agent)
+      killOrphanedProcesses(task.workspaceDir);
 
       // Save output regardless of exit code — partial results are useful
       try {
