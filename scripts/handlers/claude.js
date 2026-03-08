@@ -49,7 +49,7 @@ function parseStreamActivity(chunk, onActivity) {
         if (block.type === 'tool_use') {
           onActivity(describeToolUse(block));
         } else if (block.type === 'text' && block.text?.trim()) {
-          const text = block.text.trim().slice(0, 80);
+          const text = block.text.trim().replace(/\n/g, ' ').slice(0, 80);
           if (text) onActivity(text);
         }
       }

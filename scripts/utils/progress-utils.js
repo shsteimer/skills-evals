@@ -2,9 +2,13 @@
  * Creates a progress tracker for monitoring task execution
  * @param {number} totalTasks - Total number of tasks to track
  * @param {Function} getTaskId - Function to generate task ID from task object
+ * @param {Object} [options]
+ * @param {Object} [options.logger] - Optional run logger for writing to a log file
+ * @param {number} [options.concurrency] - Concurrency level (for logger output)
  * @returns {Object} Progress tracker with methods for updating and displaying progress
  */
-export function createProgressTracker(totalTasks, getTaskId) {
+export function createProgressTracker(totalTasks, getTaskId, options = {}) {
+  const { logger, concurrency } = options;
   const state = {
     running: new Map(), // taskId -> task name
     startTimes: new Map(), // taskId -> Date.now()
@@ -12,6 +16,7 @@ export function createProgressTracker(totalTasks, getTaskId) {
     completed: 0,
     failed: 0,
     total: totalTasks,
+    runStartTime: Date.now(),
     errors: [] // Array of { taskId, error }
   };
 
@@ -49,7 +54,13 @@ export function createProgressTracker(totalTasks, getTaskId) {
   }
 
   return {
-    taskStarted(task) {
+    async start() {
+      if (logger) {
+        await logger.runStarted(totalTasks, concurrency || 1);
+      }
+    },
+
+    async taskStarted(task) {
       const taskId = getTaskId(task);
       state.running.set(taskId, taskId);
       state.startTimes.set(taskId, Date.now());
@@ -59,40 +70,55 @@ export function createProgressTracker(totalTasks, getTaskId) {
       if (!state.refreshInterval) {
         state.refreshInterval = setInterval(updateDisplay, 5000);
       }
+      if (logger) {
+        await logger.taskStarted(taskId);
+      }
     },
 
-    taskActivity(taskId, message) {
-      state.activity.set(taskId, message);
+    async taskActivity(taskId, message) {
+      const sanitized = message.replace(/\n/g, ' ').slice(0, 120);
+      state.activity.set(taskId, sanitized);
       updateDisplay();
+      if (logger) {
+        await logger.taskActivity(taskId, sanitized);
+      }
     },
 
-    taskCompleted(task) {
+    async taskCompleted(task) {
       const taskId = getTaskId(task);
+      const durationMs = Date.now() - (state.startTimes.get(taskId) || Date.now());
       state.running.delete(taskId);
       state.startTimes.delete(taskId);
       state.activity.delete(taskId);
       state.completed++;
       updateDisplay();
+      if (logger) {
+        await logger.taskCompleted(taskId, durationMs);
+      }
     },
 
-    taskFailed(task, error) {
+    async taskFailed(task, error) {
       const taskId = getTaskId(task);
+      const durationMs = Date.now() - (state.startTimes.get(taskId) || Date.now());
       state.running.delete(taskId);
       state.startTimes.delete(taskId);
       state.activity.delete(taskId);
       state.failed++;
       state.errors.push({ taskId, error: error.message });
       updateDisplay();
+      if (logger) {
+        await logger.taskFailed(taskId, durationMs, error.message);
+      }
     },
-    
-    printSummary() {
+
+    async printSummary() {
       if (state.refreshInterval) {
         clearInterval(state.refreshInterval);
         state.refreshInterval = null;
       }
       // Print newline to move past the progress line
       console.log('\n');
-      
+
       if (state.errors.length === 0) {
         console.log(`✓ All ${state.completed} tasks completed successfully`);
       } else {
@@ -102,8 +128,12 @@ export function createProgressTracker(totalTasks, getTaskId) {
           console.log(`  - ${taskId}: ${error}`);
         }
       }
+      if (logger) {
+        const totalDurationMs = Date.now() - state.runStartTime;
+        await logger.runFinished(state.completed, state.failed, totalDurationMs);
+      }
     },
-    
+
     hasFailed() {
       return state.failed > 0;
     }
@@ -116,25 +146,31 @@ export function createProgressTracker(totalTasks, getTaskId) {
  * @param {number} concurrency - Maximum number of tasks to run concurrently
  * @param {Function} processTask - Async function to process each task
  * @param {Function} getTaskId - Function to generate task ID from task object
+ * @param {Object} [options]
+ * @param {Object} [options.logger] - Optional run logger for writing to a log file
  * @returns {Promise<boolean>} True if any tasks failed
  */
-export async function runInParallel(tasks, concurrency, processTask, getTaskId) {
-  const tracker = createProgressTracker(tasks.length, getTaskId);
+export async function runInParallel(tasks, concurrency, processTask, getTaskId, options = {}) {
+  const tracker = createProgressTracker(tasks.length, getTaskId, {
+    logger: options.logger,
+    concurrency,
+  });
+  await tracker.start();
   
   // Create a queue of tasks to process
   const queue = [...tasks];
   const running = new Set();
   
   async function executeTask(task) {
-    tracker.taskStarted(task);
+    await tracker.taskStarted(task);
     const taskId = getTaskId(task);
     const onActivity = (message) => tracker.taskActivity(taskId, message);
 
     try {
       await processTask(task, onActivity);
-      tracker.taskCompleted(task);
+      await tracker.taskCompleted(task);
     } catch (error) {
-      tracker.taskFailed(task, error);
+      await tracker.taskFailed(task, error);
     }
   }
   
@@ -168,8 +204,8 @@ export async function runInParallel(tasks, concurrency, processTask, getTaskId) 
     await Promise.all(Array.from(running));
   }
   
-  tracker.printSummary();
-  
+  await tracker.printSummary();
+
   return tracker.hasFailed();
 }
 

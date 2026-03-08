@@ -10,6 +10,7 @@ import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
 import { getEnv } from './utils/env-config.js';
+import { createRunLogger } from './utils/run-logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -588,9 +589,19 @@ async function runTasks() {
     await createTaskWorkspace(task);
   }
 
+  // Set up run logger
+  const timestamp = enrichedTasks[0]?.timestamp;
+  const resultsBaseDir = path.join(__dirname, '..', 'results');
+  let logger = null;
+  if (timestamp) {
+    const logPath = path.join(resultsBaseDir, timestamp, 'run.log');
+    logger = createRunLogger(logPath);
+    await logger.init();
+  }
+
   // Run the tasks in parallel
   const concurrency = args.agents.length;
-  const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId);
+  const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId, { logger });
   
   // Exit with non-zero code if any tasks failed
   if (hasFailures) {
