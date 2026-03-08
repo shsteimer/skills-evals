@@ -72,12 +72,13 @@ Measures ability to diagnose issues and apply targeted fixes.
 
 ## Scoring Approach
 
-All tasks use a 10-point base scoring system:
+All tasks use an additive scoring system:
 
-- **Critical** items: -2 points each when unmet
-- **Important** items: -1 point each when unmet
-- **Bonus** items: +1 or +2 points for exceptional performance
-- Minimum score: 0
+- **Critical** items: +2 points each when met
+- **Important** items: +1 point each when met
+- **Bonus** items: Add points as indicated for exceptional performance
+- Score is earned points out of total possible (excluding bonus)
+- **Pass threshold**: 80% of possible points (excluding bonus) with no critical items unmet
 
 Each task's `criteria.txt` contains the specific rubric with critical, important, and bonus items mapped to the relevant criteria dimensions above.
 

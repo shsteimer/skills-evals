@@ -8,15 +8,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const MOCK_EVAL_JSON = {
-  score: 8.250,
+  score: 8,
+  maxScore: 10,
   overallSuccess: true,
   summary: 'The agent performed well on the test task.',
   strengths: ['Good code quality'],
   weaknesses: ['Missing edge case handling'],
   observations: ['Used an iterative approach'],
   criteriaChecks: [
-    { name: 'File exists', priority: 'critical', met: true, deduction: 0, notes: 'File was created correctly' },
-    { name: 'Content correct', priority: 'important', met: false, deduction: 1, notes: 'Missing agent name' }
+    { name: 'File exists', priority: 'critical', met: true, points: 2, notes: 'File was created correctly' },
+    { name: 'Content correct', priority: 'important', met: false, points: 0, notes: 'Missing agent name' }
   ]
 };
 
@@ -205,12 +206,13 @@ describe('evalTask', () => {
     const evalResultPath = path.join(taskResult.resultPath, 'eval-result.json');
     const evalResult = JSON.parse(await fs.readFile(evalResultPath, 'utf-8'));
 
-    expect(evalResult.score).toBe(8.250);
+    expect(evalResult.score).toBe(8);
+    expect(evalResult.maxScore).toBe(10);
     expect(evalResult.overallSuccess).toBe(true);
     expect(evalResult.task).toBe('test-task');
     expect(evalResult.agent).toBe('claude');
     expect(evalResult.criteriaChecks).toHaveLength(2);
-    expect(result.evalResult.score).toBe(8.250);
+    expect(result.evalResult.score).toBe(8);
   });
 
   it('should write eval-result.html and eval-data.js', async () => {
@@ -222,7 +224,8 @@ describe('evalTask', () => {
     expect(html).toContain('eval-data.js');
 
     const dataJs = await fs.readFile(path.join(taskResult.resultPath, 'eval-data.js'), 'utf-8');
-    expect(dataJs).toContain('"score": 8.25');
+    expect(dataJs).toContain('"score": 8');
+    expect(dataJs).toContain('"maxScore": 10');
     expect(dataJs).toContain('"overallSuccess": true');
   });
 
@@ -284,7 +287,8 @@ describe('evalTask', () => {
 describe('parseEvalResult', () => {
   it('should parse valid JSON', () => {
     const result = parseEvalResult(JSON.stringify(MOCK_EVAL_JSON));
-    expect(result.score).toBe(8.250);
+    expect(result.score).toBe(8);
+    expect(result.maxScore).toBe(10);
     expect(result.overallSuccess).toBe(true);
     expect(result.criteriaChecks).toHaveLength(2);
   });
@@ -292,12 +296,13 @@ describe('parseEvalResult', () => {
   it('should strip markdown code fences', () => {
     const fenced = '```json\n' + JSON.stringify(MOCK_EVAL_JSON) + '\n```';
     const result = parseEvalResult(fenced);
-    expect(result.score).toBe(8.250);
+    expect(result.score).toBe(8);
   });
 
-  it('should normalize score to 3 decimal places', () => {
-    const result = parseEvalResult('{"score": 7.33333333, "overallSuccess": true}');
-    expect(result.score).toBe(7.333);
+  it('should normalize score to integer', () => {
+    const result = parseEvalResult('{"score": 7.6, "maxScore": 10, "overallSuccess": true}');
+    expect(result.score).toBe(8);
+    expect(result.maxScore).toBe(10);
   });
 
   it('should return null for non-JSON input', () => {

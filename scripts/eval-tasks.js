@@ -48,9 +48,12 @@ export function parseEvalResult(text) {
 
   try {
     const parsed = JSON.parse(cleaned);
-    // Normalize score to 3 decimal places
+    // Normalize score to integer
     if (typeof parsed.score === 'number' && Number.isFinite(parsed.score)) {
-      parsed.score = Math.round(parsed.score * 1000) / 1000;
+      parsed.score = Math.round(parsed.score);
+    }
+    if (typeof parsed.maxScore === 'number' && Number.isFinite(parsed.maxScore)) {
+      parsed.maxScore = Math.round(parsed.maxScore);
     }
     return parsed;
   } catch {

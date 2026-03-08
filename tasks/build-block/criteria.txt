@@ -1,48 +1,50 @@
 # Success Criteria
 
 <scoring_rubric>
-Start with 10 points.
-<critical> items: Deduct 2 points for each unmet criterion.
-<important> items: Deduct 1 point for each unmet criterion.
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
 <bonus> items: Add points as indicated.
-Minimum score: 0.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
 </scoring_rubric>
 
 ## Block Implementation
 
 <critical>
-- Block files created in `blocks/cards/` directory (or similar name like `product-cards`)
-- Block directory contains a `{block-name}.js` and `{block-name}.css` file following AEM naming conventions
+- Block created in `blocks/{block-name}/` with matching `{block-name}.js` and `{block-name}.css` files following AEM naming conventions
 - js exports a `decorate()` function as the default block entry point
-- Displays a responsive grid: 3 columns on desktop and 1 on mobile. Ideally it uses css grid with `auto-fit` or `auto-fill` to automatically size the columns rather than discrete breakpoints.
-- Each card shows an image, product name, description, and CTA link
+- Displays a responsive grid: 3 columns on desktop, scaling down to 1 on mobile
+- Each card renders an image, product name, description, and CTA link
+- Badge overlay renders on top of the card image (positioned over the image, not beside or below it) with text like "Sale", "New", etc.
 - Uses `createOptimizedPicture()` from aem.js for image optimization
 </critical>
 
 <important>
-- Uses semantic HTML structure (e.g., `<ul>/<li>`, headings, `<p>`, `<a>`)
-- All styles are scoped to the block and do not leak to other elements
-- Handles missing fields gracefully (e.g., card without image or description still renders)
-- Lazy loading for images
-- Uses modern CSS practices (grid or flexbox for layout)
+- Block implementation goes beyond renaming/copying the existing `cards` block — the structure, styling, or behavior reflects the product cards use case rather than being a mechanical clone
+- Uses semantic HTML structure (e.g., `<ul>/<li>` for the card list, headings for product names, `<a>` for CTAs)
+- All styles are scoped to the block (selectors namespaced to the block class) and do not leak to other elements
+- CSS handles edge cases: long product names and descriptions wrap or truncate gracefully rather than breaking the layout
+- Badge is optional — cards without a badge render cleanly with no empty/broken badge element
+- Lazy loading for images (via `createOptimizedPicture` eager parameter or explicit `loading="lazy"`)
 </important>
 
 ## Content Modeling & Authoring
 
 <critical>
-- Author-friendly content model: one card per row in the block table
-- Content structure uses columns appropriately (e.g., image in one column, text content in another)
+- Author-friendly content model: one card per row in the block table, with columns for image and text content
+- Badge is authored in the text column, not as a separate column in the block table
+- Badge text is distinguished using semantic formatting (e.g., bold or italic) and the JS identifies it by that formatting rather than by position or special syntax
 </critical>
 
 <important>
-- Sample/demo content was created or identified to test the block
+- Sample/demo content was created as a `.plain.html` file (e.g., in `drafts/`) that can be previewed with the AEM dev server — not just described in a summary
 </important>
 
 ## Testing
 
 <critical>
-- Agent tested implementation in a browser or browser-like environment
-- Agent tested across multiple breakpoints to verify responsive design
+- Agent tested the block in a browser or browser-like environment (e.g., started a dev server with `aem up` or wrote a playwright/puppeteer script to render the page). Simply creating files and reviewing code does not count.
+- Agent verified responsive behavior across at least two viewport sizes (e.g., desktop and mobile)
 </critical>
 
 ## Process
@@ -52,12 +54,13 @@ Minimum score: 0.
 </critical>
 
 <important>
-- PR with preview link was created or mentioned
+- PR with preview link was created
 </important>
 
 ## Skill Discovery
 
 <bonus>
-- (+1) Agent followed a structured workflow (analyze → content model → build → test → review) without being told
-- (+1) PSI check run or self-review performed before submitting
+- (+1) Agent followed a structured workflow (analyze existing blocks → design content model → build → test → review) without being told
+- (+1) Agent performed a self-review that goes beyond linting — e.g., checked accessibility, ran a PSI audit, or critically reviewed their own code for issues
+- (+1) Uses CSS grid with `auto-fit` or `auto-fill` and `minmax()` for fluid column sizing rather than discrete breakpoints
 </bonus>

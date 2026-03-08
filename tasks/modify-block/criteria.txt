@@ -1,11 +1,11 @@
 # Success Criteria
 
 <scoring_rubric>
-Start with 10 points.
-<critical> items: Deduct 2 points for each unmet criterion.
-<important> items: Deduct 1 point for each unmet criterion.
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
 <bonus> items: Add points as indicated.
-Minimum score: 0.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
 </scoring_rubric>
 
 ## Variant Implementation

@@ -48,21 +48,21 @@ tasks/{task-name}/
 # Success Criteria
 
 <scoring_rubric>
-Start with 10 points.
-<critical> items: Deduct 2 points for each unmet criterion.
-<important> items: Deduct 1 point for each unmet criterion.
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
 <bonus> items: Add points as indicated.
-Minimum score: 0.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
 </scoring_rubric>
 
 ## Section Name
 
 <critical>
-- Criterion that must be met (-2 if not)
+- Criterion that earns 2 points when met
 </critical>
 
 <important>
-- Criterion that should be met (-1 if not)
+- Criterion that earns 1 point when met
 </important>
 
 <bonus>
@@ -270,6 +270,6 @@ Present proposed changes clearly — show what's changing and why — then apply
 - When runs are few (2-3), be upfront about limited confidence. Patterns from 2 runs are hypotheses, not conclusions.
 - Focus effort proportionally: critical criteria matter more than bonus criteria, actionable findings matter more than observations.
 - Agents fail for many reasons — environment, augmentations, time limits, task difficulty. Don't conflate agent failure with criteria problems. A criterion agents consistently fail may be perfectly valid.
-- The scoring rubric (start from 10, deduct 2/critical, 1/important, add for bonus) is important context for score distributions.
+- The scoring rubric (start from 0, earn 2/critical, 1/important, add for bonus; pass at 80% with no critical unmet) is important context for score distributions.
 - Read `eval-prompt.txt` when available — it shows exactly what the evaluator saw, which helps explain scoring.
 - Use subagents for heavy analysis when the data is large (many runs, large output.jsonl files). Delegate specific analysis tasks (e.g., "read these 5 output.jsonl files and extract all process claims") to keep the main conversation focused.
