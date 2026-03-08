@@ -1,8 +1,8 @@
-# Evaluation Criteria
+# Evaluation Dimensions
 
-This document defines the evaluation criteria used to assess coding agent performance on EDS tasks.
+This document defines the evaluation dimensions used to assess coding agent performance on EDS tasks. Each dimension is a high-level competency area (C1-C6) that tasks map to. Per-task scoring criteria live in each task's `criteria.txt`.
 
-## Criteria Definitions
+## Dimension Definitions
 
 ### C1: Code Quality
 
@@ -61,7 +61,7 @@ Measures ability to diagnose issues and apply targeted fixes.
 - Verifying the fix works
 - Security awareness (e.g., XSS, innerHTML risks)
 
-## Task-Criteria Matrix
+## Task-Dimension Matrix
 
 | Task | C1 | C2 | C3 | C4 | C5 | C6 |
 |------|----|----|----|----|----|----|
@@ -80,15 +80,15 @@ All tasks use an additive scoring system:
 - Score is earned points out of total possible (excluding bonus)
 - **Pass threshold**: 80% of possible points (excluding bonus) with no critical items unmet
 
-Each task's `criteria.txt` contains the specific rubric with critical, important, and bonus items mapped to the relevant criteria dimensions above.
+Each task's `criteria.txt` contains the specific rubric with critical, important, and bonus items mapped to the relevant dimensions above.
 
-## Adding New Criteria
+## Adding New Dimensions
 
-When adding a new criterion:
+When adding a new dimension:
 
 1. Define it in this document with a clear description and measurable indicators
 2. Assign it a code (C7, C8, etc.)
-3. Update the task-criteria matrix
+3. Update the task-dimension matrix
 4. Update relevant `criteria.txt` files to include rubric items for the new criterion
 
 ## Adding New Tasks

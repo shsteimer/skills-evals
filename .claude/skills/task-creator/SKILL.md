@@ -5,7 +5,7 @@ description: >
   scaffolding task definitions, creating augmentation files, analyzing eval results to find
   task problems, and refining prompts, criteria, and augmentations. Use this skill whenever
   the user wants to create a new eval task, improve any part of an existing task, review or
-  analyze eval results, update the evaluation criteria matrix, or add new criteria dimensions.
+  analyze eval results, update the evaluation dimensions, or add new dimensions.
   Do NOT trigger for running tasks (run-tasks) or comparing run sets (compare-runs).
 ---
 
@@ -72,12 +72,12 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 
 ## Criteria dimensions
 
-The project maintains a set of evaluation criteria dimensions in `docs/evaluation-criteria.md`. These are high-level categories (C1: Code Quality, C2: EDS Architecture Understanding, etc.) that tasks map to. When creating or improving tasks:
+The project maintains a set of evaluation dimensions in `docs/evaluation-dimensions.md`. These are high-level competency areas (C1: Code Quality, C2: EDS Architecture Understanding, etc.) that tasks map to. When creating or improving tasks:
 
-- Read `docs/evaluation-criteria.md` to understand the existing dimensions
-- Map new tasks to relevant dimensions in the task-criteria matrix
+- Read `docs/evaluation-dimensions.md` to understand the existing dimensions
+- Map new tasks to relevant dimensions in the task-dimension matrix
 - If a task needs a dimension that doesn't exist, propose adding it (new code, description, measurable indicators)
-- Keep criteria.txt items grounded in these dimensions where applicable, but task-specific criteria that don't map to a dimension are fine too
+- Keep criteria.txt items grounded in these dimensions where applicable, but task-specific scoring criteria that don't map to a dimension are fine too
 
 ## Determining the mode
 
@@ -99,7 +99,7 @@ Understand what the task should test. Ask about:
 1. **What's the task?** What should the agent build, fix, or do?
 2. **What repo/starting point?** What `startFrom` repo should be used?
 3. **What makes a good result?** What are the critical success criteria vs. nice-to-haves?
-4. **What dimensions does this test?** Which criteria dimensions from `docs/evaluation-criteria.md` apply? Are any missing?
+4. **What dimensions does this test?** Which evaluation dimensions from `docs/evaluation-dimensions.md` apply? Are any missing?
 5. **Does the workspace need setup?** Are augmentations needed (buggy code, source files, config)?
 6. **Tags?** What categories does this task fall into?
 
@@ -110,7 +110,7 @@ Don't ask all of these as a checklist — have a conversation. Some answers will
 Before writing, look at what exists:
 
 - Read existing tasks with similar tags or goals to understand patterns and avoid duplication
-- Check `docs/evaluation-criteria.md` for the criteria matrix — where does this task fit?
+- Check `docs/evaluation-dimensions.md` for the dimension matrix — where does this task fit?
 - If the task is similar to an existing one, read that task's criteria.txt to understand the level of specificity expected
 
 A caution: use existing tasks for structural patterns (file format, rubric style, priority balance), not as templates to copy from. Every task tests something different, so criteria sections like "Testing" or "Process" should be written fresh based on what actually matters for this task — not pasted from a similar task where they may not apply or may need different priority levels.
@@ -135,11 +135,11 @@ The evaluator sees: the task prompt, the criteria, the git diff, lint results, t
 
 When designing augmentations, think about the difficulty curve. For bug-fix tasks: the bug should be realistic (something a real developer might introduce), discoverable with the right debugging approach, but not so obvious that a grep for "TODO" or "FIXME" finds it immediately. For import/migration tasks: the source material should have enough complexity to test the agent's judgment, not just mechanical transformation. The augmentation sets the stage for the task — if it's too easy or too hard, the criteria won't discriminate.
 
-### Step 4: Map to criteria dimensions
+### Step 4: Map to evaluation dimensions
 
-Before presenting to the user, read `docs/evaluation-criteria.md` and explicitly map the new task to criteria dimensions:
+Before presenting to the user, read `docs/evaluation-dimensions.md` and explicitly map the new task to dimensions:
 - Which existing dimensions (C1-C6+) does this task test?
-- Add a row for the new task in the task-criteria matrix
+- Add a row for the new task in the task-dimension matrix
 - If the task needs a dimension that doesn't exist, draft it (code, description, measurable indicators)
 
 This step is easy to skip but matters — it keeps the evaluation framework coherent across tasks.
@@ -149,10 +149,10 @@ This step is easy to skip but matters — it keeps the evaluation framework cohe
 Present the draft to the user. Walk through:
 - The prompt — does it read naturally? Does it capture the intent?
 - The criteria — are critical/important/bonus priorities right? Any missing criteria? Any that seem too easy or impossible?
-- The criteria dimensions — does the mapping to `docs/evaluation-criteria.md` make sense?
+- The evaluation dimensions — does the mapping to `docs/evaluation-dimensions.md` make sense?
 - Augmentations — are they correct and complete?
 
-Iterate until the user is satisfied. Then apply the `docs/evaluation-criteria.md` updates.
+Iterate until the user is satisfied. Then apply the `docs/evaluation-dimensions.md` updates.
 
 ---
 
@@ -163,7 +163,7 @@ Iterate until the user is satisfied. Then apply the `docs/evaluation-criteria.md
 1. Read the task definition from `tasks/{task-name}/`:
    - `task.json`, `prompt.txt`, `criteria.txt`
 
-2. Read `docs/evaluation-criteria.md` for context on criteria dimensions
+2. Read `docs/evaluation-dimensions.md` for context on evaluation dimensions
 
 3. Scan `results/*/` for all result directories matching the task. Result directories follow the pattern `results/{timestamp}/{task-name}-{agent}-{iteration}/`. Each may contain:
    - `eval-result.json` — structured eval output (score, overallSuccess, summary, strengths, weaknesses, observations, criteriaChecks)
@@ -258,8 +258,8 @@ The analysis above is an intermediate step — your real deliverable is improved
 - Add missing augmentations
 - Update stale augmentations
 
-**docs/evaluation-criteria.md:**
-- Update criteria dimensions or the task-criteria matrix if needed
+**docs/evaluation-dimensions.md:**
+- Update dimensions or the task-dimension matrix if needed
 
 Present proposed changes clearly — show what's changing and why — then apply after user approval.
 
