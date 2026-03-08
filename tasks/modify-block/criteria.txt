@@ -11,22 +11,24 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Variant Implementation
 
 <critical>
-- Horizontal variant works: image on the left, content on the right, side by side
-- Default stacked layout still works correctly (not broken by changes)
-- Variant activated via block table class name (e.g., `Cards (horizontal)`) which maps to a CSS class on the block element
+- Z-pattern variant alternates image placement per row: odd rows show image left/text right, even rows show image right/text left (or vice versa). The alternation must be visible across at least 3 rows.
+- Narrow-wide variant renders the first column at roughly 1/3 width and the second at roughly 2/3 width on desktop
+- Wide-narrow variant renders the first column at roughly 2/3 width and the second at roughly 1/3 width on desktop
+- Each variant is activated via the AEM variant pattern: author writes the variant name in the block table header (e.g., `Columns (z-pattern)`), which maps to a CSS class on the block element
+- Default columns layout still renders correctly — not broken by the variant CSS
 </critical>
 
 <important>
-- Responsive behavior: horizontal on desktop, stacks on mobile
-- Layout change is CSS-only (no JavaScript needed for the layout switch)
-- Existing cards CSS not broken or unnecessarily rewritten
+- All three variants stack to single-column on mobile-width viewports with image above text
+- Variant CSS is scoped to variant classes and does not leak to unmodified columns blocks
+- Z-pattern implementation uses CSS (e.g., nth-child, flexbox order/direction) rather than JS DOM manipulation to alternate layout
 </important>
 
 ## Testing
 
 <critical>
-- Tested in a browser or browser-like environment
-- Agent tested across multiple breakpoints to verify responsive behavior
+- Agent previewed the columns using the dev server (`aem up` or equivalent) and a browser or browser-like environment — simply creating files, reviewing code, or fetching raw HTML with curl does not count
+- Agent verified variant rendering at multiple viewport sizes (desktop and mobile at minimum)
 </critical>
 
 ## Process
@@ -36,26 +38,16 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 </critical>
 
 <important>
-- PR with preview link was created or mentioned
+- PR with preview link was created
 </important>
 
-## Content Modeling
-
-<critical>
-- Variant uses the AEM variant pattern (class on block table header → classList on block element)
-</critical>
+## Content
 
 <important>
-- No changes to the content model required — same authoring table works for both variants
-</important>
-
-## Code Quality
-
-<important>
-- Minimal changes: only adds what's needed for the variant, doesn't rewrite the whole block
-- Uses semantic HTML and scoped CSS
+- Demo content was created or updated as `.plain.html` files showing each variant with representative content
 </important>
 
 <bonus>
-- (+1) Sample content created to demonstrate and test both variants side by side
+- (+1) Agent performed a self-review beyond linting (accessibility check, critical code review, etc.)
+- (+1) Width variants handle 3+ column layouts gracefully (not just 2-column)
 </bonus>
