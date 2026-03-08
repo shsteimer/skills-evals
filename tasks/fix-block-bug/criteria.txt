@@ -11,13 +11,13 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Bug Fix
 
 <critical>
-- Responsive bug fixed: images are contained within the carousel container on mobile viewports
-- Touch/swipe functionality works on mobile
+- Content overflow fixed: slides with long text content no longer clip or overflow the slide container on mobile (the fixed `height: 400px` on `.carousel-slide` is the root cause)
+- Dot navigation fixed: all 6 navigation dots are visible and usable without wrapping or clipping (the `max-width: 120px` on `.carousel-nav` is too small for 6 dots)
 </critical>
 
 <important>
-- Minimal, targeted changes (doesn't rewrite the entire block)
-- Agent explains or identifies the root cause of the issue
+- Agent correctly diagnosed both issues by previewing the page in a browser, not just reading the CSS
+- Agent explains or identifies the root cause of each issue
 </important>
 
 ## Regression
@@ -30,8 +30,8 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Testing
 
 <critical>
-- Tested in a browser at a mobile viewport size
-- Agent tested across multiple breakpoints to verify the fix
+- Agent previewed the carousel using the dev server (`aem up` with `--html-folder drafts` or equivalent) or a browser-like environment. Simply reading the code does not count.
+- Agent verified the fix at a mobile viewport size (via browser resize, device emulation, or automated viewport testing)
 </critical>
 
 ## Process
@@ -41,11 +41,11 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 </critical>
 
 <important>
-- PR with preview link was created or mentioned
+- PR with preview link was created
 </important>
 
 ## Security
 
 <bonus>
-- (+2) Discovers and fixes the innerHTML XSS vulnerability without being told about it
+- (+2) Discovers and fixes the innerHTML XSS vulnerability (`content.innerHTML = contentCell.innerHTML`) without being told about it
 </bonus>

@@ -1,1 +1,1 @@
-The carousel block is broken on mobile — images overflow the container and swiping doesn't work. Can you fix it?
+The carousel block layout looks off on mobile. Use the drafts page to preview it, tell me what you find, then fix it.

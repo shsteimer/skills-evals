@@ -3,6 +3,28 @@
  * Each row in the block table becomes a slide.
  */
 
+function goToSlide(block, index) {
+  const track = block.querySelector('.carousel-track');
+  const slides = track.querySelectorAll('.carousel-slide');
+  const dots = block.querySelectorAll('.carousel-dot');
+
+  let idx = index;
+  if (idx < 0) idx = slides.length - 1;
+  if (idx >= slides.length) idx = 0;
+
+  track.style.transform = `translateX(-${idx * 100}%)`;
+  block.dataset.currentSlide = idx;
+
+  dots.forEach((dot, i) => {
+    dot.classList.toggle('active', i === idx);
+  });
+}
+
+function navigate(block, direction) {
+  const current = parseInt(block.dataset.currentSlide || '0', 10);
+  goToSlide(block, current + direction);
+}
+
 function buildNav(block, slides) {
   const nav = document.createElement('div');
   nav.classList.add('carousel-nav');
@@ -33,27 +55,6 @@ function buildControls(block) {
   next.addEventListener('click', () => navigate(block, 1));
 
   block.append(prev, next);
-}
-
-function goToSlide(block, index) {
-  const track = block.querySelector('.carousel-track');
-  const slides = track.querySelectorAll('.carousel-slide');
-  const dots = block.querySelectorAll('.carousel-dot');
-
-  if (index < 0) index = slides.length - 1;
-  if (index >= slides.length) index = 0;
-
-  track.style.transform = `translateX(-${index * 100}%)`;
-  block.dataset.currentSlide = index;
-
-  dots.forEach((dot, i) => {
-    dot.classList.toggle('active', i === index);
-  });
-}
-
-function navigate(block, direction) {
-  const current = parseInt(block.dataset.currentSlide || '0', 10);
-  goToSlide(block, current + direction);
 }
 
 export default function decorate(block) {

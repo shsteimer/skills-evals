@@ -18,14 +18,16 @@
   align-items: center;
   gap: 1rem;
   padding: 2rem;
+  height: 400px;
 }
 
 .carousel-image {
-  width: 600px;
+  width: 100%;
+  max-width: 600px;
 }
 
 .carousel-image img {
-  width: 600px;
+  width: 100%;
   display: block;
 }
 
@@ -50,6 +52,8 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 1rem 0;
+  max-width: 120px;
+  margin: 0 auto;
 }
 
 .carousel-dot {
@@ -72,7 +76,7 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 50%);
   color: white;
   border: none;
   padding: 1rem;
@@ -91,5 +95,5 @@
 
 .carousel-prev:hover,
 .carousel-next:hover {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgb(0 0 0 / 80%);
 }
