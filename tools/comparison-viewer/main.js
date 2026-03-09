@@ -25,21 +25,28 @@ function render(d) {
 }
 
 function renderAggregate(d) {
-  document.title = 'Batch Comparison — Aggregate';
+  document.title = 'Batch Comparison';
 
   const fmtNum = (v, digits = 1) => v == null ? 'n/a' : v.toFixed(digits);
   const fmtPct = (v) => v == null ? 'n/a' : (v * 100).toFixed(1) + '%';
   const fmtTokens = (v) => v == null ? 'n/a' : Math.round(v).toLocaleString();
   const fmtDuration = (v) => v == null ? 'n/a' : (v / 1000).toFixed(1) + 's';
 
-  const fmtDelta = (v, unit) => {
+  // For score/success deltas: up = good (green), down = bad (red)
+  const fmtScorelikeDelta = (v, unit) => {
     if (v == null) return '<span class="delta zero">\u2014</span>';
-    let abs;
-    if (unit === 'ms') abs = (Math.abs(v) / 1000).toFixed(1) + 's';
-    else if (unit === 'pct') abs = (Math.abs(v) * 100).toFixed(1) + '%';
-    else abs = Math.abs(v).toFixed(1);
-    if (v < -0.001) return `<span class="delta pos">\u2193${abs}</span>`;
+    const abs = unit === 'pct' ? (Math.abs(v) * 100).toFixed(1) + '%' : Math.abs(v).toFixed(1);
     if (v > 0.001) return `<span class="delta pos">\u2191${abs}</span>`;
+    if (v < -0.001) return `<span class="delta neg">\u2193${abs}</span>`;
+    return '<span class="delta zero">0</span>';
+  };
+
+  // For token/duration deltas: up = bad (red), down = good (green)
+  const fmtCostDelta = (v, unit) => {
+    if (v == null) return '<span class="delta zero">\u2014</span>';
+    const abs = unit === 'ms' ? (Math.abs(v) / 1000).toFixed(1) + 's' : Math.abs(v).toFixed(1);
+    if (v > 0.001) return `<span class="delta neg">\u2191${abs}</span>`;
+    if (v < -0.001) return `<span class="delta pos">\u2193${abs}</span>`;
     return '<span class="delta zero">0</span>';
   };
 
@@ -56,89 +63,176 @@ function renderAggregate(d) {
   const candidateTs = d.candidateBatch?.timestamp;
   const batchViewerBase = '/tools/batch-viewer/index.html?data=';
 
-  const baselineLabel = baselineTs
-    ? `<a href="${batchViewerBase}/results/${esc(baselineTs)}/batch-summary-data.js">${esc(d.baselineDir)}</a>`
+  const baselineLink = baselineTs
+    ? `<a href="${batchViewerBase}/results/${esc(baselineTs)}/batch-summary-data.js">${esc(baselineTs)}</a>`
     : `<code>${esc(d.baselineDir)}</code>`;
-  const candidateLabel = candidateTs
-    ? `<a href="${batchViewerBase}/results/${esc(candidateTs)}/batch-summary-data.js">${esc(d.candidateDir)}</a>`
+  const candidateLink = candidateTs
+    ? `<a href="${batchViewerBase}/results/${esc(candidateTs)}/batch-summary-data.js">${esc(candidateTs)}</a>`
     : `<code>${esc(d.candidateDir)}</code>`;
 
   const baselineAugName = d.baselineBatch?.augmentationSetName || 'None';
   const candidateAugName = d.candidateBatch?.augmentationSetName || 'None';
 
-  let html = `
-    <h1>Batch Comparison — Aggregate</h1>
+  let html = `<h1>Batch Comparison</h1>
     <div class="meta">
-      Baseline: ${baselineLabel} <span class="aug-label">(${esc(baselineAugName)})</span><br>
-      Candidate: ${candidateLabel} <span class="aug-label">(${esc(candidateAugName)})</span>
+      Baseline: ${baselineLink} <span class="aug-label">(${esc(baselineAugName)})</span><br>
+      Candidate: ${candidateLink} <span class="aug-label">(${esc(candidateAugName)})</span>
     </div>`;
 
-  // Overall stats
+  // Recommendation — up front
+  const analysis = d.analysis;
+  if (analysis) {
+    const recClass = analysis.recommendation === 'yes' ? 'recommend-yes'
+      : analysis.recommendation === 'no' ? 'recommend-no'
+      : 'recommend-inconclusive';
+
+    const recLabel = analysis.recommendation === 'yes' ? 'Adopt candidate'
+      : analysis.recommendation === 'no' ? 'Keep baseline'
+      : 'Inconclusive';
+
+    html += `
+      <div class="recommendation ${recClass}">
+        <div class="recommendation-header">
+          <span class="recommendation-verdict">${esc(recLabel)}</span>
+          ${analysis.confidence ? `<span class="recommendation-confidence">${esc(analysis.confidence)} confidence</span>` : ''}
+        </div>
+        ${analysis.reasoning ? `<p class="recommendation-reasoning">${esc(analysis.reasoning)}</p>` : ''}
+      </div>`;
+  }
+
+  // Stats grid — key deltas at a glance
   const bs = d.baselineStats;
   const cs = d.candidateStats;
+
+  const improved = (d.matched || []).filter(m => m.scoreDelta > 0.5).length;
+  const regressed = (d.matched || []).filter(m => m.scoreDelta < -0.5).length;
+  const stable = (d.matched || []).length - improved - regressed;
+
+  html += `
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-val">${d.matched?.length || 0}</div><div class="stat-label">Groups Compared</div></div>
+      <div class="stat"><div class="stat-val green">${improved}</div><div class="stat-label">Improved</div></div>
+      <div class="stat"><div class="stat-val red">${regressed}</div><div class="stat-label">Regressed</div></div>
+      <div class="stat"><div class="stat-val">${stable}</div><div class="stat-label">Stable</div></div>
+    </div>`;
+
+  // Overall comparison table
   html += `
     <h2>Overall</h2>
     <table class="agg-table">
-      <thead><tr><th>Variant</th><th class="num">Runs</th><th class="num">Score %</th><th class="num">Success Rate</th><th class="num">Mean Tokens</th></tr></thead>
+      <thead><tr><th>Variant</th><th class="num">Runs</th><th class="num">Score %</th><th class="num">Success Rate</th><th class="num">Mean Tokens</th><th class="num">Mean Duration</th></tr></thead>
       <tbody>
-        <tr><td>Baseline</td><td class="num">${bs.totalRuns}</td><td class="num">${fmtPct(bs.meanScorePct)}</td><td class="num">${fmtPct(bs.successRate)}</td><td class="num">${fmtTokens(bs.meanTokens)}</td></tr>
-        <tr><td>Candidate</td><td class="num">${cs.totalRuns}</td><td class="num">${fmtPct(cs.meanScorePct)}</td><td class="num">${fmtPct(cs.successRate)}</td><td class="num">${fmtTokens(cs.meanTokens)}</td></tr>
-        <tr style="font-weight:600"><td>Delta</td><td class="num">\u2014</td><td class="num">${fmtDelta(d.overallScorePctDelta, 'pct')}</td><td class="num">${fmtDelta(d.overallSuccessRateDelta, 'pct')}</td><td class="num">${fmtDelta(d.overallTokensDelta)}</td></tr>
+        <tr><td>Baseline</td><td class="num">${bs.totalRuns}</td><td class="num">${fmtPct(bs.meanScorePct)}</td><td class="num">${fmtPct(bs.successRate)}</td><td class="num">${fmtTokens(bs.meanTokens)}</td><td class="num">${fmtDuration(bs.meanDurationMs)}</td></tr>
+        <tr><td>Candidate</td><td class="num">${cs.totalRuns}</td><td class="num">${fmtPct(cs.meanScorePct)}</td><td class="num">${fmtPct(cs.successRate)}</td><td class="num">${fmtTokens(cs.meanTokens)}</td><td class="num">${fmtDuration(cs.meanDurationMs)}</td></tr>
+        <tr class="delta-row"><td>Delta</td><td class="num">\u2014</td><td class="num">${fmtScorelikeDelta(d.overallScorePctDelta, 'pct')}</td><td class="num">${fmtScorelikeDelta(d.overallSuccessRateDelta, 'pct')}</td><td class="num">${fmtCostDelta(d.overallTokensDelta)}</td><td class="num">${fmtCostDelta(d.overallDurationDelta, 'ms')}</td></tr>
       </tbody>
     </table>`;
 
-  // Per-group table
+  // Per-task breakdown with agent cards
   if (d.matched && d.matched.length > 0) {
-    html += `
-      <h2>Per Task + Agent</h2>
-      <table class="task-table">
-        <thead><tr>
-          <th>Task</th><th>Agent</th>
-          <th class="num">Baseline</th><th class="num">Candidate</th>
-          <th class="num">Score Delta</th><th class="num">Success Delta</th>
-          <th class="num">Token Delta</th><th class="num">Duration Delta</th>
-          <th>Status</th>
-        </tr></thead>
-        <tbody>`;
-
+    // Group by task
+    const byTask = new Map();
     for (const m of d.matched) {
-      const bStr = m.baseline.meanScorePct != null
-        ? fmtPct(m.baseline.meanScorePct)
-        : (m.baseline.meanScore != null ? `${fmtNum(m.baseline.meanScore)} \u00b1 ${fmtNum(m.baseline.stddev)}` : 'n/a');
-      const cStr = m.candidate.meanScorePct != null
-        ? fmtPct(m.candidate.meanScorePct)
-        : (m.candidate.meanScore != null ? `${fmtNum(m.candidate.meanScore)} \u00b1 ${fmtNum(m.candidate.stddev)}` : 'n/a');
-
-      let statusBadge;
-      if (m.scoreDelta > 0.5) statusBadge = '<span class="badge improved">Improved</span>';
-      else if (m.scoreDelta < -0.5) statusBadge = '<span class="badge regressed">Regressed</span>';
-      else statusBadge = '<span class="badge stable">Stable</span>';
-
-      html += `<tr>
-        <td>${esc(m.task)}</td>
-        <td>${esc(m.agent)}</td>
-        <td class="num">${bStr}</td>
-        <td class="num">${cStr}</td>
-        <td class="num">${fmtScoreDelta(m.scoreDelta)}</td>
-        <td class="num">${fmtDelta(m.successRateDelta, 'pct')}</td>
-        <td class="num">${fmtDelta(m.tokensDelta)}</td>
-        <td class="num">${fmtDelta(m.durationDelta, 'ms')}</td>
-        <td>${statusBadge}</td>
-      </tr>`;
+      if (!byTask.has(m.task)) byTask.set(m.task, []);
+      byTask.get(m.task).push(m);
     }
 
-    html += '</tbody></table>';
+    html += `<h2>Per Task</h2>`;
+
+    for (const [task, agents] of byTask) {
+      // Task-level aggregate: average the deltas across agents for this task
+      const taskImproved = agents.filter(m => m.scoreDelta > 0.5).length;
+      const taskRegressed = agents.filter(m => m.scoreDelta < -0.5).length;
+      const avgScoreDelta = agents.reduce((s, m) => s + (m.scoreDelta || 0), 0) / agents.length;
+
+      const taskVerdict = taskRegressed > 0 && taskImproved === 0 ? 'regressed'
+        : taskImproved > 0 && taskRegressed === 0 ? 'improved'
+        : taskImproved > 0 && taskRegressed > 0 ? 'mixed'
+        : 'stable';
+
+      const taskBadgeClass = taskVerdict === 'regressed' ? 'regressed'
+        : taskVerdict === 'improved' ? 'improved'
+        : taskVerdict === 'mixed' ? 'mixed'
+        : 'stable';
+
+      html += `<div class="task-section">`;
+      html += `<div class="task-header">`;
+      html += `<span class="task-name">${esc(task)}</span>`;
+      html += `<span class="task-summary">`;
+      html += `${agents.length} agent${agents.length !== 1 ? 's' : ''} `;
+      html += `<span class="badge ${taskBadgeClass}">${esc(taskVerdict)}</span> `;
+      html += `avg score delta: ${fmtScoreDelta(avgScoreDelta)}`;
+      html += `</span>`;
+      html += `</div>`;
+
+      for (const m of agents) {
+        html += renderGroupCard(m, { fmtPct, fmtNum, fmtTokens, fmtDuration, fmtScoreDelta });
+      }
+
+      html += `</div>`;
+    }
   }
 
   // Unmatched groups
   if (d.baselineOnly && d.baselineOnly.length > 0) {
-    html += `<h3>Baseline Only</h3><p>${d.baselineOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
+    html += `<h3>Baseline Only</h3><p class="unmatched">${d.baselineOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
   }
   if (d.candidateOnly && d.candidateOnly.length > 0) {
-    html += `<h3>Candidate Only</h3><p>${d.candidateOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
+    html += `<h3>Candidate Only</h3><p class="unmatched">${d.candidateOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
   }
 
   root.innerHTML = html;
+}
+
+function renderGroupCard(m, fmt) {
+  const { fmtPct, fmtNum, fmtTokens, fmtDuration, fmtScoreDelta } = fmt;
+  const ga = m.analysis;
+
+  const verdict = ga?.verdict || (m.scoreDelta > 0.5 ? 'improved' : m.scoreDelta < -0.5 ? 'regressed' : 'stable');
+  const cardClass = verdict === 'regressed' ? 'group-card regressed'
+    : verdict === 'improved' ? 'group-card improved'
+    : 'group-card stable';
+
+  let statusBadge;
+  if (verdict === 'improved') statusBadge = '<span class="badge improved">Improved</span>';
+  else if (verdict === 'regressed') statusBadge = '<span class="badge regressed">Regressed</span>';
+  else statusBadge = '<span class="badge stable">Stable</span>';
+
+  let html = `<div class="${cardClass}">`;
+  html += `<div class="group-header">`;
+  html += `<div class="group-title"><span class="agent-name">${esc(m.agent)}</span></div>`;
+  html += `<div class="group-status">${statusBadge}</div>`;
+  html += `</div>`;
+
+  const bScore = m.baseline.meanScorePct != null ? fmtPct(m.baseline.meanScorePct) : fmtNum(m.baseline.meanScore);
+  const cScore = m.candidate.meanScorePct != null ? fmtPct(m.candidate.meanScorePct) : fmtNum(m.candidate.meanScore);
+
+  html += `<div class="group-stats">`;
+  html += `<div class="group-stat"><span class="group-stat-val">${bScore} \u2192 ${cScore}</span><span class="group-stat-label">Score</span></div>`;
+  html += `<div class="group-stat"><span class="group-stat-val">${fmtScoreDelta(m.scoreDelta)}</span><span class="group-stat-label">Score Delta</span></div>`;
+  html += `<div class="group-stat"><span class="group-stat-val">${fmtPct(m.baseline.successRate)} \u2192 ${fmtPct(m.candidate.successRate)}</span><span class="group-stat-label">Success Rate</span></div>`;
+  html += `<div class="group-stat"><span class="group-stat-val">${fmtTokens(m.baseline.meanTokens)} \u2192 ${fmtTokens(m.candidate.meanTokens)}</span><span class="group-stat-label">Tokens</span></div>`;
+  html += `<div class="group-stat"><span class="group-stat-val">${fmtDuration(m.baseline.meanDurationMs)} \u2192 ${fmtDuration(m.candidate.meanDurationMs)}</span><span class="group-stat-label">Duration</span></div>`;
+  html += `</div>`;
+
+  const bFailures = new Set(m.baseline.commonFailures || []);
+  const cFailures = new Set(m.candidate.commonFailures || []);
+  const newFailures = [...cFailures].filter(f => !bFailures.has(f));
+  const fixedFailures = [...bFailures].filter(f => !cFailures.has(f));
+
+  if (newFailures.length > 0) {
+    html += `<div class="group-failures">New failures: ${newFailures.map(f => `<span class="failure-tag">${esc(f)}</span>`).join('')}</div>`;
+  }
+  if (fixedFailures.length > 0) {
+    html += `<div class="group-fixed">Fixed: ${fixedFailures.map(f => `<span class="fixed-tag">${esc(f)}</span>`).join('')}</div>`;
+  }
+
+  if (ga?.reasoning) {
+    html += `<div class="group-findings">${esc(ga.reasoning)}</div>`;
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 function renderLegacy(d) {

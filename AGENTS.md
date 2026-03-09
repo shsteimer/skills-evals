@@ -15,13 +15,15 @@ This is a framework for evaluating coding agent performance on development tasks
 ## Project Structure
 
 - `tasks/` - Task definitions with prompts, criteria, and configuration
-- `scripts/` - Task execution (`run-tasks.js`), summarization (`summarize-batch.js`), and comparison (`compare-batches.js`)
+- `scripts/` - Task execution (`run-tasks.js`), summarization (`summarize-batch.js`), comparison (`compare-batches.js`), assembly (`assemble-*.js`), and viewer server (`serve.js`)
 - `scripts/handlers/` - Agent-specific CLI handlers (claude, cursor, codex)
 - `scripts/utils/` - Shared utilities for git, GitHub, npm, process, and environment config
 - `.claude/skills/` - Claude Code skills (eval-run, summarize-batch, compare-batches, task-creator)
 - `tools/` - Standalone HTML viewer tools (eval-viewer, comparison-viewer, batch-viewer, conversation-viewer, diff-viewer)
 - `tests/` - Vitest unit tests
 - `results/` - Generated evaluation results
+  - `results/<timestamp>/` - Batch directories (runs + batch summary)
+  - `results/comparisons/<timestamp>/` - Comparison directories (comparison data + analysis)
 - `augmentations/` - Optional files to add to task workspaces
 
 ## Commands
@@ -29,6 +31,7 @@ This is a framework for evaluating coding agent performance on development tasks
 - `npm run lint:fix` - Check code with ESLint, Auto-fix linting issues
 - `npm test` - Run all tests
 - `npm run run-tasks` - Execute tasks with agents
+- `npm run serve` - Start viewer server at http://localhost:8765 (index page lists all batches and comparisons)
 
 ## Evaluation Workflow
 
@@ -39,7 +42,7 @@ The framework has a multi-step pipeline. Each step is a separate skill invocatio
 3. **Summarize batch** (`summarize-batch`) — Aggregate stats + analytical findings per batch
 4. **Compare batches** (`compare-batches`) — A/B comparison with recommendation
 
-Steps 3 and 4 each include an analytical subagent step that produces structured findings for the viewer tools. These are not optional — the viewers render this analysis alongside the raw numbers. Running the script alone without the analysis step produces incomplete output.
+Steps 2-4 include an analytical subagent step that produces structured findings for the viewer tools. These are not optional — the viewers render this analysis alongside the raw numbers. Running the script alone without the analysis step produces incomplete output.
 
 When a user asks for multiple steps at once (e.g. "evaluate, summarize, and compare"), invoke each skill fully — don't shortcut the analytical steps just because the mechanical parts are fast.
 

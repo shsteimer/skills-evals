@@ -8,12 +8,12 @@ describe('compare-batches parseArgs', () => {
     expect(args.candidateDir).toBe('results/candidate');
   });
 
-  it('should parse output-json flag', () => {
+  it('should parse output-dir flag', () => {
     const args = parseArgs([
       'node', 'compare-batches.js', 'results/base', 'results/candidate',
-      '--output-json', 'results/comparison.json'
+      '--output-dir', 'results/comparisons/20260309-120000'
     ]);
-    expect(args.outputJsonPath).toBe('results/comparison.json');
+    expect(args.outputDir).toBe('results/comparisons/20260309-120000');
   });
 
   it('should parse help flag', () => {

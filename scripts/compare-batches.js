@@ -9,7 +9,7 @@ export function parseArgs(argv) {
   const result = {
     baselineDir: null,
     candidateDir: null,
-    outputJsonPath: null,
+    outputDir: null,
     showHelp: false
   };
 
@@ -17,8 +17,8 @@ export function parseArgs(argv) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
       result.showHelp = true;
-    } else if (arg === '--output-json' && i + 1 < argv.length) {
-      result.outputJsonPath = argv[++i];
+    } else if (arg === '--output-dir' && i + 1 < argv.length) {
+      result.outputDir = argv[++i];
     } else if (!arg.startsWith('-') && !result.baselineDir) {
       result.baselineDir = arg;
     } else if (!arg.startsWith('-') && !result.candidateDir) {
@@ -40,9 +40,15 @@ Arguments:
   <candidate-dir>    Path to candidate batch directory
 
 Options:
-  --output-json <path>  Write comparison JSON to file
-  -h, --help            Show this help message
+  --output-dir <path>  Output directory (default: results/comparisons/<timestamp>)
+  -h, --help           Show this help message
 `);
+}
+
+export function generateTimestamp() {
+  const now = new Date();
+  const pad = (n, len = 2) => String(n).padStart(len, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
 export async function loadBatchSummary(batchDir) {
@@ -210,23 +216,24 @@ async function main() {
 
   console.log(formatSummary(comparison));
 
+  // Write output to a comparison directory
+  const outputDir = path.resolve(args.outputDir || path.join('results', 'comparisons', generateTimestamp()));
+  await fs.mkdir(outputDir, { recursive: true });
+
+  // Write comparison.json
+  const jsonPath = path.join(outputDir, 'comparison.json');
+  await fs.writeFile(jsonPath, JSON.stringify(comparison, null, 2), 'utf-8');
+  console.log(`\nJSON: ${jsonPath}`);
+
   // Write compare-data.js for the comparison viewer
-  const reportDir = path.resolve(args.candidateDir);
-  const dataJsPath = path.join(reportDir, '..', 'compare-data.js');
-  await fs.mkdir(path.dirname(dataJsPath), { recursive: true });
+  const dataJsPath = path.join(outputDir, 'compare-data.js');
   await fs.writeFile(dataJsPath, `const compareData = ${JSON.stringify(comparison, null, 2)};\n`, 'utf-8');
-  console.log(`\nData: ${dataJsPath}`);
+  console.log(`Data: ${dataJsPath}`);
 
   const toolsDir = path.join(__dirname, '..', 'tools', 'comparison-viewer');
   const relDataPath = path.relative(toolsDir, dataJsPath);
   console.log(`View: tools/comparison-viewer/index.html?data=${relDataPath}`);
-
-  if (args.outputJsonPath) {
-    const outputPath = path.resolve(args.outputJsonPath);
-    await fs.mkdir(path.dirname(outputPath), { recursive: true });
-    await fs.writeFile(outputPath, JSON.stringify(comparison, null, 2), 'utf-8');
-    console.log(`Wrote ${outputPath}`);
-  }
+  console.log(`Dir: ${outputDir}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

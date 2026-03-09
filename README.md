@@ -20,10 +20,12 @@ This framework allows you to:
 ## Structure
 
 - `tasks/` - Task definitions with prompts and evaluation criteria
-- `scripts/` - Execution, evaluation, summarization, and comparison scripts
+- `scripts/` - Execution, evaluation, summarization, comparison, and assembly scripts
 - `.claude/skills/` - Claude Code skills for evaluation workflow
 - `tools/` - Standalone HTML viewer tools
-- `results/` - Evaluation results (generated at `results/{timestamp}/{task-agent}/`)
+- `results/` - Evaluation results
+  - `results/{timestamp}/` - Batch directories (runs + batch summary)
+  - `results/comparisons/{timestamp}/` - Comparison directories
 - `augmentations/` - Optional global augmentation files
 
 ## Quick Start
@@ -53,6 +55,9 @@ npm run run-tasks -- --task build-block --times 5
 
 # Show help
 npm run run-tasks -- --help
+
+# Start viewer server (index page at http://localhost:8765)
+npm run serve
 ```
 
 ## Pipeline
@@ -153,11 +158,15 @@ For folders, control merge behavior:
 
 Results are stored at `results/{timestamp}/`:
 
-### Batch-level artifacts
+### Batch-level artifacts (`results/{timestamp}/`)
 - `batch.json` — batch metadata (timestamp, args, augmentations, agents, run counts)
 - `batch-summary.json` — aggregate stats per task+agent (after `summarize-batch`)
 - `batch-summary-data.js` — data file for batch viewer
 - `batch.log` — execution log
+
+### Comparison artifacts (`results/comparisons/{timestamp}/`)
+- `comparison.json` — comparison data with analysis (recommendation, per-group verdicts)
+- `compare-data.js` — data file for comparison viewer
 
 ### Run-level artifacts (per `{task-agent-iteration}/`)
 - `task.json` - Complete task configuration including augmentations
@@ -173,14 +182,17 @@ Results are stored at `results/{timestamp}/`:
 
 ## Viewer Tools
 
-Standalone HTML viewers for inspecting results. Serve from project root:
+Standalone HTML viewers for inspecting results:
+
 ```bash
-python3 -m http.server 8765
+npm run serve
 ```
 
+This starts a server at http://localhost:8765 with an index page listing all batches and comparisons.
+
 - **eval-viewer** — single-run evaluation results, criteria, screenshots
-- **batch-viewer** — batch summary with per-group stats
-- **comparison-viewer** — A/B batch comparison (aggregate mode)
+- **batch-viewer** — batch summary with per-group stats and analytical findings
+- **comparison-viewer** — A/B batch comparison with recommendation and per-group verdicts
 - **conversation-viewer** — parsed agent conversation log
 - **diff-viewer** — interactive diff view
 
@@ -188,6 +200,7 @@ All viewers load data via `?data=` URL parameter:
 ```
 http://localhost:8765/tools/eval-viewer/index.html?data=results/20260308-135305/build-block-claude-1/eval-data.js
 http://localhost:8765/tools/batch-viewer/index.html?data=results/20260308-135305/batch-summary-data.js
+http://localhost:8765/tools/comparison-viewer/index.html?data=results/comparisons/20260309-115836/compare-data.js
 ```
 
 ## Testing

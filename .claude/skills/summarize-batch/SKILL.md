@@ -130,12 +130,9 @@ Show the user:
 
 ### Viewer URL
 
-After summarization, provide the batch viewer URL:
+Ensure the viewer server is running (`npm run serve`), then provide the batch viewer URL:
 ```
 http://localhost:8765/tools/batch-viewer/index.html?data=results/<timestamp>/batch-summary-data.js
 ```
 
-Start a local HTTP server if one isn't running:
-```bash
-python3 -m http.server 8765
-```
+The index page at http://localhost:8765/ lists all batches and comparisons.

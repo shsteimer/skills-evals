@@ -32,14 +32,20 @@ Check that `batch-summary.json` exists in both directories. If missing, suggest 
 ### Step 3: Run compare-batches script
 
 ```bash
-node scripts/compare-batches.js <baseline-dir> <candidate-dir> --output-json results/comparison.json
+node scripts/compare-batches.js <baseline-dir> <candidate-dir> --output-dir results/comparisons/<timestamp>
 ```
 
-This produces:
-- `compare-data.js` — JavaScript data file for the comparison viewer (in the results parent directory)
-- Optional `comparison.json` — machine-readable comparison data
+If you don't pass `--output-dir`, the script auto-generates a timestamped directory under `results/comparisons/`.
+
+This produces a comparison directory containing:
+- `comparison.json` — machine-readable comparison data
+- `compare-data.js` — JavaScript data file for the comparison viewer
+
+Note the output directory path — you'll need it for the assembly step.
 
 ### Step 4: Analyze results with subagent
+
+This step is **required** — it produces the recommendation and per-group analysis that appear in the comparison viewer.
 
 Launch an analysis subagent using the **Agent tool** that:
 
@@ -74,7 +80,7 @@ the baseline batch.
    - Efficiency: Are agents using fewer tokens or finishing faster?
    - Consistency: Is variance (stddev) lower? More predictable outcomes?
 
-3. Produce your recommendation as a JSON object:
+3. Produce your recommendation as a JSON object (no markdown fences, no commentary):
 {
   "recommendation": "yes" | "no" | "inconclusive",
   "confidence": "high" | "medium" | "low",
@@ -93,6 +99,23 @@ the baseline batch.
 - "inconclusive" = mixed results, need more data or targeted investigation
 ```
 
+#### Merging analysis into comparison data
+
+After the subagent returns, write the analysis into the comparison data:
+
+1. Parse the subagent's JSON output
+2. Write it to `<comparison-dir>/comparison-analysis.json`
+3. Run the assembly script to merge analysis into the comparison data:
+
+```bash
+node scripts/assemble-comparison.js <comparison-dir>
+```
+
+This merges `comparison.json` with `comparison-analysis.json` and writes an updated
+`compare-data.js` that includes the analysis fields for the comparison viewer.
+
+4. Clean up: `rm <comparison-dir>/comparison-analysis.json`
+
 ### Step 5: Present results
 
 Show the user:
@@ -103,10 +126,9 @@ Show the user:
 
 ### Viewer URL
 
-After comparison, provide the viewer URL:
+Ensure the viewer server is running (`npm run serve`), then provide the viewer URL:
 ```
-http://localhost:8765/tools/comparison-viewer/index.html?data=results/compare-data.js
+http://localhost:8765/tools/comparison-viewer/index.html?data=results/comparisons/<timestamp>/compare-data.js
 ```
 
-The comparison viewer detects `mode: "aggregate"` in the data and renders the aggregate view
-(mean ± stddev per group) instead of the iteration-level view.
+The index page at http://localhost:8765/ lists all batches and comparisons.

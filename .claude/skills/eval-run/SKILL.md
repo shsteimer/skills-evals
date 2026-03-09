@@ -355,19 +355,12 @@ rm <result-folder>/subagent-output.json
 
 ### Viewing results
 
-The viewer tools require a local HTTP server. After evaluation completes, tell the user how to view results:
-
-1. Start a server from the project root (if one isn't already running):
-   ```bash
-   python3 -m http.server 8765
-   ```
-
-2. Provide direct URLs for each result folder evaluated, using paths relative to the project root:
+The viewer tools require the viewer server (`npm run serve`). After evaluation completes, provide direct URLs for each result folder evaluated:
    - `http://localhost:8765/tools/eval-viewer/index.html?data=results/<run-set>/<run>/eval-data.js`
    - `http://localhost:8765/tools/conversation-viewer/index.html?data=results/<run-set>/<run>/conversation-data.js`
    - `http://localhost:8765/tools/diff-viewer/index.html?data=results/<run-set>/<run>/diff-data.js`
 
-Always provide the eval viewer URL at minimum. Include conversation and diff viewer URLs if those data files were generated.
+Always provide the eval viewer URL at minimum. Include conversation and diff viewer URLs if those data files were generated. The index page at http://localhost:8765/ lists all batches and comparisons.
 
 ### Pre-built tooling
 
