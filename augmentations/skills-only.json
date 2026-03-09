@@ -2,8 +2,8 @@
   "name": "Skills Only",
   "augmentations": [
     {
-      "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services",
-      "target": ".claude/"
+      "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services/skills",
+      "target": ".claude/skills/"
     }
   ]
 }
