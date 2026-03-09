@@ -12,6 +12,10 @@
     {
       "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services/skills",
       "target": ".claude/skills/"
+    },
+    {
+      "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services/skills",
+      "target": ".agents/skills/"
     }
   ]
 }
