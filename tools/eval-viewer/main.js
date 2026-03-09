@@ -93,6 +93,10 @@ function render(d, m) {
   }
 
   html += '<div class="links">';
+  if (d.runSetId) {
+    const batchDir = dataDir(dataPath).replace(/[^/]+\/[^/]*$/, '');
+    html += `<a href="/tools/batch-viewer/index.html?data=${batchDir}batch-summary-data.js">Batch Summary</a>`;
+  }
   html += `<a href="${viewerLink('diff-viewer', 'diff-data.js', dataPath)}">View Diff</a>`;
   html += `<a href="${viewerLink('conversation-viewer', 'conversation-data.js', dataPath)}">View Conversation</a>`;
   html += '</div>';

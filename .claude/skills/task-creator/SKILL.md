@@ -6,7 +6,7 @@ description: >
   task problems, and refining prompts, criteria, and augmentations. Use this skill whenever
   the user wants to create a new eval task, improve any part of an existing task, review or
   analyze eval results, update the evaluation dimensions, or add new dimensions.
-  Do NOT trigger for running tasks (run-tasks) or comparing run sets (compare-runs).
+  Do NOT trigger for running tasks (run-tasks) or comparing batches (compare-batches).
 ---
 
 # Task Creator

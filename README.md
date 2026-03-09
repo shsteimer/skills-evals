@@ -8,11 +8,21 @@ This framework allows you to:
 - Define development tasks with specific criteria
 - Run coding agents against those tasks in isolated workspaces
 - Evaluate agent performance based on defined criteria
+- Summarize batch results with aggregate statistics
+- Compare batches to determine if changes improved performance
+
+## Terminology
+
+- **batch** — timestamp directory (`results/20260308-135305/`) containing all tasks × agents × iterations from one `run-tasks` invocation
+- **run** — individual task execution folder (`results/.../build-block-claude-1/`)
+- **iteration** — repeat number (1-5) within a batch for same task+agent
 
 ## Structure
 
 - `tasks/` - Task definitions with prompts and evaluation criteria
-- `scripts/` - Execution and evaluation scripts
+- `scripts/` - Execution, evaluation, summarization, and comparison scripts
+- `.claude/skills/` - Claude Code skills for evaluation workflow
+- `tools/` - Standalone HTML viewer tools
 - `results/` - Evaluation results (generated at `results/{timestamp}/{task-agent}/`)
 - `augmentations/` - Optional global augmentation files
 
@@ -38,9 +48,21 @@ npm run run-tasks -- --agents claude,cursor
 # Run with augmentations
 npm run run-tasks -- --augmentations ./augmentations/agents-md-only.json
 
+# Run multiple iterations
+npm run run-tasks -- --task build-block --times 5
+
 # Show help
 npm run run-tasks -- --help
 ```
+
+## Pipeline
+
+The full evaluation pipeline:
+
+1. **Run tasks** — `npm run run-tasks` executes agents against tasks, writes results + `batch.json`
+2. **Evaluate runs** — use the `eval-run` skill (or `npm run eval-tasks` legacy path) to evaluate individual runs
+3. **Summarize batch** — `npm run summarize-batch -- <batch-dir>` computes aggregate stats
+4. **Compare batches** — `npm run compare-batches -- <baseline-dir> <candidate-dir>` compares two batches
 
 ## Defining Tasks
 
@@ -80,7 +102,7 @@ Tasks are defined in the `tasks/` directory. Each task is a folder containing:
   - GitHub files: `"https://github.com/org/repo/blob/main/file.txt"`
   - GitHub folders: `"https://github.com/org/repo/tree/main/folder"`
   - HTTP URLs: `"https://example.com/file.txt"`
-  
+
 - **`tags`** (optional): Tags for filtering tasks
 
 ## Augmentations
@@ -120,7 +142,7 @@ For folders, control merge behavior:
 {
   "source": "./folder",
   "target": "dest",
-  "mode": "merge"  // or "replace"
+  "mode": "merge"
 }
 ```
 
@@ -129,14 +151,44 @@ For folders, control merge behavior:
 
 ## Results
 
-Results are stored at `results/{timestamp}/{task-agent}/`:
+Results are stored at `results/{timestamp}/`:
+
+### Batch-level artifacts
+- `batch.json` — batch metadata (timestamp, args, augmentations, agents, run counts)
+- `batch-summary.json` — aggregate stats per task+agent (after `summarize-batch`)
+- `batch-summary-data.js` — data file for batch viewer
+- `run.log` — execution log
+
+### Run-level artifacts (per `{task-agent-iteration}/`)
 - `task.json` - Complete task configuration including augmentations
 - `prompt.txt` - The prompt given to the agent
 - `criteria.txt` - Evaluation criteria
+- `changes.diff` - Git diff of agent's changes
+- `commits.json` - Agent's git commits
+- `run-metrics.json` - Timing, token usage, timeout status
+- `output.jsonl` - Raw agent output stream
+- `check-results.json` - Deterministic check results
+- `eval-result.json` - Evaluation results (after eval)
+- `eval-data.js` - Data file for eval viewer
 
-The workspace for each run is at: `{workspace-dir}/{timestamp}/{task-agent}/`
-- Default workspace directory is system temp directory
-- Can be customized with `--workspace` flag
+## Viewer Tools
+
+Standalone HTML viewers for inspecting results. Serve from project root:
+```bash
+python3 -m http.server 8765
+```
+
+- **eval-viewer** — single-run evaluation results, criteria, screenshots
+- **batch-viewer** — batch summary with per-group stats
+- **comparison-viewer** — A/B comparison (supports both iteration-level and aggregate mode)
+- **conversation-viewer** — parsed agent conversation log
+- **diff-viewer** — interactive diff view
+
+All viewers load data via `?data=` URL parameter:
+```
+http://localhost:8765/tools/eval-viewer/index.html?data=results/20260308-135305/build-block-claude-1/eval-data.js
+http://localhost:8765/tools/batch-viewer/index.html?data=results/20260308-135305/batch-summary-data.js
+```
 
 ## Testing
 
@@ -148,6 +200,5 @@ npm test
 npm run test:watch
 
 # Run specific test file
-npm test find-tasks.test.js
+npm test summarize-batch.test.js
 ```
-

@@ -9,6 +9,8 @@
     "run-tasks": "node scripts/run-tasks.js",
     "eval-tasks": "node scripts/eval-tasks.js",
     "compare-runs": "node scripts/compare-runs.js",
+    "summarize-batch": "node scripts/summarize-batch.js",
+    "compare-batches": "node scripts/compare-batches.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

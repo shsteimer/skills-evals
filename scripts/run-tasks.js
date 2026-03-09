@@ -591,17 +591,60 @@ async function processTask(task, onActivity) {
   if (runError) throw runError;
 }
 
+export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures) {
+  const timestamp = enrichedTasks[0]?.timestamp || null;
+  const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+
+  // Collect unique task names
+  const taskNames = [...new Set(enrichedTasks.map(t => t.name))];
+
+  // Build agent → model map
+  const agentModels = {};
+  for (const task of enrichedTasks) {
+    if (!agentModels[task.agent]) {
+      agentModels[task.agent] = task.model || null;
+    }
+  }
+
+  // Count completed vs failed based on whether taskInfoFolder has a run-metrics.json
+  // Since we don't have per-task status here, use the overall hasFailures flag
+  const runCount = enrichedTasks.length;
+  const failedCount = hasFailures ? null : 0; // null = unknown breakdown
+  const completedCount = hasFailures ? null : runCount;
+
+  return {
+    timestamp,
+    startedAt,
+    finishedAt,
+    durationMs,
+    args: {
+      tasks: args.tasks,
+      tags: args.tags,
+      agents: args.agents,
+      times: args.times,
+      workspaceDir: args.workspaceDir,
+      augmentationsFile: args.augmentationsFile
+    },
+    augmentationSetName: enrichedTasks[0]?.augmentationSetName || null,
+    agentModels,
+    taskNames,
+    runCount,
+    completedCount,
+    failedCount
+  };
+}
+
 async function runTasks() {
   const args = parseArgs(process.argv);
-  
+
   if (args.showHelp) {
     showHelp();
     return;
   }
-  
+
   const tasks = await findTasks(args);
   const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir, args.times);
-  
+
   // Create result folders up front so the full run is visible immediately
   for (const task of enrichedTasks) {
     await createTaskInfoFolder(task);
@@ -618,9 +661,18 @@ async function runTasks() {
   }
 
   // Run the tasks in parallel
+  const startedAt = new Date().toISOString();
   const concurrency = args.agents.length;
   const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId, { logger });
-  
+  const finishedAt = new Date().toISOString();
+
+  // Write batch.json
+  if (timestamp) {
+    const batchMetadata = buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures);
+    const batchJsonPath = path.join(resultsBaseDir, timestamp, 'batch.json');
+    await fs.writeFile(batchJsonPath, JSON.stringify(batchMetadata, null, 2), 'utf-8');
+  }
+
   // Exit with non-zero code if any tasks failed
   if (hasFailures) {
     process.exit(1);

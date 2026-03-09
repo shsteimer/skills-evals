@@ -6,12 +6,20 @@ This document provides guidance for AI coding agents working on the skills evalu
 
 This is a framework for evaluating coding agent performance on development tasks. It runs agents in isolated workspaces, then evaluates their output against defined criteria.
 
+## Terminology
+
+- **batch** — timestamp directory (`results/20260308-135305/`) containing all tasks × agents × iterations from one `run-tasks` invocation
+- **run** — individual task execution folder (`results/.../build-block-claude-1/`)
+- **iteration** — repeat number (1-5) within a batch for same task+agent
+
 ## Project Structure
 
 - `tasks/` - Task definitions with prompts, criteria, and configuration
-- `scripts/` - Task execution (`run-tasks.js`) and evaluation (`eval-tasks.js`)
+- `scripts/` - Task execution (`run-tasks.js`), evaluation (`eval-tasks.js`), summarization (`summarize-batch.js`), and comparison (`compare-batches.js`, `compare-runs.js`)
 - `scripts/handlers/` - Agent-specific CLI handlers (claude, cursor, codex)
 - `scripts/utils/` - Shared utilities for git, GitHub, npm, process, and environment config
+- `.claude/skills/` - Claude Code skills (eval-run, summarize-batch, compare-batches, task-creator)
+- `tools/` - Standalone HTML viewer tools (eval-viewer, comparison-viewer, batch-viewer, conversation-viewer, diff-viewer)
 - `tests/` - Vitest unit tests
 - `results/` - Generated evaluation results
 - `augmentations/` - Optional files to add to task workspaces
@@ -21,7 +29,10 @@ This is a framework for evaluating coding agent performance on development tasks
 - `npm run lint:fix` - Check code with ESLint, Auto-fix linting issues
 - `npm test` - Run all tests
 - `npm run run-tasks` - Execute tasks with agents
-- `npm run eval-tasks` - Evaluate completed tasks
+- `npm run eval-tasks` - Evaluate completed tasks (legacy path)
+- `npm run summarize-batch` - Summarize evaluation results for a batch
+- `npm run compare-batches` - Compare two batch summaries
+- `npm run compare-runs` - Compare two run sets (iteration-level)
 
 ## Important Reminders
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgs } from '../scripts/run-tasks.js';
+import { parseArgs, buildBatchMetadata } from '../scripts/run-tasks.js';
 
 describe('parseArgs', () => {
   describe('task name filtering', () => {
@@ -176,6 +176,98 @@ describe('parseArgs', () => {
       
       expect(() => parseArgs(args)).toThrow('--times must be a positive integer');
     });
+  });
+});
+
+describe('buildBatchMetadata', () => {
+  const baseArgs = {
+    tasks: ['build-block'],
+    tags: [],
+    agents: ['claude'],
+    times: 3,
+    workspaceDir: '/tmp/workspace',
+    augmentationsFile: 'augmentations/cdd.json'
+  };
+
+  const enrichedTasks = [
+    { name: 'build-block', agent: 'claude', model: 'claude-sonnet-4-20250514', timestamp: '20260308-135305', iteration: 1, augmentationSetName: 'cdd-v1' },
+    { name: 'build-block', agent: 'claude', model: 'claude-sonnet-4-20250514', timestamp: '20260308-135305', iteration: 2, augmentationSetName: 'cdd-v1' },
+    { name: 'build-block', agent: 'claude', model: 'claude-sonnet-4-20250514', timestamp: '20260308-135305', iteration: 3, augmentationSetName: 'cdd-v1' }
+  ];
+
+  it('should produce correct shape with all required fields', () => {
+    const result = buildBatchMetadata(
+      baseArgs, enrichedTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      false
+    );
+
+    expect(result).toMatchObject({
+      timestamp: '20260308-135305',
+      startedAt: '2026-03-08T13:53:05.000Z',
+      finishedAt: '2026-03-08T13:59:02.000Z',
+      augmentationSetName: 'cdd-v1',
+      taskNames: ['build-block'],
+      runCount: 3
+    });
+    expect(result.durationMs).toBe(357000);
+    expect(result.agentModels).toEqual({ claude: 'claude-sonnet-4-20250514' });
+  });
+
+  it('should include args subset', () => {
+    const result = buildBatchMetadata(
+      baseArgs, enrichedTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      false
+    );
+
+    expect(result.args).toEqual({
+      tasks: ['build-block'],
+      tags: [],
+      agents: ['claude'],
+      times: 3,
+      workspaceDir: '/tmp/workspace',
+      augmentationsFile: 'augmentations/cdd.json'
+    });
+  });
+
+  it('should set augmentationSetName to null when no augmentation file', () => {
+    const tasksNoAug = enrichedTasks.map(t => ({ ...t, augmentationSetName: null }));
+    const result = buildBatchMetadata(
+      { ...baseArgs, augmentationsFile: null }, tasksNoAug,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      false
+    );
+
+    expect(result.augmentationSetName).toBeNull();
+  });
+
+  it('should collect unique task names across multiple tasks', () => {
+    const multiTasks = [
+      { name: 'build-block', agent: 'claude', model: 'claude-sonnet-4-20250514', timestamp: '20260308-135305', iteration: 1, augmentationSetName: null },
+      { name: 'fix-block-bug', agent: 'claude', model: 'claude-sonnet-4-20250514', timestamp: '20260308-135305', iteration: 1, augmentationSetName: null },
+      { name: 'build-block', agent: 'cursor', model: null, timestamp: '20260308-135305', iteration: 1, augmentationSetName: null }
+    ];
+
+    const result = buildBatchMetadata(
+      { ...baseArgs, agents: ['claude', 'cursor'] }, multiTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      false
+    );
+
+    expect(result.taskNames).toEqual(['build-block', 'fix-block-bug']);
+    expect(result.agentModels).toEqual({ claude: 'claude-sonnet-4-20250514', cursor: null });
+  });
+
+  it('should set completedCount to null when hasFailures is true', () => {
+    const result = buildBatchMetadata(
+      baseArgs, enrichedTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      true
+    );
+
+    expect(result.failedCount).toBeNull();
+    expect(result.completedCount).toBeNull();
   });
 });
 

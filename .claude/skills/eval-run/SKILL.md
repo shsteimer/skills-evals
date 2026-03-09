@@ -1,15 +1,15 @@
 ---
-name: eval
+name: eval-run
 description: >
   Evaluate completed agent task runs by reconstructing workspaces and running a thorough
   evaluation combining deterministic checks with LLM judgment. Use this skill whenever the
   user wants to evaluate task results, re-evaluate runs, assess agent performance on completed
   tasks, or score results. Triggers on phrases like "evaluate the runs", "score these results",
   "how did the agent do", "eval the latest", "re-evaluate", or referencing result paths.
-  Do NOT trigger for running tasks (use run-tasks) or comparing run sets (use compare-runs).
+  Do NOT trigger for running tasks (use run-tasks) or comparing batches (use compare-batches).
 ---
 
-# Eval
+# Eval Run
 
 Evaluate completed agent task runs. Reconstructs the agent's workspace from captured artifacts, runs deterministic checks, then uses LLM judgment only for subjective criteria.
 
@@ -336,9 +336,14 @@ Write to the result folder:
 
 Use `scripts/assemble-eval.js` to handle all of the above:
 ```bash
-node scripts/assemble-eval.js <result-folder> <subagent-output.json>
+node scripts/assemble-eval.js <result-folder> <result-folder>/subagent-output.json
 ```
 It reads `check-resolved-criteria.json` from the result folder if present, merges with the subagent output, computes scores, and writes all data files.
+
+**Important:** Write the intermediate subagent output JSON to the run's result folder (e.g. `results/<timestamp>/<run>/subagent-output.json`), not /tmp/. After `assemble-eval.js` completes, delete the intermediate file:
+```bash
+rm <result-folder>/subagent-output.json
+```
 
 ### Viewing results
 
@@ -387,3 +392,7 @@ Use the Agent tool to spawn parallel evaluator subagents when processing multipl
 - **Large diffs**: Some runs have large changes.diff files. The reconstruct script handles this, but `git apply` may fail if the diff is malformed. Check the script's exit code and report failures.
 - **Missing artifacts**: Some runs may lack certain artifacts (e.g., no commits.json if the agent didn't commit). Handle gracefully — evaluate what's available.
 - **Timeout runs**: Runs where `run-metrics.json` shows `timedOut: true` may have incomplete work. Still evaluate what's there — partial credit is valid.
+
+## After evaluation
+
+After evaluating all runs in a batch, suggest running `summarize-batch` to get aggregate stats across all runs in the batch (mean scores, success rates, common failures, etc.).

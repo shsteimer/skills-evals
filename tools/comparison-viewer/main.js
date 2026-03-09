@@ -17,6 +17,116 @@ if (!dataPath) {
 function render(d) {
   if (!d) { root.innerHTML = '<p>No comparison data.</p>'; return; }
 
+  if (d.mode === 'aggregate') {
+    renderAggregate(d);
+  } else {
+    renderLegacy(d);
+  }
+}
+
+function renderAggregate(d) {
+  document.title = 'Batch Comparison — Aggregate';
+
+  const fmtNum = (v, digits = 1) => v == null ? 'n/a' : v.toFixed(digits);
+  const fmtPct = (v) => v == null ? 'n/a' : (v * 100).toFixed(1) + '%';
+  const fmtTokens = (v) => v == null ? 'n/a' : Math.round(v).toLocaleString();
+  const fmtDuration = (v) => v == null ? 'n/a' : (v / 1000).toFixed(1) + 's';
+
+  const fmtDelta = (v, unit) => {
+    if (v == null) return '<span class="delta zero">\u2014</span>';
+    let abs;
+    if (unit === 'ms') abs = (Math.abs(v) / 1000).toFixed(1) + 's';
+    else if (unit === 'pct') abs = (Math.abs(v) * 100).toFixed(1) + '%';
+    else abs = Math.abs(v).toFixed(1);
+    if (v < -0.001) return `<span class="delta pos">\u2193${abs}</span>`;
+    if (v > 0.001) return `<span class="delta pos">\u2191${abs}</span>`;
+    return '<span class="delta zero">0</span>';
+  };
+
+  const fmtScoreDelta = (v) => {
+    if (v == null) return '<span class="delta zero">\u2014</span>';
+    const abs = Math.abs(v).toFixed(1);
+    if (v > 0.001) return `<span class="delta pos">+${abs}</span>`;
+    if (v < -0.001) return `<span class="delta neg">${(-Math.abs(v)).toFixed(1)}</span>`;
+    return '<span class="delta zero">0.0</span>';
+  };
+
+  let html = `
+    <h1>Batch Comparison — Aggregate</h1>
+    <div class="meta">
+      Baseline: <code>${esc(d.baselineDir)}</code><br>
+      Candidate: <code>${esc(d.candidateDir)}</code>
+    </div>`;
+
+  // Overall stats
+  const bs = d.baselineStats;
+  const cs = d.candidateStats;
+  html += `
+    <h2>Overall</h2>
+    <table class="agg-table">
+      <thead><tr><th>Variant</th><th class="num">Runs</th><th class="num">Score %</th><th class="num">Success Rate</th><th class="num">Mean Tokens</th></tr></thead>
+      <tbody>
+        <tr><td>Baseline</td><td class="num">${bs.totalRuns}</td><td class="num">${fmtPct(bs.meanScorePct)}</td><td class="num">${fmtPct(bs.successRate)}</td><td class="num">${fmtTokens(bs.meanTokens)}</td></tr>
+        <tr><td>Candidate</td><td class="num">${cs.totalRuns}</td><td class="num">${fmtPct(cs.meanScorePct)}</td><td class="num">${fmtPct(cs.successRate)}</td><td class="num">${fmtTokens(cs.meanTokens)}</td></tr>
+        <tr style="font-weight:600"><td>Delta</td><td class="num">\u2014</td><td class="num">${fmtDelta(d.overallScorePctDelta, 'pct')}</td><td class="num">${fmtDelta(d.overallSuccessRateDelta, 'pct')}</td><td class="num">${fmtDelta(d.overallTokensDelta)}</td></tr>
+      </tbody>
+    </table>`;
+
+  // Per-group table
+  if (d.matched && d.matched.length > 0) {
+    html += `
+      <h2>Per Task + Agent</h2>
+      <table class="task-table">
+        <thead><tr>
+          <th>Task</th><th>Agent</th>
+          <th class="num">Baseline</th><th class="num">Candidate</th>
+          <th class="num">Score Delta</th><th class="num">Success Delta</th>
+          <th class="num">Token Delta</th><th class="num">Duration Delta</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody>`;
+
+    for (const m of d.matched) {
+      const bStr = m.baseline.meanScorePct != null
+        ? fmtPct(m.baseline.meanScorePct)
+        : (m.baseline.meanScore != null ? `${fmtNum(m.baseline.meanScore)} \u00b1 ${fmtNum(m.baseline.stddev)}` : 'n/a');
+      const cStr = m.candidate.meanScorePct != null
+        ? fmtPct(m.candidate.meanScorePct)
+        : (m.candidate.meanScore != null ? `${fmtNum(m.candidate.meanScore)} \u00b1 ${fmtNum(m.candidate.stddev)}` : 'n/a');
+
+      let statusBadge;
+      if (m.scoreDelta > 0.5) statusBadge = '<span class="badge improved">Improved</span>';
+      else if (m.scoreDelta < -0.5) statusBadge = '<span class="badge regressed">Regressed</span>';
+      else statusBadge = '<span class="badge stable">Stable</span>';
+
+      html += `<tr>
+        <td>${esc(m.task)}</td>
+        <td>${esc(m.agent)}</td>
+        <td class="num">${bStr}</td>
+        <td class="num">${cStr}</td>
+        <td class="num">${fmtScoreDelta(m.scoreDelta)}</td>
+        <td class="num">${fmtDelta(m.successRateDelta, 'pct')}</td>
+        <td class="num">${fmtDelta(m.tokensDelta)}</td>
+        <td class="num">${fmtDelta(m.durationDelta, 'ms')}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+  }
+
+  // Unmatched groups
+  if (d.baselineOnly && d.baselineOnly.length > 0) {
+    html += `<h3>Baseline Only</h3><p>${d.baselineOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
+  }
+  if (d.candidateOnly && d.candidateOnly.length > 0) {
+    html += `<h3>Candidate Only</h3><p>${d.candidateOnly.map(k => `<code>${esc(k)}</code>`).join(', ')}</p>`;
+  }
+
+  root.innerHTML = html;
+}
+
+function renderLegacy(d) {
   document.title = `Comparison \u2014 ${d.passed ? 'PASS' : 'FAIL'}`;
 
   const fmtNum = (v, digits = 3) => v == null ? 'n/a' : v.toFixed(digits);
