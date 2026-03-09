@@ -27,13 +27,6 @@ describe('codex buildArgs', () => {
     expect(args[sandboxIdx + 1]).toBe('workspace-write');
   });
 
-  it('should include -a never for no interactive approvals', () => {
-    const args = buildArgs();
-    const aIdx = args.indexOf('-a');
-    expect(aIdx).toBeGreaterThan(-1);
-    expect(args[aIdx + 1]).toBe('never');
-  });
-
   it('should NOT include --dangerously-bypass-approvals-and-sandbox', () => {
     const args = buildArgs();
     expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');

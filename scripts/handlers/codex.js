@@ -19,7 +19,6 @@ export function buildArgs() {
   const args = [
     'exec',
     '--sandbox', 'workspace-write',
-    '-a', 'never',
     '--json',
   ];
 

@@ -89,7 +89,6 @@ Each handler builds its own CLI args in `buildArgs()`.
 |------|-------|---------|
 | `exec` | — | Non-interactive execution mode |
 | `--sandbox` | `workspace-write` | Filesystem writes constrained to workspace |
-| `-a` | `never` | No interactive approval prompts (required for headless) |
 | `--json` | — | JSON output |
 | `--model` | (from env) | Model override (when set) |
 
