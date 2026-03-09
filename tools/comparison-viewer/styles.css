@@ -44,3 +44,7 @@
 a { color: var(--blue); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .drill { font-size: 0.75rem; white-space: nowrap; }
+
+.aug-label { color: var(--muted); font-size: 0.875rem; }
+.meta a { color: var(--blue); text-decoration: none; }
+.meta a:hover { text-decoration: underline; }

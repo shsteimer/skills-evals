@@ -655,7 +655,7 @@ async function runTasks() {
   const resultsBaseDir = path.join(__dirname, '..', 'results');
   let logger = null;
   if (timestamp) {
-    const logPath = path.join(resultsBaseDir, timestamp, 'run.log');
+    const logPath = path.join(resultsBaseDir, timestamp, 'batch.log');
     logger = createRunLogger(logPath);
     await logger.init();
   }

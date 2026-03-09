@@ -157,7 +157,7 @@ Results are stored at `results/{timestamp}/`:
 - `batch.json` — batch metadata (timestamp, args, augmentations, agents, run counts)
 - `batch-summary.json` — aggregate stats per task+agent (after `summarize-batch`)
 - `batch-summary-data.js` — data file for batch viewer
-- `run.log` — execution log
+- `batch.log` — execution log
 
 ### Run-level artifacts (per `{task-agent-iteration}/`)
 - `task.json` - Complete task configuration including augmentations

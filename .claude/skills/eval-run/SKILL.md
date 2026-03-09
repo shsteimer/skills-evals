@@ -393,6 +393,3 @@ Use the Agent tool to spawn parallel evaluator subagents when processing multipl
 - **Missing artifacts**: Some runs may lack certain artifacts (e.g., no commits.json if the agent didn't commit). Handle gracefully — evaluate what's available.
 - **Timeout runs**: Runs where `run-metrics.json` shows `timedOut: true` may have incomplete work. Still evaluate what's there — partial credit is valid.
 
-## After evaluation
-
-After evaluating all runs in a batch, suggest running `summarize-batch` to get aggregate stats across all runs in the batch (mean scores, success rates, common failures, etc.).

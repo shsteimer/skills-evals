@@ -12,7 +12,7 @@ description: >
 
 # Summarize Batch
 
-Summarize evaluation results for all runs in a batch directory. Produces aggregate statistics per task+agent group and overall batch metrics.
+Summarize evaluation results for all runs in a batch directory. Produces aggregate statistics per task+agent group and overall batch metrics, then analyzes the results to surface patterns and findings.
 
 ## Pipeline
 
@@ -36,16 +36,94 @@ If most runs are missing evaluations, suggest running `eval-run` first before su
 node scripts/summarize-batch.js <batch-dir>
 ```
 
-This produces:
-- `batch-summary.json` — structured summary with per-group and overall stats
-- `batch-summary-data.js` — JavaScript data file for the batch viewer
+This produces `batch-summary.json` — structured summary with per-group and overall stats.
+The viewer data file (`batch-summary-data.js`) is produced later by the assembly step after
+analysis is merged in.
 
-### Step 4: Present results
+### Step 4: Analyze results with subagent
+
+This step is **required** — it produces the analytical findings that appear in the batch viewer.
+
+Launch an analysis subagent using the **Agent tool** that reads the batch summary and individual eval results to produce structured findings.
+
+#### Subagent prompt structure
+
+```
+You are analyzing evaluation results for a batch of agent task runs. Your job is to
+identify patterns, explain outcomes, and surface findings that the raw numbers alone
+don't reveal.
+
+## Batch summary
+{batch-summary.json contents}
+
+## Your task
+
+1. Read the batch-summary.json to understand overall and per-group performance.
+
+2. For groups with notable patterns (high variance, low success rates, common failures,
+   unusual token usage), read the individual eval-result.json files in those groups to
+   understand WHY:
+
+   Batch dir: {batch_dir}
+   Run folders follow the pattern: {batch_dir}/{task}-{agent}-{iteration}/eval-result.json
+
+3. Analyze each group and produce per-group findings:
+   - What happened? (succeeded, failed, mixed results)
+   - Why? (specific evidence from eval results)
+   - Consistency — was behavior stable across iterations or variable?
+
+4. Look for cross-cutting patterns:
+   - Which agents performed best/worst overall?
+   - Are there efficiency differences (token usage, duration) worth noting?
+   - Any systematic failures that appear across multiple groups?
+
+5. Produce your output as a JSON object (no markdown fences, no commentary):
+{
+  "perGroup": {
+    "task::agent": {
+      "findings": "2-3 sentence analysis of this group's performance with specific evidence",
+      "concerns": ["specific concern if any — e.g. high variance, systematic failure"]
+    }
+  },
+  "crossCutting": [
+    "Pattern or finding that spans multiple groups — be specific"
+  ],
+  "highlights": [
+    "Notable positive or negative outcome worth calling attention to"
+  ]
+}
+
+Rules:
+- Be specific — reference actual scores, failure names, and evidence from eval results
+- Don't just restate the numbers — explain what they mean
+- Keep each finding concise (2-3 sentences max)
+- If a group is straightforward (perfect scores, zero variance), a brief note is fine
+- Focus on what's useful for understanding agent behavior, NOT on task design issues
+```
+
+#### Merging analysis into batch summary
+
+After the subagent returns, write the analysis into the batch summary:
+
+1. Parse the subagent's JSON output
+2. Write it to `<batch-dir>/batch-analysis.json`
+3. Re-run the data file generation to include the analysis:
+
+```bash
+node scripts/assemble-batch-summary.js <batch-dir>
+```
+
+This merges `batch-summary.json` with `batch-analysis.json` and writes an updated
+`batch-summary-data.js` that includes the analysis fields for the batch viewer.
+
+4. Clean up: `rm <batch-dir>/batch-analysis.json`
+
+### Step 5: Present results
 
 Show the user:
 1. Overall batch stats (mean score, success rate, mean tokens, run count)
 2. Per task+agent breakdown (mean ± stddev, success rate, min/max, common failures)
-3. Any notable findings (high variance groups, common failure patterns)
+3. Key findings from the analysis (highlights and cross-cutting patterns)
 4. Batch viewer URL for visual inspection
 
 ### Viewer URL

@@ -27,10 +27,7 @@ Convention: the first/older batch is the **baseline**, the second/newer is the *
 
 ### Step 2: Verify batch summaries exist
 
-Check that `batch-summary.json` exists in both directories. If missing, suggest running `summarize-batch` first:
-```bash
-node scripts/summarize-batch.js <batch-dir>
-```
+Check that `batch-summary.json` exists in both directories. If missing, suggest running the `summarize-batch` skill first — batch summaries must include analysis to be useful for comparison.
 
 ### Step 3: Run compare-batches script
 

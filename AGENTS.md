@@ -29,10 +29,19 @@ This is a framework for evaluating coding agent performance on development tasks
 - `npm run lint:fix` - Check code with ESLint, Auto-fix linting issues
 - `npm test` - Run all tests
 - `npm run run-tasks` - Execute tasks with agents
-- `npm run eval-tasks` - Evaluate completed tasks (legacy path)
-- `npm run summarize-batch` - Summarize evaluation results for a batch
-- `npm run compare-batches` - Compare two batch summaries
-- `npm run compare-runs` - Compare two run sets (iteration-level)
+
+## Evaluation Workflow
+
+The framework has a multi-step pipeline. Each step is a separate skill invocation — don't collapse them into a single mechanical pass.
+
+1. **Run tasks** (`run-tasks`) — Execute agents against tasks in isolated workspaces
+2. **Evaluate runs** (`eval-run`) — Score individual runs against criteria
+3. **Summarize batch** (`summarize-batch`) — Aggregate stats + analytical findings per batch
+4. **Compare batches** (`compare-batches`) — A/B comparison with recommendation
+
+Steps 3 and 4 each include an analytical subagent step that produces structured findings for the viewer tools. These are not optional — the viewers render this analysis alongside the raw numbers. Running the script alone without the analysis step produces incomplete output.
+
+When a user asks for multiple steps at once (e.g. "evaluate, summarize, and compare"), invoke each skill fully — don't shortcut the analytical steps just because the mechanical parts are fast.
 
 ## Important Reminders
 

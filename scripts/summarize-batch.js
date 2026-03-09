@@ -1,9 +1,5 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export function parseArgs(argv) {
   const result = {
@@ -235,22 +231,18 @@ async function main() {
 
   if (!args.batchDir) {
     console.error('Error: batch directory is required');
-    console.error('Usage: npm run summarize-batch -- <batch-dir>');
+    console.error('Usage: node scripts/summarize-batch.js <batch-dir>');
     process.exit(1);
   }
 
   const summary = await summarizeBatch(args.batchDir);
   const targetDir = path.resolve(args.batchDir);
 
-  // Write batch-summary.json
+  // Write batch-summary.json (raw stats only — batch-summary-data.js is
+  // produced by assemble-batch-summary.js after analysis is merged in)
   const summaryPath = path.join(targetDir, 'batch-summary.json');
   await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), 'utf-8');
   console.log(`Wrote ${summaryPath}`);
-
-  // Write batch-summary-data.js for viewer
-  const dataJsPath = path.join(targetDir, 'batch-summary-data.js');
-  await fs.writeFile(dataJsPath, `const batchSummaryData = ${JSON.stringify(summary, null, 2)};\n`, 'utf-8');
-  console.log(`Wrote ${dataJsPath}`);
 
   // Print summary
   console.log(`\nBatch: ${targetDir}`);
@@ -271,10 +263,6 @@ async function main() {
     }
   }
 
-  // Viewer URL
-  const toolsDir = path.join(__dirname, '..', 'tools', 'batch-viewer');
-  const relDataPath = path.relative(toolsDir, dataJsPath);
-  console.log(`\nView: tools/batch-viewer/index.html?data=${relDataPath}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

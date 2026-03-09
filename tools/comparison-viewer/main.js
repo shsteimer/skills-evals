@@ -51,11 +51,26 @@ function renderAggregate(d) {
     return '<span class="delta zero">0.0</span>';
   };
 
+  // Build batch viewer links from timestamps
+  const baselineTs = d.baselineBatch?.timestamp;
+  const candidateTs = d.candidateBatch?.timestamp;
+  const batchViewerBase = '/tools/batch-viewer/index.html?data=';
+
+  const baselineLabel = baselineTs
+    ? `<a href="${batchViewerBase}/results/${esc(baselineTs)}/batch-summary-data.js">${esc(d.baselineDir)}</a>`
+    : `<code>${esc(d.baselineDir)}</code>`;
+  const candidateLabel = candidateTs
+    ? `<a href="${batchViewerBase}/results/${esc(candidateTs)}/batch-summary-data.js">${esc(d.candidateDir)}</a>`
+    : `<code>${esc(d.candidateDir)}</code>`;
+
+  const baselineAugName = d.baselineBatch?.augmentationSetName || 'None';
+  const candidateAugName = d.candidateBatch?.augmentationSetName || 'None';
+
   let html = `
     <h1>Batch Comparison — Aggregate</h1>
     <div class="meta">
-      Baseline: <code>${esc(d.baselineDir)}</code><br>
-      Candidate: <code>${esc(d.candidateDir)}</code>
+      Baseline: ${baselineLabel} <span class="aug-label">(${esc(baselineAugName)})</span><br>
+      Candidate: ${candidateLabel} <span class="aug-label">(${esc(candidateAugName)})</span>
     </div>`;
 
   // Overall stats

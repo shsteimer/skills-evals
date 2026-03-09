@@ -10,7 +10,7 @@ describe('createRunLogger', () => {
 
   beforeEach(async () => {
     logDir = path.join(os.tmpdir(), `run-logger-test-${Date.now()}`);
-    logPath = path.join(logDir, 'run.log');
+    logPath = path.join(logDir, 'batch.log');
   });
 
   afterEach(async () => {

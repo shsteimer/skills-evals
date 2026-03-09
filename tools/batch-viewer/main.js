@@ -19,7 +19,6 @@ function render(d) {
 
   const batch = d.batch;
   const stats = d.batchStats;
-  // dataPath is like "results/20260309/batch-summary-data.js" — strip filename to get batch dir
   const batchDataDir = dataDir(dataPath);
 
   document.title = `Batch Summary — ${batch?.timestamp || 'unknown'}`;
@@ -50,63 +49,102 @@ function render(d) {
   html += `</div>`;
 
   // Overall stats
+  const taskCount = batch?.taskNames?.length || new Set(Object.values(d.groups).map(g => g.task)).size;
+  const agentCount = batch?.args?.agents?.length || new Set(Object.values(d.groups).map(g => g.agent)).size;
+
   html += `
     <div class="stats-grid">
       <div class="stat"><div class="stat-val">${d.evaluatedCount}</div><div class="stat-label">Runs Evaluated</div></div>
+      <div class="stat"><div class="stat-val">${taskCount}</div><div class="stat-label">Tasks</div></div>
+      <div class="stat"><div class="stat-val">${agentCount}</div><div class="stat-label">Agents</div></div>
       <div class="stat"><div class="stat-val">${fmtPct(stats.meanScorePct)}</div><div class="stat-label">Mean Score</div></div>
       <div class="stat"><div class="stat-val">${fmtPct(stats.successRate)}</div><div class="stat-label">Success Rate</div></div>
       <div class="stat"><div class="stat-val">${fmtTokens(stats.meanTokens)}</div><div class="stat-label">Mean Tokens</div></div>
     </div>`;
 
-  // Per task+agent table
+  // Analysis insights (highlights + cross-cutting) — right after stats
+  const analysis = d.analysis;
+  if (analysis && (analysis.highlights?.length || analysis.crossCutting?.length)) {
+    html += '<div class="insights">';
+
+    html += '<div class="insight-col highlights"><h3>Highlights</h3>';
+    if (analysis.highlights?.length) {
+      html += `<ul class="list highlights">${analysis.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul>`;
+    } else {
+      html += '<p class="none">None noted</p>';
+    }
+    html += '</div>';
+
+    html += '<div class="insight-col patterns"><h3>Cross-Cutting Patterns</h3>';
+    if (analysis.crossCutting?.length) {
+      html += `<ul class="list patterns">${analysis.crossCutting.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`;
+    } else {
+      html += '<p class="none">None noted</p>';
+    }
+    html += '</div>';
+
+    html += '</div>';
+  }
+
+  // Per task+agent cards
   const groups = Object.entries(d.groups);
   if (groups.length > 0) {
-    html += `
-      <h2>Per Task + Agent</h2>
-      <table class="group-table">
-        <thead><tr>
-          <th>Task</th><th>Agent</th>
-          <th class="num">Score %</th><th class="num">Min</th><th class="num">Max</th>
-          <th class="num">Success</th><th class="num">Tokens</th><th class="num">Duration</th>
-          <th>Runs</th>
-        </tr></thead>
-        <tbody>`;
+    html += `<h2>Per Task + Agent</h2>`;
 
     for (const [, g] of groups) {
       const s = g.stats;
+      const ga = g.analysis;
       const scoreStr = s.meanScorePct != null ? fmtPct(s.meanScorePct) : 'n/a';
+      const allPass = s.successRate === 1;
+      const allFail = s.successRate === 0;
+      const cardClass = allFail ? 'group-card fail' : allPass ? 'group-card pass' : 'group-card mixed';
 
-      let statusBadge;
-      if (s.successRate === 1) statusBadge = '<span class="badge pass">All pass</span>';
-      else if (s.successRate === 0) statusBadge = '<span class="badge fail">All fail</span>';
-      else statusBadge = `<span class="badge mixed">${fmtPct(s.successRate)}</span>`;
-
-      // Build run links
+      // Run links
       const runLinks = (g.runs || []).map(r => {
-        const label = g.stats.runCount > 1 ? `#${r.iteration}` : 'eval';
+        const label = s.runCount > 1 ? `#${r.iteration}` : 'eval';
         const passClass = r.overallSuccess ? 'pass' : 'fail';
         const score = r.score != null ? ` (${r.score}/${r.maxScore})` : '';
         return `<a class="drill ${passClass}" href="${evalLink(r.folderName)}">${label}${score}</a>`;
       }).join(' ');
 
-      html += `<tr>
-        <td>${esc(g.task)}</td>
-        <td>${esc(g.agent)}</td>
-        <td class="num">${scoreStr}</td>
-        <td class="num">${fmtNum(s.minScore)}</td>
-        <td class="num">${fmtNum(s.maxScore)}</td>
-        <td class="num">${statusBadge}</td>
-        <td class="num">${fmtTokens(s.meanTokens)}</td>
-        <td class="num">${fmtDuration(s.meanDurationMs)}</td>
-        <td>${runLinks}</td>
-      </tr>`;
+      // Status badge
+      let statusBadge;
+      if (allPass) statusBadge = '<span class="badge pass">All pass</span>';
+      else if (allFail) statusBadge = '<span class="badge fail">All fail</span>';
+      else statusBadge = `<span class="badge mixed">${fmtPct(s.successRate)}</span>`;
 
-      if (s.commonFailures && s.commonFailures.length > 0) {
-        html += `<tr><td colspan="9"><div class="failures">Common failures: ${s.commonFailures.map(f => `<span>${esc(f)}</span>`).join('')}</div></td></tr>`;
+      html += `<div class="${cardClass}">`;
+      html += `<div class="group-header">`;
+      html += `<div class="group-title">${esc(g.task)} <span class="agent-name">${esc(g.agent)}</span></div>`;
+      html += `<div class="group-status">${statusBadge}</div>`;
+      html += `</div>`;
+
+      html += `<div class="group-stats">`;
+      html += `<div class="group-stat"><span class="group-stat-val">${scoreStr}</span><span class="group-stat-label">Score</span></div>`;
+      html += `<div class="group-stat"><span class="group-stat-val">${fmtNum(s.meanScore)} ± ${fmtNum(s.stddev)}</span><span class="group-stat-label">Mean ± SD</span></div>`;
+      html += `<div class="group-stat"><span class="group-stat-val">${fmtNum(s.minScore)} – ${fmtNum(s.maxScore)}</span><span class="group-stat-label">Range</span></div>`;
+      html += `<div class="group-stat"><span class="group-stat-val">${fmtTokens(s.meanTokens)}</span><span class="group-stat-label">Tokens</span></div>`;
+      html += `<div class="group-stat"><span class="group-stat-val">${fmtDuration(s.meanDurationMs)}</span><span class="group-stat-label">Duration</span></div>`;
+      html += `</div>`;
+
+      // Common failures
+      if (s.commonFailures?.length > 0) {
+        html += `<div class="group-failures">Common failures: ${s.commonFailures.map(f => `<span class="failure-tag">${esc(f)}</span>`).join('')}</div>`;
       }
-    }
 
-    html += `</tbody></table>`;
+      // Analysis findings
+      if (ga?.findings) {
+        html += `<div class="group-findings">${esc(ga.findings)}</div>`;
+      }
+      if (ga?.concerns?.length > 0) {
+        html += `<div class="group-concerns">${ga.concerns.map(c => `<span class="concern-tag">${esc(c)}</span>`).join('')}</div>`;
+      }
+
+      // Run links
+      html += `<div class="group-runs">Runs: ${runLinks}</div>`;
+
+      html += `</div>`;
+    }
   }
 
   root.innerHTML = html;
