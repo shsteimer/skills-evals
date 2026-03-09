@@ -195,67 +195,90 @@ describe('findTasks', () => {
       await fs.unlink(globalAugPath).catch(() => {});
     });
 
-    it('should load global augmentations when file is specified', async () => {
+    it('should load global augmentations from named object format', async () => {
       const globalAugPath = path.join(process.cwd(), 'test-augmentations.json');
-      const globalAugs = [
-        { source: 'global1.txt', target: 'global1.txt' },
-        { source: 'global2.txt', target: 'global2.txt' }
-      ];
-      
+      const globalAugs = {
+        name: 'Test Set',
+        augmentations: [
+          { source: 'global1.txt', target: 'global1.txt' },
+          { source: 'global2.txt', target: 'global2.txt' }
+        ]
+      };
+
       await fs.writeFile(globalAugPath, JSON.stringify(globalAugs, null, 2));
-      
+
       const args = { tasks: [], tags: [], agents: [], augmentationsFile: globalAugPath };
       const tasks = await findTasks(args, testTasksDir);
-      
-      // All tasks should have global augmentations
+
       for (const task of tasks) {
         expect(task.augmentations).toBeDefined();
         expect(task.augmentations.length).toBeGreaterThanOrEqual(2);
         expect(task.augmentations[0].source).toBe('global1.txt');
         expect(task.augmentations[1].source).toBe('global2.txt');
+        expect(task.augmentationSetName).toBe('Test Set');
       }
-      
-      // Clean up
+
+      await fs.unlink(globalAugPath);
+    });
+
+    it('should load global augmentations from legacy array format', async () => {
+      const globalAugPath = path.join(process.cwd(), 'test-augmentations.json');
+      const globalAugs = [
+        { source: 'global1.txt', target: 'global1.txt' }
+      ];
+
+      await fs.writeFile(globalAugPath, JSON.stringify(globalAugs, null, 2));
+
+      const args = { tasks: [], tags: [], agents: [], augmentationsFile: globalAugPath };
+      const tasks = await findTasks(args, testTasksDir);
+
+      for (const task of tasks) {
+        expect(task.augmentations[0].source).toBe('global1.txt');
+        expect(task.augmentationSetName).toBeNull();
+      }
+
       await fs.unlink(globalAugPath);
     });
 
     it('should combine global and task-specific augmentations', async () => {
       const globalAugPath = path.join(process.cwd(), 'test-augmentations.json');
-      const globalAugs = [{ source: 'global.txt', target: 'global.txt' }];
-      
+      const globalAugs = {
+        name: 'Global Set',
+        augmentations: [{ source: 'global.txt', target: 'global.txt' }]
+      };
+
       await fs.writeFile(globalAugPath, JSON.stringify(globalAugs, null, 2));
-      
+
       const args = { tasks: [], tags: [], agents: [], augmentationsFile: globalAugPath };
       const tasks = await findTasks(args, testTasksDir);
-      
-      // Global augmentations should come first
+
       for (const task of tasks) {
         expect(task.augmentations[0].source).toBe('global.txt');
       }
-      
-      // Clean up
+
       await fs.unlink(globalAugPath);
     });
 
     it('should work without global augmentations file', async () => {
       const args = { tasks: [], tags: [], agents: [] };
       const tasks = await findTasks(args, testTasksDir);
-      
-      // Should still work fine without augmentations.json
+
       expect(tasks.length).toBeGreaterThan(0);
+      for (const task of tasks) {
+        expect(task.augmentationSetName).toBeNull();
+      }
     });
 
-    it('should throw error if augmentations file is not an array', async () => {
+    it('should throw error if augmentations file has invalid format', async () => {
       const globalAugPath = path.join(process.cwd(), 'test-augmentations.json');
       await fs.writeFile(globalAugPath, JSON.stringify({ source: 'test.txt' }));
-      
+
       const args = { tasks: [], tags: [], agents: [], augmentationsFile: globalAugPath };
-      
+
       await expect(findTasks(args, testTasksDir)).rejects.toThrow(
-        'Augmentations file must contain an array'
+        'Augmentations file must contain'
       );
-      
-      // Clean up
+
       await fs.unlink(globalAugPath).catch(() => {});
     });
   });

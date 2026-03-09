@@ -6,6 +6,7 @@ export default [
       'tasks/**/buggy-*/',
       'tasks/**/source-*/',
       'results/',
+      'tools/',
     ],
   },
   js.configs.recommended,

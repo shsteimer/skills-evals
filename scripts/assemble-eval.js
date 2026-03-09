@@ -1,9 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { parseAgentLog } from './parse-agent-log.js';
 
 /**
  * Assemble a final eval-result.json from subagent output and check-resolved criteria.
@@ -45,6 +42,10 @@ export async function assembleEval(resultFolder, subagentOutput, resolvedChecks 
   const evalResult = {
     task: taskJson.name,
     agent: taskJson.agent,
+    model: taskJson.model || null,
+    augmentationSetName: taskJson.augmentationSetName || null,
+    runSetId: taskJson.runSetId || taskJson.timestamp,
+    iteration: taskJson.iteration || null,
     score,
     maxScore,
     overallSuccess,
@@ -71,13 +72,47 @@ export async function assembleEval(resultFolder, subagentOutput, resolvedChecks 
     // optional
   }
 
-  // Write eval-data.js
+  // Build conversation viewer data
+  try {
+    const jsonlContent = await fs.readFile(path.join(resultFolder, 'output.jsonl'), 'utf-8');
+    const events = parseAgentLog(jsonlContent);
+    if (events.length > 0) {
+      let prompt = null;
+      try {
+        prompt = await fs.readFile(path.join(resultFolder, 'prompt.txt'), 'utf-8');
+      } catch {
+        // no prompt.txt
+      }
+      const convMeta = {
+        title: `${taskJson.name} — ${taskJson.agent}`,
+        runFolder: path.basename(resultFolder),
+        prompt,
+      };
+      const convJs = `const conversationEvents = ${JSON.stringify(events, null, 2)};\nconst conversationMeta = ${JSON.stringify(convMeta, null, 2)};\n`;
+      await fs.writeFile(path.join(resultFolder, 'conversation-data.js'), convJs, 'utf-8');
+    }
+  } catch {
+    // no output.jsonl
+  }
+
+  // Build diff viewer data
+  try {
+    const diffContent = await fs.readFile(path.join(resultFolder, 'changes.diff'), 'utf-8');
+    if (diffContent.trim()) {
+      const diffMeta = {
+        title: `${taskJson.name} — ${taskJson.agent}`,
+        runFolder: path.basename(resultFolder),
+      };
+      const diffJs = `const diffContent = ${JSON.stringify(diffContent)};\nconst diffMeta = ${JSON.stringify(diffMeta, null, 2)};\n`;
+      await fs.writeFile(path.join(resultFolder, 'diff-data.js'), diffJs, 'utf-8');
+    }
+  } catch {
+    // no changes.diff
+  }
+
+  // Write eval-data.js (viewers are standalone tools, no HTML copied here)
   const dataJs = `const evalData = ${JSON.stringify(evalResult, null, 2)};\nconst runMetrics = ${JSON.stringify(runMetrics, null, 2)};\n`;
   await fs.writeFile(path.join(resultFolder, 'eval-data.js'), dataJs, 'utf-8');
-
-  // Copy HTML template
-  const templatePath = path.join(__dirname, 'report', 'eval-template.html');
-  await fs.copyFile(templatePath, path.join(resultFolder, 'eval-result.html'));
 
   return evalResult;
 }

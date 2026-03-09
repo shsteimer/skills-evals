@@ -1,14 +1,17 @@
-[
-  {
-    "source": "https://github.com/adobe/aem-boilerplate/blob/main/AGENTS.md",
-    "target": "AGENTS.md"
-  },
-  {
-    "source": "https://github.com/adobe/aem-boilerplate/blob/main/CLAUDE.md",
-    "target": "CLAUDE.md"
-  },
-  {
-    "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services",
-    "target": ".claude/"
-  }
-]
+{
+  "name": "AGENTS.md + Skills",
+  "augmentations": [
+    {
+      "source": "https://github.com/adobe/aem-boilerplate/blob/main/AGENTS.md",
+      "target": "AGENTS.md"
+    },
+    {
+      "source": "https://github.com/adobe/aem-boilerplate/blob/main/CLAUDE.md",
+      "target": "CLAUDE.md"
+    },
+    {
+      "source": "https://github.com/adobe/skills/tree/main/skills/aem/edge-delivery-services",
+      "target": ".claude/"
+    }
+  ]
+}

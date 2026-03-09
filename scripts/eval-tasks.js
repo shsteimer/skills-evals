@@ -302,12 +302,9 @@ export async function evalTask(taskResult, onActivity) {
   await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), 'utf-8');
 
   if (onActivity) onActivity('writing results...');
-  // Write data JS file and copy static HTML template
+  // Write data JS file for eval-viewer tool
   const dataJsPath = path.join(taskResult.resultPath, 'eval-data.js');
   await fs.writeFile(dataJsPath, buildEvalDataJs(evalResult, runMetrics), 'utf-8');
-  const templatePath = path.join(__dirname, 'report', 'eval-template.html');
-  const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
-  await fs.copyFile(templatePath, htmlPath);
 
   return { evalResult };
 }

@@ -214,13 +214,8 @@ describe('evalTask', () => {
     expect(result.evalResult.score).toBe(8);
   });
 
-  it('should write eval-result.html and eval-data.js', async () => {
+  it('should write eval-data.js', async () => {
     await evalTask(taskResult);
-
-    const htmlPath = path.join(taskResult.resultPath, 'eval-result.html');
-    const html = await fs.readFile(htmlPath, 'utf-8');
-    expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('eval-data.js');
 
     const dataJs = await fs.readFile(path.join(taskResult.resultPath, 'eval-data.js'), 'utf-8');
     expect(dataJs).toContain('"score": 8');

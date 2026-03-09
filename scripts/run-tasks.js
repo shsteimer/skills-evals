@@ -9,7 +9,7 @@ import { downloadFromGitHub } from './utils/github-utils.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
-import { getEnv } from './utils/env-config.js';
+import { getEnv, getAgentConfig } from './utils/env-config.js';
 import { createRunLogger } from './utils/run-logger.js';
 import { runTaskChecks } from './utils/task-checks.js';
 
@@ -28,16 +28,27 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
   
   // Load global augmentations if a file path is specified
   let globalAugmentations = [];
+  let augmentationSetName = null;
   const globalAugmentationsPath = augmentationsFile || args.augmentationsFile;
-  
+
   if (globalAugmentationsPath) {
     try {
       const globalAugContent = await fs.readFile(globalAugmentationsPath, 'utf-8');
-      globalAugmentations = JSON.parse(globalAugContent);
-      if (!Array.isArray(globalAugmentations)) {
-        throw new Error(`Augmentations file must contain an array (${globalAugmentationsPath})`);
+      const parsed = JSON.parse(globalAugContent);
+
+      // Support both formats:
+      //   New: { name: "...", augmentations: [...] }
+      //   Legacy: [...]
+      if (Array.isArray(parsed)) {
+        globalAugmentations = parsed;
+      } else if (parsed && Array.isArray(parsed.augmentations)) {
+        globalAugmentations = parsed.augmentations;
+        augmentationSetName = parsed.name || null;
+      } else {
+        throw new Error(`Augmentations file must contain an array or {name, augmentations} object (${globalAugmentationsPath})`);
       }
     } catch (error) {
+      if (error.message.includes('Augmentations file must contain')) throw error;
       throw new Error(`Error reading augmentations file ${globalAugmentationsPath}: ${error.message}`);
     }
   }
@@ -83,6 +94,7 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
       allTasks.push({
         ...taskData,
         augmentations,
+        augmentationSetName,
         taskPath,
         prompt,
         criteria
@@ -307,14 +319,17 @@ export async function createTaskInfoFolder(task) {
   const taskHash = computeTaskHash(sourcePrompt, sourceCriteria, sourceTaskJsonContent);
 
   // Build task.json with all runtime information
-  // Use task data directly (includes global + task-specific augmentations)
   const taskJson = {
     name: task.name,
     description: task.description,
     tags: task.tags,
     startFrom: task.startFrom,
-    augmentations: task.augmentations, // This includes global + task-specific
+    augmentations: task.augmentations,
+    augmentationSetName: task.augmentationSetName || null,
     agent: task.agent,
+    model: task.model || null,
+    runSetId: task.timestamp,
+    iteration: task.iteration,
     timestamp: task.timestamp,
     workspaceDir: task.workspaceDir,
     taskHash
@@ -423,9 +438,11 @@ export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
         const sanitizedAgent = sanitizeName(agent);
         const folderName = `${task.name}-${sanitizedAgent}-${iteration}`;
         
+        const config = getAgentConfig(agent);
         const enrichedTask = {
           ...task,
           agent,
+          model: config.model || null,
           timestamp,
           iteration,
           taskInfoFolder: path.join(resultsBaseDir, timestamp, folderName),

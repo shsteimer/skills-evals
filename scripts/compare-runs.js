@@ -413,13 +413,11 @@ async function main() {
   const reportDir = args.outputHtmlPath
     ? path.dirname(path.resolve(args.outputHtmlPath))
     : path.join(path.resolve(args.candidateDir), '..');
-  const htmlPath = path.join(reportDir, 'comparison-report.html');
   const dataJsPath = path.join(reportDir, 'compare-data.js');
-  const templatePath = path.join(__dirname, 'report', 'comparison-template.html');
   await fs.mkdir(reportDir, { recursive: true });
   await fs.writeFile(dataJsPath, `const compareData = ${JSON.stringify(summary, null, 2)};\n`, 'utf-8');
-  await fs.copyFile(templatePath, htmlPath);
-  console.log(`\nReport: ${htmlPath}`);
+  console.log(`\nData: ${dataJsPath}`);
+  console.log(`View: tools/comparison-viewer/index.html?data=${path.relative(path.join(__dirname, '..', 'tools', 'comparison-viewer'), dataJsPath)}`);
 
   if (!summary.passed) {
     process.exit(1);

@@ -330,19 +330,31 @@ From the criteriaChecks array:
 
 Write to the result folder:
 1. `eval-result.json` — the structured evaluation
-2. `eval-data.js` — JavaScript constants for the HTML viewer:
-   ```javascript
-   const evalData = { ... };
-   const runMetrics = { ... };
-   ```
-   Read `run-metrics.json` from the result folder for the metrics.
-3. Copy `scripts/report/eval-template.html` to `eval-result.html`
+2. `eval-data.js` — JavaScript constants for the eval viewer
+3. `conversation-data.js` — parsed agent conversation (if `output.jsonl` exists)
+4. `diff-data.js` — diff content (if `changes.diff` exists)
 
-You can use `scripts/assemble-eval.js` to handle steps 1-3:
+Use `scripts/assemble-eval.js` to handle all of the above:
 ```bash
 node scripts/assemble-eval.js <result-folder> <subagent-output.json>
 ```
-It reads `check-resolved-criteria.json` from the result folder if present, merges with the subagent output, computes scores, and writes all three output files.
+It reads `check-resolved-criteria.json` from the result folder if present, merges with the subagent output, computes scores, and writes all data files.
+
+### Viewing results
+
+The viewer tools require a local HTTP server. After evaluation completes, tell the user how to view results:
+
+1. Start a server from the project root (if one isn't already running):
+   ```bash
+   python3 -m http.server 8765
+   ```
+
+2. Provide direct URLs for each result folder evaluated, using paths relative to the project root:
+   - `http://localhost:8765/tools/eval-viewer/index.html?data=results/<run-set>/<run>/eval-data.js`
+   - `http://localhost:8765/tools/conversation-viewer/index.html?data=results/<run-set>/<run>/conversation-data.js`
+   - `http://localhost:8765/tools/diff-viewer/index.html?data=results/<run-set>/<run>/diff-data.js`
+
+Always provide the eval viewer URL at minimum. Include conversation and diff viewer URLs if those data files were generated.
 
 ### Pre-built tooling
 
