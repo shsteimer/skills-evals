@@ -51,7 +51,7 @@ All three handlers (`scripts/handlers/claude.js`, `cursor.js`, `codex.js`) share
 
 Remaining gaps between claude and cursor/codex handlers:
 
-- **agent configuration** — claude has system prompt append (`config/claude-system-prompt-append.txt`) and settings isolation (`--setting-sources project`); it also doesn't require yolo mode but instead has finely tuned permissions so agents can complete tasks. cursor/codex have no equivalent configuration mechanism yet
+- ~~**agent configuration** — claude has system prompt append (`config/claude-system-prompt-append.txt`) and settings isolation (`--setting-sources project`); it also doesn't require yolo mode but instead has finely tuned permissions so agents can complete tasks. cursor/codex have no equivalent configuration mechanism yet~~ ✓ done — cursor gets `.cursor/cli.json` + `.cursor/rules/system-prompt.md`, codex gets `.codex/config.toml`; cursor uses `--trust` instead of `--force`, codex uses `--sandbox workspace-write -a never` instead of `--dangerously-bypass-approvals-and-sandbox`
 
 ### 3. Future work
 - **Per-dimension stats** — aggregate and compare by criteria section (C1-C6)

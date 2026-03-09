@@ -134,6 +134,43 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
   return filteredTasks;
 }
 
+const configDir = path.join(__dirname, '..', 'config');
+
+/**
+ * Copy agent-specific config files into the workspace.
+ * Each agent has its own config layout:
+ * - claude: config/claude-settings.json → .claude/settings.json
+ * - cursor: config/cursor-cli.json → .cursor/cli.json, config/cursor-system-prompt.md → .cursor/rules/system-prompt.md
+ * - codex: config/codex-config.toml → .codex/config.toml
+ */
+export async function copyAgentConfig(agent, workspaceDir) {
+  const copies = {
+    claude: [
+      { src: 'claude-settings.json', dest: '.claude/settings.json' },
+    ],
+    cursor: [
+      { src: 'cursor-cli.json', dest: '.cursor/cli.json' },
+      { src: 'cursor-system-prompt.md', dest: '.cursor/rules/system-prompt.md' },
+    ],
+    codex: [
+      { src: 'codex-config.toml', dest: '.codex/config.toml' },
+    ],
+  };
+
+  const filesToCopy = copies[agent] || [];
+  for (const { src, dest } of filesToCopy) {
+    const srcPath = path.join(configDir, src);
+    try {
+      await fs.access(srcPath);
+      const destPath = path.join(workspaceDir, dest);
+      await ensureDir(path.dirname(destPath));
+      await fs.copyFile(srcPath, destPath);
+    } catch {
+      // Config file doesn't exist — skip
+    }
+  }
+}
+
 export async function createTaskWorkspace(task) {
   // Create workspace directory
   await ensureDir(task.workspaceDir);
@@ -271,16 +308,8 @@ export async function createTaskWorkspace(task) {
     
   }
 
-  // Copy agent-specific settings into workspace if they exist
-  const agentSettingsPath = path.join(__dirname, '..', 'config', `${sanitizeName(task.agent)}-settings.json`);
-  try {
-    await fs.access(agentSettingsPath);
-    const dotClaudeDir = path.join(task.workspaceDir, '.claude');
-    await ensureDir(dotClaudeDir);
-    await fs.copyFile(agentSettingsPath, path.join(dotClaudeDir, 'settings.json'));
-  } catch {
-    // No agent settings file - that's fine
-  }
+  // Copy agent-specific config into workspace
+  await copyAgentConfig(sanitizeName(task.agent), task.workspaceDir);
 
   // Single commit for all workspace setup (augmentations + agent settings)
   addAndCommit(task.workspaceDir, 'Workspace setup');

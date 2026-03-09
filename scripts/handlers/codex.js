@@ -10,6 +10,30 @@ import {
 } from './shared.js';
 
 /**
+ * Build the CLI args array for the codex command.
+ * Exported for testing.
+ */
+export function buildArgs() {
+  const config = getAgentConfig('codex');
+
+  const args = [
+    'exec',
+    '--sandbox', 'workspace-write',
+    '-a', 'never',
+    '--json',
+  ];
+
+  if (config.model) {
+    args.push('--model', config.model);
+  }
+
+  const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+  args.push(...additionalArgs);
+
+  return args;
+}
+
+/**
  * Run a task using the Codex CLI agent
  * @param {Object} task - The enriched task object
  * @param {Function} [onActivity] - Optional callback for activity updates
@@ -17,23 +41,7 @@ import {
  */
 export default async function runCodex(task, onActivity, signal) {
   return new Promise((resolve, reject) => {
-    const config = getAgentConfig('codex');
-
-    // Build arguments array
-    const args = [
-      'exec',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--json',
-    ];
-
-    // Add model if specified
-    if (config.model) {
-      args.push('--model', config.model);
-    }
-
-    // Add any additional arguments
-    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
-    args.push(...additionalArgs);
+    const args = buildArgs();
 
     const codex = spawn('codex', args, {
       cwd: task.workspaceDir,

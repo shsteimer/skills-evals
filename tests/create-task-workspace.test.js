@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createTaskWorkspace } from '../scripts/run-tasks.js';
+import { createTaskWorkspace, copyAgentConfig } from '../scripts/run-tasks.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -502,12 +502,65 @@ describe('createTaskWorkspace', () => {
 
       const newFile = await fs.readFile(path.join(task.workspaceDir, 'target', 'new.txt'), 'utf-8');
       expect(newFile).toBe('New content');
-      
+
       // Old file should be gone
       const oldExists = await fs.access(path.join(task.workspaceDir, 'target', 'old.txt'))
         .then(() => true).catch(() => false);
       expect(oldExists).toBe(false);
     });
+  });
+});
+
+describe('copyAgentConfig', () => {
+  let workspaceDir;
+
+  beforeEach(async () => {
+    workspaceDir = path.join(testWorkspaceRoot, 'config-test-workspace');
+    await fs.mkdir(workspaceDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(testWorkspaceRoot, { recursive: true, force: true });
+  });
+
+  it('should copy claude settings to .claude/settings.json', async () => {
+    await copyAgentConfig('claude', workspaceDir);
+
+    const destPath = path.join(workspaceDir, '.claude', 'settings.json');
+    const content = JSON.parse(await fs.readFile(destPath, 'utf-8'));
+    expect(content.permissions).toBeDefined();
+    expect(content.permissions.allow).toBeInstanceOf(Array);
+  });
+
+  it('should copy cursor config to .cursor/cli.json and .cursor/rules/', async () => {
+    await copyAgentConfig('cursor', workspaceDir);
+
+    const cliPath = path.join(workspaceDir, '.cursor', 'cli.json');
+    const cliContent = JSON.parse(await fs.readFile(cliPath, 'utf-8'));
+    expect(cliContent.permissions).toBeDefined();
+    expect(cliContent.permissions.allow).toBeInstanceOf(Array);
+
+    const rulesPath = path.join(workspaceDir, '.cursor', 'rules', 'system-prompt.md');
+    const rulesContent = await fs.readFile(rulesPath, 'utf-8');
+    expect(rulesContent).toContain('alwaysApply: true');
+    expect(rulesContent).toContain('kill any background processes');
+  });
+
+  it('should copy codex config to .codex/config.toml', async () => {
+    await copyAgentConfig('codex', workspaceDir);
+
+    const destPath = path.join(workspaceDir, '.codex', 'config.toml');
+    const content = await fs.readFile(destPath, 'utf-8');
+    expect(content).toContain('developer_instructions');
+    expect(content).toContain('network_access = true');
+  });
+
+  it('should handle unknown agent gracefully', async () => {
+    await copyAgentConfig('unknown-agent', workspaceDir);
+
+    // Should not throw, workspace should be unchanged
+    const entries = await fs.readdir(workspaceDir);
+    expect(entries).toHaveLength(0);
   });
 });
 

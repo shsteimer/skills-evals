@@ -10,6 +10,28 @@ import {
 } from './shared.js';
 
 /**
+ * Build the CLI args array for the cursor-agent command.
+ * Exported for testing.
+ */
+export function buildArgs() {
+  const config = getAgentConfig('cursor');
+
+  const args = [
+    '--trust',
+    '--output-format', 'stream-json',
+  ];
+
+  if (config.model) {
+    args.push('--model', config.model);
+  }
+
+  const additionalArgs = parseAdditionalArgs(config.additionalArgs);
+  args.push(...additionalArgs);
+
+  return args;
+}
+
+/**
  * Run a task using the Cursor CLI agent
  * @param {Object} task - The enriched task object
  * @param {Function} [onActivity] - Optional callback for activity updates
@@ -17,22 +39,7 @@ import {
  */
 export default async function runCursor(task, onActivity, signal) {
   return new Promise((resolve, reject) => {
-    const config = getAgentConfig('cursor');
-
-    // Build arguments array
-    const args = [
-      '--force',
-      '--output-format', 'stream-json',
-    ];
-
-    // Add model if specified
-    if (config.model) {
-      args.push('--model', config.model);
-    }
-
-    // Add any additional arguments
-    const additionalArgs = parseAdditionalArgs(config.additionalArgs);
-    args.push(...additionalArgs);
+    const args = buildArgs();
 
     const cursor = spawn('cursor-agent', args, {
       cwd: task.workspaceDir,
