@@ -15,7 +15,7 @@ This is a framework for evaluating coding agent performance on development tasks
 ## Project Structure
 
 - `tasks/` - Task definitions with prompts, criteria, and configuration
-- `scripts/` - Task execution (`run-tasks.js`), evaluation (`eval-tasks.js`), summarization (`summarize-batch.js`), and comparison (`compare-batches.js`, `compare-runs.js`)
+- `scripts/` - Task execution (`run-tasks.js`), summarization (`summarize-batch.js`), and comparison (`compare-batches.js`)
 - `scripts/handlers/` - Agent-specific CLI handlers (claude, cursor, codex)
 - `scripts/utils/` - Shared utilities for git, GitHub, npm, process, and environment config
 - `.claude/skills/` - Claude Code skills (eval-run, summarize-batch, compare-batches, task-creator)

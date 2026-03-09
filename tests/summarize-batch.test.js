@@ -94,6 +94,34 @@ describe('computeGroupStats', () => {
     expect(stats.meanDurationMs).toBeNull();
   });
 
+  it('should count timed-out runs in group stats', () => {
+    const group = {
+      task: 'build-block',
+      agent: 'claude',
+      runs: [
+        { score: 8, maxScore: 10, overallSuccess: true, totalTokens: 1000, durationMs: 60000, timedOut: false, criteriaChecks: [] },
+        { score: 4, maxScore: 10, overallSuccess: false, totalTokens: 500, durationMs: 300000, timedOut: true, criteriaChecks: [] },
+        { score: 10, maxScore: 10, overallSuccess: true, totalTokens: 800, durationMs: 50000, timedOut: false, criteriaChecks: [] }
+      ]
+    };
+
+    const stats = computeGroupStats(group);
+    expect(stats.timedOutCount).toBe(1);
+  });
+
+  it('should set timedOutCount to 0 when no runs timed out', () => {
+    const group = {
+      task: 'build-block',
+      agent: 'claude',
+      runs: [
+        { score: 8, maxScore: 10, overallSuccess: true, totalTokens: 1000, durationMs: 60000, timedOut: false, criteriaChecks: [] }
+      ]
+    };
+
+    const stats = computeGroupStats(group);
+    expect(stats.timedOutCount).toBe(0);
+  });
+
   it('should identify common criteria failures (>50% of iterations)', () => {
     const group = {
       task: 'build-block',

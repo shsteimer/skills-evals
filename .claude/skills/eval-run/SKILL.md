@@ -34,6 +34,8 @@ Parse what the user wants evaluated:
 
 For each target, verify the result folder contains at minimum: `task.json`, `criteria.txt`, `changes.diff`.
 
+Also read `run-metrics.json` if it exists — check the `timedOut` field. If true, the agent ran out of time and the work is partial. Pass this information to the evaluator subagent in Step 4.
+
 To find results programmatically, scan `results/` for timestamp directories, then scan those for task folders containing `task.json`.
 
 ## Step 2: Reconstruct workspace
@@ -146,6 +148,12 @@ do NOT re-evaluate them. They are included so you have full context.
 - [{MET|NOT MET}] ({priority}, {points}pts) {criterion text}: {evidence}
 
 ## Additional context
+{if run-metrics.json shows timedOut: true:}
+- **This run timed out.** The agent did not finish within the time limit. Evaluate the
+  partial work that exists — partial credit is valid. Note the timeout prominently in your
+  summary, and consider it when judging criteria: incomplete work due to timeout is different
+  from the agent choosing not to do something.
+
 {if test-results.json exists:}
 - Tests: {passed|failed} — {details}
 

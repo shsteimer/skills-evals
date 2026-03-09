@@ -67,6 +67,7 @@ export async function loadBatchRuns(batchDir) {
       overallSuccess: evalResult.overallSuccess ?? null,
       totalTokens: metrics?.tokenUsage?.totalTokens ?? null,
       durationMs: metrics?.durationMs ?? null,
+      timedOut: metrics?.timedOut ?? false,
       criteriaChecks: evalResult.criteriaChecks ?? []
     });
   }
@@ -136,6 +137,8 @@ export function computeGroupStats(group) {
       .map(([name]) => name)
     : [];
 
+  const timedOutCount = runs.filter(r => r.timedOut).length;
+
   return {
     runCount: runs.length,
     meanScore,
@@ -146,6 +149,7 @@ export function computeGroupStats(group) {
     successRate,
     meanTokens: mean(tokens),
     meanDurationMs: mean(durations),
+    timedOutCount,
     commonFailures
   };
 }
@@ -179,13 +183,28 @@ export function computeBatchStats(groups) {
   };
 }
 
+async function countTotalRuns(batchDir) {
+  const targetDir = path.resolve(batchDir);
+  const entries = await fs.readdir(targetDir, { withFileTypes: true });
+  let count = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const taskJson = await safeReadJson(path.join(targetDir, entry.name, 'task.json'));
+    if (taskJson) count++;
+  }
+  return count;
+}
+
 export async function summarizeBatch(batchDir) {
   const targetDir = path.resolve(batchDir);
 
   // Load batch metadata (may not exist for older batches)
   const batch = await safeReadJson(path.join(targetDir, 'batch.json'));
 
-  // Load and group runs
+  // Count total runs (dirs with task.json) to determine missing evals
+  const totalRuns = await countTotalRuns(batchDir);
+
+  // Load and group runs (only those with eval-result.json)
   const runs = await loadBatchRuns(batchDir);
   const groups = groupRuns(runs);
 
@@ -215,9 +234,9 @@ export async function summarizeBatch(batchDir) {
         }))
       }])
     ),
-    runCount: runs.length,
+    runCount: totalRuns,
     evaluatedCount: runs.length,
-    missingEvalCount: 0 // TODO: count dirs without eval-result.json
+    missingEvalCount: totalRuns - runs.length
   };
 }
 

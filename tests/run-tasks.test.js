@@ -269,5 +269,26 @@ describe('buildBatchMetadata', () => {
     expect(result.failedCount).toBeNull();
     expect(result.completedCount).toBeNull();
   });
+
+  it('should include timedOutRuns when provided', () => {
+    const result = buildBatchMetadata(
+      baseArgs, enrichedTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      true,
+      ['build-block-claude-2']
+    );
+
+    expect(result.timedOutRuns).toEqual(['build-block-claude-2']);
+  });
+
+  it('should default timedOutRuns to empty array when not provided', () => {
+    const result = buildBatchMetadata(
+      baseArgs, enrichedTasks,
+      '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
+      false
+    );
+
+    expect(result.timedOutRuns).toEqual([]);
+  });
 });
 

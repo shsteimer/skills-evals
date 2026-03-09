@@ -60,9 +60,9 @@ npm run run-tasks -- --help
 The full evaluation pipeline:
 
 1. **Run tasks** — `npm run run-tasks` executes agents against tasks, writes results + `batch.json`
-2. **Evaluate runs** — use the `eval-run` skill (or `npm run eval-tasks` legacy path) to evaluate individual runs
-3. **Summarize batch** — `npm run summarize-batch -- <batch-dir>` computes aggregate stats
-4. **Compare batches** — `npm run compare-batches -- <baseline-dir> <candidate-dir>` compares two batches
+2. **Evaluate runs** — use the `eval-run` skill to evaluate individual runs
+3. **Summarize batch** — use the `summarize-batch` skill (runs `scripts/summarize-batch.js` + analytical subagent)
+4. **Compare batches** — use the `compare-batches` skill (runs `scripts/compare-batches.js` + analytical subagent)
 
 ## Defining Tasks
 
@@ -180,7 +180,7 @@ python3 -m http.server 8765
 
 - **eval-viewer** — single-run evaluation results, criteria, screenshots
 - **batch-viewer** — batch summary with per-group stats
-- **comparison-viewer** — A/B comparison (supports both iteration-level and aggregate mode)
+- **comparison-viewer** — A/B batch comparison (aggregate mode)
 - **conversation-viewer** — parsed agent conversation log
 - **diff-viewer** — interactive diff view
 

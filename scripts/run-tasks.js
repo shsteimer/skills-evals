@@ -591,7 +591,7 @@ async function processTask(task, onActivity) {
   if (runError) throw runError;
 }
 
-export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures) {
+export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures, timedOutRuns = []) {
   const timestamp = enrichedTasks[0]?.timestamp || null;
   const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
 
@@ -630,8 +630,26 @@ export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, h
     taskNames,
     runCount,
     completedCount,
-    failedCount
+    failedCount,
+    timedOutRuns
   };
+}
+
+async function collectTimedOutRuns(enrichedTasks) {
+  const timedOut = [];
+  for (const task of enrichedTasks) {
+    if (!task.taskInfoFolder) continue;
+    try {
+      const metricsPath = path.join(task.taskInfoFolder, 'run-metrics.json');
+      const metrics = JSON.parse(await fs.readFile(metricsPath, 'utf-8'));
+      if (metrics.timedOut) {
+        timedOut.push(path.basename(task.taskInfoFolder));
+      }
+    } catch {
+      // run-metrics.json may not exist for runs that failed before capturing results
+    }
+  }
+  return timedOut;
 }
 
 async function runTasks() {
@@ -668,7 +686,8 @@ async function runTasks() {
 
   // Write batch.json
   if (timestamp) {
-    const batchMetadata = buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures);
+    const timedOutRuns = await collectTimedOutRuns(enrichedTasks);
+    const batchMetadata = buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures, timedOutRuns);
     const batchJsonPath = path.join(resultsBaseDir, timestamp, 'batch.json');
     await fs.writeFile(batchJsonPath, JSON.stringify(batchMetadata, null, 2), 'utf-8');
   }

@@ -72,6 +72,11 @@ export async function assembleEval(resultFolder, subagentOutput, resolvedChecks 
     // optional
   }
 
+  // Add timeout status to eval result
+  if (runMetrics?.timedOut) {
+    evalResult.timedOut = true;
+  }
+
   // Build conversation viewer data
   try {
     const jsonlContent = await fs.readFile(path.join(resultFolder, 'output.jsonl'), 'utf-8');

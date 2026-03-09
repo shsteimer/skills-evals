@@ -24,11 +24,13 @@ Parse the user's request to find the batch directory:
 
 ### Step 2: Verify evaluations exist
 
-Check that `eval-result.json` exists in run subdirectories. Report:
-- How many runs have eval results
-- How many are missing eval results
+Run the verification script to check that all runs have been evaluated:
 
-If most runs are missing evaluations, suggest running `eval-run` first before summarizing.
+```bash
+node scripts/verify-batch-evals.js <batch-dir>
+```
+
+This reports how many runs have `eval-result.json` and lists any that are missing. If runs are missing evaluations, suggest running `eval-run` first before summarizing. The script exits with code 1 if any evals are missing.
 
 ### Step 3: Run summarize-batch script
 

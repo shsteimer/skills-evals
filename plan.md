@@ -10,22 +10,25 @@ Full evaluation pipeline implemented:
 4. `compare-batches` — compare two batch summaries, identify improvements/regressions
 
 ### Skills
-- `eval-run` — evaluate completed runs (renamed from `eval`)
-- `summarize-batch` — batch-level aggregate stats
+- `eval-run` — evaluate completed runs (deterministic checks + LLM judgment)
+- `summarize-batch` — batch-level aggregate stats with analytical subagent
 - `compare-batches` — A/B batch comparison with subagent analysis
 - `task-creator` — create and improve evaluation tasks
 
 ### Scripts
-- `scripts/run-tasks.js` — task execution, writes `batch.json` with batch metadata
+- `scripts/run-tasks.js` — task execution, writes `batch.json` with batch metadata (including `timedOutRuns`)
 - `scripts/summarize-batch.js` — reads eval results, computes group + batch stats, writes `batch-summary.json`
 - `scripts/compare-batches.js` — compares two batch summaries, writes `compare-data.js`
-- `scripts/compare-runs.js` — iteration-level comparison (legacy, still used)
-- `scripts/eval-tasks.js` — legacy OpenAI API evaluation path
+- `scripts/verify-batch-evals.js` — checks that all runs in a batch have been evaluated
+- `scripts/assemble-eval.js` — merges check + judgment results into `eval-result.json`
+- `scripts/assemble-batch-summary.js` — merges batch stats with analysis into viewer data
+- `scripts/reconstruct-workspace.js` — reconstructs agent workspace for evaluation
+- `scripts/parse-agent-log.js` — parses agent conversation logs
 
 ### Viewer tools
 - `tools/eval-viewer/` — single-run eval results
 - `tools/batch-viewer/` — batch summary with per-group stats
-- `tools/comparison-viewer/` — A/B comparison (supports both iteration-level and aggregate mode)
+- `tools/comparison-viewer/` — A/B comparison (aggregate mode)
 - `tools/conversation-viewer/` — parsed agent conversation
 - `tools/diff-viewer/` — interactive diff view
 
@@ -36,13 +39,6 @@ Full evaluation pipeline implemented:
 - Evaluate all runs using eval-run skill
 - Summarize each batch, compare batches to determine if augmentations help
 
-### 2. Retire legacy paths
-- Remove `eval-tasks.js` and OpenAI API eval path once eval-run skill is proven end-to-end
-- cleanup any other unused scripts
-
-### 3. Future work
+### 2. Future work
 - **Per-dimension stats** — aggregate and compare by criteria section (C1-C6)
-- **Run and evaluate** — combined skill that runs tasks, evaluates, summarizes, and compares in one flow
-- ensure when a run times out, that is written somewhere to when the eval-run happens, it can note that and respond accordingly (may require updated to eval-run skill and run-tasks scripting)
 - ensure conversation viewer handles output from codex/cursor, not just claude
-- add a script to use in summarize-batch to verify all evaluations exist for a batch. this will make that process more repeatable.
