@@ -25,6 +25,14 @@ Full evaluation pipeline implemented:
 - `scripts/reconstruct-workspace.js` — reconstructs agent workspace for evaluation
 - `scripts/parse-agent-log.js` — parses agent conversation logs
 
+### Agent handlers
+All three handlers (`scripts/handlers/claude.js`, `cursor.js`, `codex.js`) share process lifecycle utilities from `scripts/handlers/shared.js`:
+- Idle timeout (configurable via `AGENT_IDLE_TIMEOUT_MS`, default 2 min)
+- AbortSignal support (total timeout from `run-tasks.js`)
+- Orphan process cleanup via `lsof`
+- Output saved regardless of exit code (partial results preserved on failure)
+- Activity parsing: Claude/Cursor use `parseStreamActivity` (stream-json format), Codex uses `parseCodexActivity` (item.started/item.completed format)
+
 ### Viewer tools
 - `tools/eval-viewer/` — single-run eval results
 - `tools/batch-viewer/` — batch summary with per-group stats
@@ -39,6 +47,12 @@ Full evaluation pipeline implemented:
 - Evaluate all runs using eval-run skill
 - Summarize each batch, compare batches to determine if augmentations help
 
-### 2. Future work
+### 2. Cross-Agent Compatibility
+
+Remaining gaps between claude and cursor/codex handlers:
+
+- **agent configuration** — claude has system prompt append (`config/claude-system-prompt-append.txt`) and settings isolation (`--setting-sources project`); it also doesn't require yolo mode but instead has finely tuned permissions so agents can complete tasks. cursor/codex have no equivalent configuration mechanism yet
+
+### 3. Future work
 - **Per-dimension stats** — aggregate and compare by criteria section (C1-C6)
-- ensure conversation viewer handles output from codex/cursor, not just claude
+
