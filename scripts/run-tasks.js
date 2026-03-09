@@ -11,6 +11,7 @@ import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
 import { getEnv } from './utils/env-config.js';
 import { createRunLogger } from './utils/run-logger.js';
+import { runTaskChecks } from './utils/task-checks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -462,17 +463,7 @@ async function runTask(task, onActivity, signal) {
 
 async function captureResults(task, runMetrics = null) {
   const results = {};
-  
-  // Run npm run lint and capture status (if lint script exists)
-  if (await hasNpmScript(task.workspaceDir, 'lint')) {
-    results.lint = await runNpmScript(task.workspaceDir, 'lint');
-  } else {
-    results.lint = {
-      skipped: true,
-      reason: 'No lint script found in package.json'
-    };
-  }
-  
+
   // Capture diff of all changes from augmentations commit
   results.diff = await captureGitChanges(task.workspaceDir, 'Workspace setup');
   
@@ -483,17 +474,24 @@ async function captureResults(task, runMetrics = null) {
   if (await hasNpmScript(task.workspaceDir, 'test')) {
     results.tests = await runNpmScript(task.workspaceDir, 'test');
   }
-  
-  // Write lint results to separate file
-  const lintPath = path.join(task.taskInfoFolder, 'lint-results.json');
-  await fs.writeFile(lintPath, JSON.stringify(results.lint, null, 2), 'utf-8');
-  
+
+  // Run task-specific checks if checks.js exists
+  if (task.taskPath) {
+    results.checks = await runTaskChecks(task.taskPath, task.workspaceDir);
+  }
+
   // Write test results if they exist
   if (results.tests) {
     const testsPath = path.join(task.taskInfoFolder, 'test-results.json');
     await fs.writeFile(testsPath, JSON.stringify(results.tests, null, 2), 'utf-8');
   }
-  
+
+  // Write check results if any
+  if (results.checks) {
+    const checksPath = path.join(task.taskInfoFolder, 'check-results.json');
+    await fs.writeFile(checksPath, JSON.stringify(results.checks, null, 2), 'utf-8');
+  }
+
   // Write git commits if any
   if (results.commits && results.commits.length > 0) {
     const commitsPath = path.join(task.taskInfoFolder, 'commits.json');

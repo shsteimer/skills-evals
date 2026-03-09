@@ -22,6 +22,7 @@ tasks/{task-name}/
 ├── task.json        # metadata: name, description, tags, startFrom, augmentations
 ├── prompt.txt       # the prompt given to the agent under test
 ├── criteria.txt     # evaluation criteria with scoring rubric
+├── (checks.js)      # optional deterministic checks run against the workspace after the agent finishes
 └── (augmentations)  # optional files copied into the workspace before the agent runs
 ```
 
@@ -59,6 +60,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 
 <critical>
 - Criterion that earns 2 points when met
+- Criterion resolved by a deterministic check [check: check-name]
 </critical>
 
 <important>
@@ -69,6 +71,38 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 - (+1) Criterion for exceptional work
 </bonus>
 ```
+
+Criteria can reference deterministic checks by name using `[check: name]` at the end of the line. When a criterion has a check reference, the evaluator resolves it directly from the check result (pass/fail) instead of using LLM judgment. The check name must match a `name` field in the output of the task's `checks.js` script. Use this for criteria that are objectively verifiable — file existence, code pattern presence, CSS properties. Leave criteria without check references for the LLM evaluator to judge.
+
+**checks.js** (optional) — deterministic checks run against the agent's workspace after the task completes. The script receives the workspace path as its first argument and prints a JSON array to stdout:
+
+```javascript
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+
+const workspacePath = process.argv[2];
+const results = [];
+
+// Example: check that block files exist
+const blockDirs = fs.readdirSync(path.join(workspacePath, 'blocks'));
+const hasBlock = blockDirs.some(d => {
+  const dir = path.join(workspacePath, 'blocks', d);
+  return fs.existsSync(path.join(dir, `${d}.js`)) && fs.existsSync(path.join(dir, `${d}.css`));
+});
+results.push({
+  name: 'block-files-exist',
+  description: 'Block folder with matching .js and .css files',
+  passed: hasBlock,
+  evidence: hasBlock ? `Found block in blocks/${blockDirs[0]}/` : 'No matching block folder found'
+});
+
+console.log(JSON.stringify(results));
+```
+
+Each result has: `name` (identifier), `description` (what it checks), `passed` (boolean), `evidence` (what was found). These are captured as `check-results.json` in the result folder and fed to the evaluator as supplementary evidence.
+
+Write checks for criteria that are objectively verifiable — file existence, code pattern presence, CSS property checks, HTML structure. Leave subjective criteria (code quality, appropriate naming, whether the approach "goes beyond copying") to the LLM evaluator.
 
 ## Criteria dimensions
 

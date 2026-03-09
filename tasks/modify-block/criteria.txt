@@ -34,7 +34,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Process
 
 <critical>
-- Agent ran a lint check and fixed any issues found
+- Agent ran a lint check and fixed any issues found [check: lint-passes]
 </critical>
 
 <important>

@@ -190,7 +190,6 @@ describe('evalTask', () => {
     };
 
     await fs.writeFile(path.join(taskDir, 'changes.diff'), 'test changes');
-    await fs.writeFile(path.join(taskDir, 'lint-results.json'), '{}');
     await fs.writeFile(path.join(taskDir, 'output.jsonl'), 'test log output');
   });
 

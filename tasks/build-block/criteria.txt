@@ -11,8 +11,8 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Block Implementation
 
 <critical>
-- Block created in `blocks/{block-name}/` with matching `{block-name}.js` and `{block-name}.css` files following AEM naming conventions
-- js exports a `decorate()` function as the default block entry point
+- Block created in `blocks/{block-name}/` with matching `{block-name}.js` and `{block-name}.css` files following AEM naming conventions [check: block-files-exist]
+- js exports a `decorate()` function as the default block entry point [check: exports-decorate]
 - Displays a responsive grid: 3 columns on desktop, scaling down to 1 on mobile
 - Each card renders an image, product name, description, and CTA link
 - Badge overlay renders on top of the card image (positioned over the image, not beside or below it) with text like "Sale", "New", etc.
@@ -50,7 +50,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Process
 
 <critical>
-- Agent ran a lint check and fixed any issues found
+- Agent ran a lint check and fixed any issues found [check: lint-passes]
 </critical>
 
 <important>
