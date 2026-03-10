@@ -73,6 +73,11 @@ The full evaluation pipeline:
 
 - [Token-efficient batch compare proposal](./docs/token-efficient-batch-compare-proposal.md) — concrete plan to move run and batch analysis to scripted artifacts and reserve the LLM for focused comparison only
 
+## Benchmarking
+
+- [Benchmarking guide](./docs/benchmarking.md) — how to curate compatibility replay data versus decision-grade benchmark runs
+- [Benchmark manifest](./config/benchmark-manifest.json) — machine-readable benchmark suites, defaults, and collection rules
+
 ## Defining Tasks
 
 Tasks are defined in the `tasks/` directory. Each task is a folder containing:

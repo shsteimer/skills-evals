@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "updatedAt": "2026-03-10",
+  "goals": {
+    "compatibility": "Prove newer scripts can summarize and compare older result folders without mutation.",
+    "decisionGrade": "Produce baseline/candidate evidence that is strong enough to support quality, cost, and consistency decisions."
+  },
+  "defaults": {
+    "agents": [
+      "claude",
+      "codex",
+      "cursor"
+    ],
+    "iterations": {
+      "smoke": 1,
+      "core": 3,
+      "stress": 3
+    },
+    "requiredRunArtifacts": [
+      "task.json",
+      "criteria.txt",
+      "changes.diff",
+      "commits.json",
+      "run-metrics.json",
+      "output.jsonl",
+      "check-results.json",
+      "run-report.json"
+    ],
+    "optionalRunArtifacts": [
+      "test-results.json",
+      "eval-result.json",
+      "eval-data.js",
+      "run-report-data.js"
+    ],
+    "requiredBatchArtifacts": [
+      "batch.json",
+      "batch-summary.json",
+      "batch-focus.json"
+    ],
+    "requiredComparisonArtifacts": [
+      "comparison.json",
+      "comparison-focus.json",
+      "compare-data.js"
+    ],
+    "comparisonMetrics": [
+      "meanScorePct",
+      "successRate",
+      "meanTokens",
+      "meanDurationMs",
+      "focusGroupCount",
+      "focusRunCount",
+      "focusRunRate"
+    ]
+  },
+  "suites": [
+    {
+      "id": "legacy-replay-feb-2026",
+      "purpose": "compatibility",
+      "status": "active",
+      "description": "Historical replay-only dataset used to prove the scripted summarization and comparison path remains backward compatible.",
+      "source": {
+        "type": "historical-results",
+        "root": "results/",
+        "batches": [
+          "20260225-161334",
+          "20260225-162212",
+          "20260225-163056",
+          "20260225-185621"
+        ]
+      },
+      "agents": [
+        "codex"
+      ],
+      "tasks": [
+        "eds-authoring-semantics",
+        "eds-block-contract-governance",
+        "eds-doc-update-accuracy",
+        "eds-test-discipline"
+      ],
+      "iterations": 1,
+      "notes": [
+        "Do not use this suite for headline quality or token-efficiency claims.",
+        "Artifacts are sparse and every run may be mechanically suspicious for reasons unrelated to the current branch."
+      ]
+    },
+    {
+      "id": "current-pipeline-smoke",
+      "purpose": "decision-grade",
+      "status": "planned",
+      "description": "Fast confidence suite for fresh baseline/candidate runs under the current scripted pipeline.",
+      "tier": "smoke",
+      "tasks": [
+        "hello-world",
+        "build-block",
+        "fix-block-bug",
+        "modify-block"
+      ],
+      "agents": [
+        "claude",
+        "codex",
+        "cursor"
+      ],
+      "iterations": 1,
+      "acceptance": {
+        "minimumArtifactCoverage": 1.0,
+        "requiresComparisonFocus": true
+      }
+    },
+    {
+      "id": "current-pipeline-core",
+      "purpose": "decision-grade",
+      "status": "planned",
+      "description": "Primary comparison suite for branch-to-branch product decisions.",
+      "tier": "core",
+      "tasks": [
+        "hello-world",
+        "build-block",
+        "fix-block-bug",
+        "modify-block",
+        "skill-check"
+      ],
+      "agents": [
+        "claude",
+        "codex",
+        "cursor"
+      ],
+      "iterations": 3,
+      "rules": {
+        "sameTaskSetAcrossBaselineAndCandidate": true,
+        "sameAgentSetAcrossBaselineAndCandidate": true,
+        "sameIterationCountAcrossBaselineAndCandidate": true,
+        "singleIntendedVariableChange": true
+      },
+      "decisionReadout": {
+        "requiresScoreAndEfficiencyReview": true,
+        "requiresFocusRateReview": true,
+        "requiresVarianceReview": true
+      }
+    },
+    {
+      "id": "current-pipeline-stress",
+      "purpose": "decision-grade",
+      "status": "planned",
+      "description": "Higher-cost suite for changes that may affect failure recovery, long prompts, or tool-heavy workflows.",
+      "tier": "stress",
+      "taskSelectionStrategy": "Curate tasks with historically high token usage, timeouts, or ambiguous outcomes.",
+      "agents": [
+        "claude",
+        "codex"
+      ],
+      "iterations": 3
+    }
+  ],
+  "collectionProtocol": {
+    "baselineCandidatePairing": [
+      "Use the same task set, agent set, and iteration count for both batches.",
+      "Change one intended variable at a time: prompt, augmentation, runtime, or evaluator behavior.",
+      "Do not mix unrelated framework changes into the same benchmark pair."
+    ],
+    "naming": {
+      "recommendedComparisonDir": "results/comparisons/<timestamp>-<suite-id>",
+      "metadataFields": [
+        "suiteId",
+        "branch",
+        "commitSha",
+        "agents",
+        "iterations",
+        "augmentations",
+        "purpose"
+      ]
+    },
+    "decisionQuestions": [
+      "Did quality improve?",
+      "Did token usage improve or regress?",
+      "Did runtime improve or regress?",
+      "Did focus shrink enough to justify the compare-stage LLM spend?",
+      "Were regressions concentrated in specific task-agent groups?"
+    ]
+  }
+}
