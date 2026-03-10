@@ -12,6 +12,7 @@ import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
 import { getEnv, getAgentConfig } from './utils/env-config.js';
 import { createRunLogger } from './utils/run-logger.js';
 import { runTaskChecks } from './utils/task-checks.js';
+import { hasUserFlags, confirmOrEdit, runInteractiveFlow } from './utils/interactive-prompts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -682,11 +683,19 @@ async function collectTimedOutRuns(enrichedTasks) {
 }
 
 async function runTasks() {
-  const args = parseArgs(process.argv);
+  const parsedArgs = parseArgs(process.argv);
 
-  if (args.showHelp) {
+  if (parsedArgs.showHelp) {
     showHelp();
     return;
+  }
+
+  // Interactive mode: guided flow or confirm-before-run
+  let args;
+  if (hasUserFlags(process.argv)) {
+    args = await confirmOrEdit(parsedArgs);
+  } else {
+    args = await runInteractiveFlow();
   }
 
   const tasks = await findTasks(args);
