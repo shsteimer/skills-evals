@@ -87,7 +87,7 @@ describe('reconstructWorkspace', () => {
 
     const workspacePath = await reconstructWorkspace(resultDir);
 
-    expect(workspacePath).toContain('skills-evals-eval');
+    expect(workspacePath).toContain('.eval-workspaces');
     expect(workspacePath).toContain('build-block-claude-1');
 
     // Clean up workspace

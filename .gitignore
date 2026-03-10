@@ -37,6 +37,9 @@ tmp/
 temp/
 *.tmp
 
+# Eval workspaces (reconstructed agent workspaces for evaluation)
+.eval-workspaces/
+
 # Task results
 results/
 

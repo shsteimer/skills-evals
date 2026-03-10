@@ -44,9 +44,10 @@ export async function reconstructWorkspace(resultFolder) {
   }
   const cloneUrl = `https://github.com/${org}/${repo}.git`;
 
-  // Create workspace in temp directory
+  // Create workspace in project-local directory (so subagents have permission to read it)
+  const projectRoot = path.join(__dirname, '..');
   const folderName = path.basename(resultFolder);
-  const workspaceDir = path.join(os.tmpdir(), 'skills-evals-eval', folderName);
+  const workspaceDir = path.join(projectRoot, '.eval-workspaces', folderName);
   await cleanupDir(workspaceDir);
   await ensureDir(workspaceDir);
 
@@ -90,13 +91,22 @@ export async function reconstructWorkspace(resultFolder) {
           await fs.writeFile(targetPath, content, 'utf-8');
         }
       } else {
-        // Local path — resolve relative to project root (where augmentations/ lives)
+        // Local path — try task directory first, then project root (matching run-tasks.js)
         const projectRoot = path.join(__dirname, '..');
         let sourcePath;
         if (path.isAbsolute(aug.source)) {
           sourcePath = aug.source;
         } else {
-          sourcePath = path.resolve(projectRoot, aug.source);
+          const taskName = taskJson.name;
+          const taskRelativePath = path.join(projectRoot, 'tasks', taskName, aug.source);
+          const projectRelativePath = path.resolve(projectRoot, aug.source);
+
+          try {
+            await fs.access(taskRelativePath);
+            sourcePath = taskRelativePath;
+          } catch {
+            sourcePath = projectRelativePath;
+          }
         }
 
         const stats = await fs.stat(sourcePath);
