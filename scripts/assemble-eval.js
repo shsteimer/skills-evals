@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { parseAgentLog } from './parse-agent-log.js';
+import { assembleRunReport } from './assemble-run-report.js';
+import { writeCheckResolutionFiles } from './resolve-checks.js';
 
 /**
  * Assemble a final eval-result.json from subagent output and check-resolved criteria.
@@ -119,6 +121,9 @@ export async function assembleEval(resultFolder, subagentOutput, resolvedChecks 
   const dataJs = `const evalData = ${JSON.stringify(evalResult, null, 2)};\nconst runMetrics = ${JSON.stringify(runMetrics, null, 2)};\n`;
   await fs.writeFile(path.join(resultFolder, 'eval-data.js'), dataJs, 'utf-8');
 
+  // Phase 1: emit a deterministic run report alongside judged output.
+  await assembleRunReport(resultFolder);
+
   return evalResult;
 }
 
@@ -135,14 +140,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const resolvedPath = path.resolve(resultFolder);
   const subagentOutput = JSON.parse(await fs.readFile(path.resolve(subagentJsonPath), 'utf-8'));
 
-  // Check for check-resolved criteria
-  let resolvedChecks = [];
-  const checkResultsPath = path.join(resolvedPath, 'check-resolved-criteria.json');
-  try {
-    resolvedChecks = JSON.parse(await fs.readFile(checkResultsPath, 'utf-8'));
-  } catch {
-    // no check-resolved criteria
-  }
+  const checkResolution = await writeCheckResolutionFiles(resolvedPath);
+  const resolvedChecks = checkResolution.resolved;
 
   const result = await assembleEval(resolvedPath, subagentOutput, resolvedChecks);
   console.log(`Score: ${result.score}/${result.maxScore} (${result.overallSuccess ? 'PASS' : 'FAIL'})`);

@@ -1,5 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { parseArgs, matchGroups, compareGroup, compareBatches } from '../scripts/compare-batches.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import {
+  parseArgs,
+  matchGroups,
+  compareGroup,
+  compareBatches,
+  deriveComparisonFocus,
+  writeComparisonArtifacts
+} from '../scripts/compare-batches.js';
 
 describe('compare-batches parseArgs', () => {
   it('should parse positional baseline and candidate dirs', () => {
@@ -85,6 +95,7 @@ describe('compareBatches', () => {
       batchDir: '/results/base',
       batch: { timestamp: '20260308-135305' },
       batchStats: { meanScorePct: 0.7, successRate: 0.6, meanTokens: 1200, meanDurationMs: 70000, totalRuns: 10 },
+      analysis: { mode: 'scripted', focus: { focusGroups: [], focusRuns: [] } },
       groups: {
         'build-block::claude': { task: 'build-block', agent: 'claude', stats: { meanScore: 8, stddev: 1, successRate: 0.8, meanTokens: 1000, meanDurationMs: 60000, runCount: 5 } },
         'fix-bug::claude': { task: 'fix-bug', agent: 'claude', stats: { meanScore: 6, stddev: 2, successRate: 0.4, meanTokens: 1400, meanDurationMs: 80000, runCount: 5 } }
@@ -94,6 +105,7 @@ describe('compareBatches', () => {
       batchDir: '/results/candidate',
       batch: { timestamp: '20260308-135902' },
       batchStats: { meanScorePct: 0.8, successRate: 0.7, meanTokens: 1100, meanDurationMs: 65000, totalRuns: 10 },
+      analysis: { mode: 'scripted', focus: { focusGroups: [], focusRuns: [] } },
       groups: {
         'build-block::claude': { task: 'build-block', agent: 'claude', stats: { meanScore: 9, stddev: 0.5, successRate: 1.0, meanTokens: 900, meanDurationMs: 55000, runCount: 5 } },
         'fix-bug::claude': { task: 'fix-bug', agent: 'claude', stats: { meanScore: 7, stddev: 1.5, successRate: 0.6, meanTokens: 1300, meanDurationMs: 75000, runCount: 5 } }
@@ -105,5 +117,110 @@ describe('compareBatches', () => {
     expect(result.matched).toHaveLength(2);
     expect(result.overallScorePctDelta).toBeCloseTo(0.1);
     expect(result.matched[0].scoreDelta).toBe(1);
+  });
+});
+
+describe('deriveComparisonFocus', () => {
+  it('combines batch focus inheritance with delta-based reasons', () => {
+    const comparison = {
+      baselineDir: '/results/base',
+      candidateDir: '/results/candidate',
+      matched: [
+        {
+          key: 'build-block::claude',
+          task: 'build-block',
+          agent: 'claude',
+          scoreDelta: -1.2,
+          successRateDelta: -0.4,
+          tokensDelta: 300,
+          durationDelta: 5000,
+          baseline: { stddev: 0.8 },
+          candidate: { stddev: 1.6 }
+        }
+      ],
+      baselineOnly: [],
+      candidateOnly: []
+    };
+    const baselineSummary = {
+      analysis: {
+        focus: {
+          focusGroups: [
+            { key: 'build-block::claude', reasons: ['timeout-heavy'] }
+          ],
+          focusRuns: [
+            { key: 'build-block::claude', folderName: 'build-block-claude-1', reasons: ['timed-out'] }
+          ]
+        }
+      }
+    };
+    const candidateSummary = {
+      analysis: {
+        focus: {
+          focusGroups: [
+            { key: 'build-block::claude', reasons: ['common-failures'] }
+          ],
+          focusRuns: [
+            { key: 'build-block::claude', folderName: 'build-block-claude-2', reasons: ['failed'] }
+          ]
+        }
+      }
+    };
+
+    const focus = deriveComparisonFocus(comparison, baselineSummary, candidateSummary);
+
+    expect(focus.mode).toBe('scripted');
+    expect(focus.focusGroups).toEqual([
+      expect.objectContaining({
+        key: 'build-block::claude'
+      })
+    ]);
+    expect(focus.focusGroups[0].reasons).toEqual(expect.arrayContaining([
+      'score-regression',
+      'success-regression',
+      'token-regression',
+      'stability-regression',
+      'baseline:timeout-heavy',
+      'candidate:common-failures'
+    ]));
+    expect(focus.focusRuns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ folderName: 'build-block-claude-1', batchRole: 'baseline' }),
+      expect.objectContaining({ folderName: 'build-block-claude-2', batchRole: 'candidate' })
+    ]));
+  });
+});
+
+describe('writeComparisonArtifacts', () => {
+  let tmpDir;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'compare-batches-artifacts-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('writes comparison.json, compare-data.js, and comparison-focus.json', async () => {
+    const comparison = {
+      matched: [],
+      baselineOnly: [],
+      candidateOnly: [],
+      analysis: { mode: 'scripted', focus: { focusGroups: [], focusRuns: [] } }
+    };
+    const focus = {
+      mode: 'scripted',
+      focusGroups: [{ key: 'hello-world::claude', reasons: ['score-regression'] }],
+      focusRuns: []
+    };
+
+    await writeComparisonArtifacts(tmpDir, comparison, focus);
+
+    const comparisonJson = JSON.parse(await fs.readFile(path.join(tmpDir, 'comparison.json'), 'utf-8'));
+    const comparisonFocus = JSON.parse(await fs.readFile(path.join(tmpDir, 'comparison-focus.json'), 'utf-8'));
+    const compareData = await fs.readFile(path.join(tmpDir, 'compare-data.js'), 'utf-8');
+
+    expect(comparisonJson.analysis.focus.focusGroups).toHaveLength(1);
+    expect(comparisonFocus.focusGroups[0].key).toBe('hello-world::claude');
+    expect(compareData).toMatch(/^const compareData = /);
   });
 });

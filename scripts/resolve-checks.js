@@ -11,29 +11,33 @@
  *
  * Writes:
  *   - check-resolved-criteria.json to the result folder
+ *   - check-unresolved-criteria.json to the result folder
  */
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+function scoreForPriority(priority, passed) {
+  if (!passed) {
+    return 0;
+  }
+  if (priority === 'critical') {
+    return 2;
+  }
+  if (priority === 'important') {
+    return 1;
+  }
+  return 0;
+}
 
-async function resolveChecks(resultFolder) {
-  const taskJson = JSON.parse(await fs.readFile(path.join(resultFolder, 'task.json'), 'utf-8'));
-  const taskName = taskJson.name;
-
-  // Read criteria from task definition
-  const criteriaPath = path.join(__dirname, '..', 'tasks', taskName, 'criteria.txt');
-  const criteria = await fs.readFile(criteriaPath, 'utf-8');
+export async function resolveChecks(resultFolder) {
+  const criteria = await fs.readFile(path.join(resultFolder, 'criteria.txt'), 'utf-8');
 
   // Read check results
   let checks = [];
   try {
     checks = JSON.parse(await fs.readFile(path.join(resultFolder, 'check-results.json'), 'utf-8'));
   } catch {
-    // No checks — write empty resolved file
-    await fs.writeFile(path.join(resultFolder, 'check-resolved-criteria.json'), '[]');
-    return;
+    // No checks file — all check-linked criteria remain unresolved.
   }
 
   const checkMap = {};
@@ -42,6 +46,7 @@ async function resolveChecks(resultFolder) {
   }
 
   const resolved = [];
+  const unresolved = [];
   const lines = criteria.split('\n');
   let section = '';
   let priority = '';
@@ -63,38 +68,54 @@ async function resolveChecks(resultFolder) {
       const criterionText = line.replace(/^-\s*/, '').replace(/\[check:.*\]/, '').trim();
 
       if (check) {
-        const points = priority === 'critical'
-          ? (check.passed ? 2 : 0)
-          : priority === 'important'
-            ? (check.passed ? 1 : 0)
-            : 0;
-
         resolved.push({
           name: criterionText,
           section,
           priority,
           met: check.passed,
-          points,
+          points: scoreForPriority(priority, check.passed),
           notes: check.evidence,
+          source: 'check',
+        });
+      } else {
+        unresolved.push({
+          name: criterionText,
+          section,
+          priority,
+          checkName,
           source: 'check',
         });
       }
     }
   }
 
+  return { resolved, unresolved };
+}
+
+export async function writeCheckResolutionFiles(resultFolder, resolution = null) {
+  const result = resolution || await resolveChecks(resultFolder);
+
   await fs.writeFile(
     path.join(resultFolder, 'check-resolved-criteria.json'),
-    JSON.stringify(resolved, null, 2),
+    JSON.stringify(result.resolved, null, 2),
   );
+  await fs.writeFile(
+    path.join(resultFolder, 'check-unresolved-criteria.json'),
+    JSON.stringify(result.unresolved, null, 2),
+  );
+
+  return result;
 }
 
 // CLI entry point
-const resultFolder = process.argv[2];
-if (!resultFolder) {
-  console.error('Usage: node scripts/resolve-checks.js <result-folder>');
-  process.exit(1);
-}
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const resultFolder = process.argv[2];
+  if (!resultFolder) {
+    console.error('Usage: node scripts/resolve-checks.js <result-folder>');
+    process.exit(1);
+  }
 
-resolveChecks(path.resolve(resultFolder))
-  .then(() => console.log('Done'))
-  .catch((err) => { console.error(err.message); process.exit(1); });
+  writeCheckResolutionFiles(path.resolve(resultFolder))
+    .then(() => console.log('Done'))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+}

@@ -65,9 +65,13 @@ npm run serve
 The full evaluation pipeline:
 
 1. **Run tasks** — `npm run run-tasks` executes agents against tasks, writes results + `batch.json`
-2. **Evaluate runs** — use the `eval-run` skill to evaluate individual runs
-3. **Summarize batch** — use the `summarize-batch` skill (runs `scripts/summarize-batch.js` + analytical subagent)
-4. **Compare batches** — use the `compare-batches` skill (runs `scripts/compare-batches.js` + analytical subagent)
+2. **Evaluate runs** — use the `eval-run` skill to evaluate individual runs; this now also emits deterministic `run-report.json` artifacts
+3. **Summarize batch** — use the `summarize-batch` skill; batch summarization is scripted and emits `batch-summary.json`, `batch-summary-data.js`, and `batch-focus.json`
+4. **Compare batches** — use the `compare-batches` skill; `scripts/compare-batches.js` derives deterministic `comparison-focus.json`, then the analytical subagent is reserved for focused comparison only
+
+## Active Proposals
+
+- [Token-efficient batch compare proposal](./docs/token-efficient-batch-compare-proposal.md) — concrete plan to move run and batch analysis to scripted artifacts and reserve the LLM for focused comparison only
 
 ## Defining Tasks
 
@@ -162,10 +166,12 @@ Results are stored at `results/{timestamp}/`:
 - `batch.json` — batch metadata (timestamp, args, augmentations, agents, run counts)
 - `batch-summary.json` — aggregate stats per task+agent (after `summarize-batch`)
 - `batch-summary-data.js` — data file for batch viewer
+- `batch-focus.json` — deterministic focus list for comparison-stage drill-down
 - `batch.log` — execution log
 
 ### Comparison artifacts (`results/comparisons/{timestamp}/`)
-- `comparison.json` — comparison data with analysis (recommendation, per-group verdicts)
+- `comparison.json` — comparison data with scripted focus and merged recommendation analysis
+- `comparison-focus.json` — deterministic focus list for the compare-stage drill-down
 - `compare-data.js` — data file for comparison viewer
 
 ### Run-level artifacts (per `{task-agent-iteration}/`)
@@ -177,6 +183,8 @@ Results are stored at `results/{timestamp}/`:
 - `run-metrics.json` - Timing, token usage, timeout status
 - `output.jsonl` - Raw agent output stream
 - `check-results.json` - Deterministic check results
+- `run-report.json` - Deterministic run report used by scripted batch summaries
+- `run-report-data.js` - Data file for future run-level scripted viewers
 - `eval-result.json` - Evaluation results (after eval)
 - `eval-data.js` - Data file for eval viewer
 

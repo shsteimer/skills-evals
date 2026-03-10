@@ -1,5 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import { parseArgs, groupRuns, computeGroupStats, computeBatchStats } from '../scripts/summarize-batch.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import {
+  parseArgs,
+  groupRuns,
+  computeGroupStats,
+  computeBatchStats,
+  loadBatchRuns,
+  deriveBatchFocus,
+  summarizeBatch
+} from '../scripts/summarize-batch.js';
 
 describe('summarize-batch parseArgs', () => {
   it('should parse positional batch dir', () => {
@@ -190,5 +201,167 @@ describe('computeBatchStats', () => {
     const stats = computeBatchStats(groups);
     expect(stats.meanTokens).toBeNull();
     expect(stats.meanDurationMs).toBeNull();
+  });
+});
+
+describe('loadBatchRuns', () => {
+  let tmpDir;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'summarize-batch-load-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('prefers run-report.json when present', async () => {
+    const runDir = path.join(tmpDir, 'build-block-claude-1');
+    await fs.mkdir(runDir, { recursive: true });
+    await fs.writeFile(path.join(runDir, 'task.json'), JSON.stringify({
+      name: 'build-block',
+      agent: 'claude',
+      iteration: 1,
+    }));
+    await fs.writeFile(path.join(runDir, 'run-report.json'), JSON.stringify({
+      evaluationMode: 'scripted',
+      mechanicalScore: 2,
+      mechanicalMaxScore: 3,
+      mechanicalSuccess: true,
+      resolvedCriteria: [{ name: 'lint', met: true }],
+      unresolvedCriteriaCount: 1,
+      warnings: ['no-commits'],
+      runMetrics: {
+        durationMs: 1000,
+        tokenUsage: { totalTokens: 50 },
+        timedOut: false,
+      },
+    }));
+    await fs.writeFile(path.join(runDir, 'eval-result.json'), JSON.stringify({
+      score: 99,
+      maxScore: 100,
+      overallSuccess: false,
+      criteriaChecks: [],
+    }));
+
+    const runs = await loadBatchRuns(tmpDir);
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0].score).toBe(2);
+    expect(runs[0].maxScore).toBe(3);
+    expect(runs[0].overallSuccess).toBe(true);
+    expect(runs[0].reportSource).toBe('run-report');
+    expect(runs[0].warnings).toEqual(['no-commits']);
+  });
+
+  it('falls back to eval-result.json for older batches', async () => {
+    const runDir = path.join(tmpDir, 'build-block-claude-1');
+    await fs.mkdir(runDir, { recursive: true });
+    await fs.writeFile(path.join(runDir, 'task.json'), JSON.stringify({
+      name: 'build-block',
+      agent: 'claude',
+      iteration: 1,
+    }));
+    await fs.writeFile(path.join(runDir, 'eval-result.json'), JSON.stringify({
+      score: 8,
+      maxScore: 10,
+      overallSuccess: true,
+      criteriaChecks: [{ name: 'lint', met: true }],
+    }));
+    await fs.writeFile(path.join(runDir, 'run-metrics.json'), JSON.stringify({
+      durationMs: 2000,
+      tokenUsage: { totalTokens: 75 },
+      timedOut: false,
+    }));
+
+    const runs = await loadBatchRuns(tmpDir);
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0].score).toBe(8);
+    expect(runs[0].reportSource).toBe('eval-result');
+  });
+});
+
+describe('deriveBatchFocus', () => {
+  it('flags unstable, failing, timeout-heavy, and warning-heavy groups', () => {
+    const groups = {
+      'build-block::claude': {
+        task: 'build-block',
+        agent: 'claude',
+        stats: {
+          runCount: 3,
+          meanScorePct: 0.55,
+          stddev: 1.4,
+          successRate: 0.33,
+          timedOutCount: 2,
+          commonFailures: ['lint-passes'],
+        },
+        runs: [
+          { folderName: 'run-1', iteration: 1, score: 1, maxScore: 3, overallSuccess: false, warnings: ['timed-out', 'no-commits'] },
+          { folderName: 'run-2', iteration: 2, score: 2, maxScore: 3, overallSuccess: false, warnings: ['timed-out'] },
+          { folderName: 'run-3', iteration: 3, score: 2, maxScore: 3, overallSuccess: true, warnings: [] },
+        ],
+      },
+    };
+
+    const focus = deriveBatchFocus(groups);
+
+    expect(focus.focusGroups).toEqual([
+      expect.objectContaining({
+        key: 'build-block::claude',
+      }),
+    ]);
+    expect(focus.focusGroups[0].reasons).toEqual(expect.arrayContaining([
+      'low-success-rate',
+      'timeout-heavy',
+      'common-failures',
+      'high-variance',
+    ]));
+    expect(focus.focusRuns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ folderName: 'run-1' }),
+      expect.objectContaining({ folderName: 'run-2' }),
+    ]));
+  });
+});
+
+describe('summarizeBatch', () => {
+  let tmpDir;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'summarize-batch-summary-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes scripted focus data in batch summaries', async () => {
+    const runDir = path.join(tmpDir, 'build-block-claude-1');
+    await fs.mkdir(runDir, { recursive: true });
+    await fs.writeFile(path.join(runDir, 'task.json'), JSON.stringify({
+      name: 'build-block',
+      agent: 'claude',
+      iteration: 1,
+    }));
+    await fs.writeFile(path.join(runDir, 'run-report.json'), JSON.stringify({
+      evaluationMode: 'scripted',
+      mechanicalScore: 1,
+      mechanicalMaxScore: 3,
+      mechanicalSuccess: false,
+      resolvedCriteria: [{ name: 'lint-passes', met: false }],
+      unresolvedCriteriaCount: 1,
+      warnings: ['timed-out'],
+      runMetrics: {
+        durationMs: 1000,
+        tokenUsage: { totalTokens: 50 },
+        timedOut: true,
+      },
+    }));
+
+    const summary = await summarizeBatch(tmpDir);
+
+    expect(summary.analysis.mode).toBe('scripted');
+    expect(summary.analysis.focus.focusGroups).toHaveLength(1);
+    expect(summary.groups['build-block::claude'].stats.timedOutCount).toBe(1);
   });
 });

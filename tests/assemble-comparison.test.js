@@ -123,4 +123,34 @@ describe('assembleComparison', () => {
     expect(result.analysis.recommendation).toBe('inconclusive');
     expect(result.matched[0].analysis).toBeUndefined();
   });
+
+  it('preserves scripted focus data when merging recommendation analysis', async () => {
+    await writeComparison({
+      ...baseComparison,
+      analysis: {
+        mode: 'scripted',
+        focus: {
+          focusGroups: [
+            { key: 'hello-world::claude', reasons: ['score-improvement'] }
+          ],
+          focusRuns: [
+            {
+              key: 'hello-world::claude',
+              folderName: 'hello-world-claude-1',
+              batchRole: 'candidate',
+              reasons: ['resolved-unusual-failure']
+            }
+          ]
+        }
+      }
+    });
+    await writeAnalysis(baseAnalysis);
+
+    const result = await assembleComparison(tmpDir);
+
+    expect(result.analysis.mode).toBe('scripted');
+    expect(result.analysis.focus.focusGroups).toHaveLength(1);
+    expect(result.analysis.recommendation).toBe('yes');
+    expect(result.analysis.focus.focusRuns[0].folderName).toBe('hello-world-claude-1');
+  });
 });

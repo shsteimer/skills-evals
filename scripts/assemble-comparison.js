@@ -31,8 +31,11 @@ export async function assembleComparison(comparisonDir) {
     }
   }
 
-  // Add top-level analysis
+  const existingAnalysis = comparison.analysis || {};
+
+  // Add top-level analysis while preserving scripted focus metadata
   comparison.analysis = {
+    ...existingAnalysis,
     recommendation: analysis.recommendation,
     confidence: analysis.confidence,
     reasoning: analysis.reasoning

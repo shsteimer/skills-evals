@@ -145,6 +145,13 @@ export function compareBatches(baselineSummary, candidateSummary) {
     candidateBatch: candidateSummary.batch,
     baselineStats: baselineSummary.batchStats,
     candidateStats: candidateSummary.batchStats,
+    analysis: {
+      mode: 'scripted',
+      focus: {
+        focusGroups: [],
+        focusRuns: []
+      }
+    },
     overallScorePctDelta,
     overallSuccessRateDelta,
     overallTokensDelta,
@@ -153,6 +160,124 @@ export function compareBatches(baselineSummary, candidateSummary) {
     baselineOnly,
     candidateOnly
   };
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function getBatchFocus(summary, batchRole) {
+  const focus = summary?.analysis?.focus || {};
+  return {
+    groups: safeArray(focus.focusGroups).map((entry) => ({ ...entry, batchRole })),
+    runs: safeArray(focus.focusRuns).map((entry) => ({ ...entry, batchRole }))
+  };
+}
+
+export function deriveComparisonFocus(comparison, baselineSummary, candidateSummary) {
+  const baselineFocus = getBatchFocus(baselineSummary, 'baseline');
+  const candidateFocus = getBatchFocus(candidateSummary, 'candidate');
+
+  const groupMap = new Map();
+  const addGroupReasons = (key, task, agent, reasons, sourceLabel = null) => {
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { key, task, agent, reasons: [] });
+    }
+    const entry = groupMap.get(key);
+    for (const reason of reasons) {
+      entry.reasons.push(sourceLabel ? `${sourceLabel}:${reason}` : reason);
+    }
+  };
+
+  for (const group of comparison.matched) {
+    const reasons = [];
+    if (typeof group.scoreDelta === 'number') {
+      if (group.scoreDelta <= -0.5) reasons.push('score-regression');
+      if (group.scoreDelta >= 0.5) reasons.push('score-improvement');
+    }
+    if (typeof group.successRateDelta === 'number') {
+      if (group.successRateDelta < 0) reasons.push('success-regression');
+      if (group.successRateDelta > 0) reasons.push('success-improvement');
+    }
+    if (typeof group.tokensDelta === 'number') {
+      if (group.tokensDelta > 0) reasons.push('token-regression');
+      if (group.tokensDelta < 0) reasons.push('token-improvement');
+    }
+    if (typeof group.durationDelta === 'number') {
+      if (group.durationDelta > 0) reasons.push('duration-regression');
+      if (group.durationDelta < 0) reasons.push('duration-improvement');
+    }
+    if (
+      typeof group.baseline?.stddev === 'number' &&
+      typeof group.candidate?.stddev === 'number' &&
+      group.candidate.stddev > group.baseline.stddev + 0.25
+    ) {
+      reasons.push('stability-regression');
+    }
+
+    if (reasons.length > 0) {
+      addGroupReasons(group.key, group.task, group.agent, reasons);
+    }
+  }
+
+  for (const group of baselineFocus.groups) {
+    addGroupReasons(group.key, group.task, group.agent, group.reasons || [], 'baseline');
+  }
+  for (const group of candidateFocus.groups) {
+    addGroupReasons(group.key, group.task, group.agent, group.reasons || [], 'candidate');
+  }
+
+  const focusGroups = Array.from(groupMap.values()).map((entry) => ({
+    ...entry,
+    reasons: Array.from(new Set(entry.reasons))
+  }));
+
+  const focusGroupKeys = new Set(focusGroups.map((group) => group.key));
+  const focusRuns = [...baselineFocus.runs, ...candidateFocus.runs]
+    .filter((run) => focusGroupKeys.has(run.key))
+    .map((run) => ({
+      key: run.key,
+      task: run.task,
+      agent: run.agent,
+      iteration: run.iteration,
+      folderName: run.folderName,
+      batchRole: run.batchRole,
+      reasons: Array.from(new Set(run.reasons || []))
+    }));
+
+  focusGroups.sort((a, b) => b.reasons.length - a.reasons.length || a.key.localeCompare(b.key));
+  focusRuns.sort((a, b) => b.reasons.length - a.reasons.length || a.folderName.localeCompare(b.folderName));
+
+  return {
+    mode: 'scripted',
+    focusGroups,
+    focusRuns
+  };
+}
+
+export async function writeComparisonArtifacts(outputDir, comparison, focus) {
+  const resolvedOutputDir = path.resolve(outputDir);
+  await fs.mkdir(resolvedOutputDir, { recursive: true });
+
+  const enrichedComparison = {
+    ...comparison,
+    analysis: {
+      ...(comparison.analysis || {}),
+      mode: 'scripted',
+      focus
+    }
+  };
+
+  const jsonPath = path.join(resolvedOutputDir, 'comparison.json');
+  await fs.writeFile(jsonPath, JSON.stringify(enrichedComparison, null, 2), 'utf-8');
+
+  const focusPath = path.join(resolvedOutputDir, 'comparison-focus.json');
+  await fs.writeFile(focusPath, JSON.stringify(focus, null, 2), 'utf-8');
+
+  const dataJsPath = path.join(resolvedOutputDir, 'compare-data.js');
+  await fs.writeFile(dataJsPath, `const compareData = ${JSON.stringify(enrichedComparison, null, 2)};\n`, 'utf-8');
+
+  return { enrichedComparison, jsonPath, focusPath, dataJsPath };
 }
 
 function formatSummary(comparison) {
@@ -213,21 +338,16 @@ async function main() {
   const baselineSummary = await loadBatchSummary(args.baselineDir);
   const candidateSummary = await loadBatchSummary(args.candidateDir);
   const comparison = compareBatches(baselineSummary, candidateSummary);
+  const focus = deriveComparisonFocus(comparison, baselineSummary, candidateSummary);
 
   console.log(formatSummary(comparison));
 
   // Write output to a comparison directory
   const outputDir = path.resolve(args.outputDir || path.join('results', 'comparisons', generateTimestamp()));
-  await fs.mkdir(outputDir, { recursive: true });
-
-  // Write comparison.json
-  const jsonPath = path.join(outputDir, 'comparison.json');
-  await fs.writeFile(jsonPath, JSON.stringify(comparison, null, 2), 'utf-8');
+  const { jsonPath, focusPath, dataJsPath } = await writeComparisonArtifacts(outputDir, comparison, focus);
   console.log(`\nJSON: ${jsonPath}`);
+  console.log(`Focus: ${focusPath}`);
 
-  // Write compare-data.js for the comparison viewer
-  const dataJsPath = path.join(outputDir, 'compare-data.js');
-  await fs.writeFile(dataJsPath, `const compareData = ${JSON.stringify(comparison, null, 2)};\n`, 'utf-8');
   console.log(`Data: ${dataJsPath}`);
 
   const toolsDir = path.join(__dirname, '..', 'tools', 'comparison-viewer');

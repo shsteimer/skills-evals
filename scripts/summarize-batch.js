@@ -41,6 +41,47 @@ async function safeReadJson(filePath) {
   }
 }
 
+function normalizeRunFromRunReport(folderName, taskJson, runReport) {
+  const metrics = runReport.runMetrics || null;
+  return {
+    folderName,
+    task: taskJson.name,
+    agent: taskJson.agent,
+    iteration: taskJson.iteration ?? 1,
+    score: runReport.mechanicalScore ?? null,
+    maxScore: runReport.mechanicalMaxScore ?? null,
+    overallSuccess: runReport.mechanicalSuccess ?? null,
+    totalTokens: metrics?.tokenUsage?.totalTokens ?? null,
+    durationMs: metrics?.durationMs ?? null,
+    timedOut: metrics?.timedOut ?? runReport.timedOut ?? false,
+    criteriaChecks: runReport.resolvedCriteria ?? [],
+    unresolvedCriteriaCount: runReport.unresolvedCriteriaCount ?? 0,
+    warnings: runReport.warnings ?? [],
+    evaluationMode: runReport.evaluationMode ?? 'scripted',
+    reportSource: 'run-report'
+  };
+}
+
+function normalizeRunFromEvalResult(folderName, taskJson, evalResult, metrics) {
+  return {
+    folderName,
+    task: taskJson.name,
+    agent: taskJson.agent,
+    iteration: taskJson.iteration ?? 1,
+    score: evalResult.score ?? null,
+    maxScore: evalResult.maxScore ?? null,
+    overallSuccess: evalResult.overallSuccess ?? null,
+    totalTokens: metrics?.tokenUsage?.totalTokens ?? null,
+    durationMs: metrics?.durationMs ?? null,
+    timedOut: metrics?.timedOut ?? false,
+    criteriaChecks: evalResult.criteriaChecks ?? [],
+    unresolvedCriteriaCount: null,
+    warnings: [],
+    evaluationMode: 'judged',
+    reportSource: 'eval-result'
+  };
+}
+
 export async function loadBatchRuns(batchDir) {
   const targetDir = path.resolve(batchDir);
   const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -49,27 +90,20 @@ export async function loadBatchRuns(batchDir) {
 
   for (const dir of dirs) {
     const runDir = path.join(targetDir, dir.name);
-    const evalResult = await safeReadJson(path.join(runDir, 'eval-result.json'));
-    if (!evalResult) continue;
-
     const taskJson = await safeReadJson(path.join(runDir, 'task.json'));
     if (!taskJson) continue;
 
-    const metrics = await safeReadJson(path.join(runDir, 'run-metrics.json'));
+    const runReport = await safeReadJson(path.join(runDir, 'run-report.json'));
+    if (runReport) {
+      runs.push(normalizeRunFromRunReport(dir.name, taskJson, runReport));
+      continue;
+    }
 
-    runs.push({
-      folderName: dir.name,
-      task: taskJson.name,
-      agent: taskJson.agent,
-      iteration: taskJson.iteration ?? 1,
-      score: evalResult.score ?? null,
-      maxScore: evalResult.maxScore ?? null,
-      overallSuccess: evalResult.overallSuccess ?? null,
-      totalTokens: metrics?.tokenUsage?.totalTokens ?? null,
-      durationMs: metrics?.durationMs ?? null,
-      timedOut: metrics?.timedOut ?? false,
-      criteriaChecks: evalResult.criteriaChecks ?? []
-    });
+    const evalResult = await safeReadJson(path.join(runDir, 'eval-result.json'));
+    if (!evalResult) continue;
+
+    const metrics = await safeReadJson(path.join(runDir, 'run-metrics.json'));
+    runs.push(normalizeRunFromEvalResult(dir.name, taskJson, evalResult, metrics));
   }
 
   return runs;
@@ -138,6 +172,21 @@ export function computeGroupStats(group) {
     : [];
 
   const timedOutCount = runs.filter(r => r.timedOut).length;
+  const warningCounts = {};
+  let unresolvedCriteriaRunCount = 0;
+
+  for (const run of runs) {
+    if (typeof run.unresolvedCriteriaCount === 'number' && run.unresolvedCriteriaCount > 0) {
+      unresolvedCriteriaRunCount++;
+    }
+    for (const warning of run.warnings || []) {
+      warningCounts[warning] = (warningCounts[warning] || 0) + 1;
+    }
+  }
+
+  const commonWarnings = Object.entries(warningCounts)
+    .filter(([, count]) => count / runs.length >= 0.5)
+    .map(([warning]) => warning);
 
   return {
     runCount: runs.length,
@@ -150,7 +199,9 @@ export function computeGroupStats(group) {
     meanTokens: mean(tokens),
     meanDurationMs: mean(durations),
     timedOutCount,
-    commonFailures
+    commonFailures,
+    commonWarnings,
+    unresolvedCriteriaRunCount
   };
 }
 
@@ -180,6 +231,84 @@ export function computeBatchStats(groups) {
     successRate: totalRuns > 0 ? totalSuccessRate / totalRuns : null,
     meanTokens: tokenCount > 0 ? totalTokens / tokenCount : null,
     meanDurationMs: durationCount > 0 ? totalDuration / durationCount : null
+  };
+}
+
+export function deriveBatchFocus(groups) {
+  const focusGroups = [];
+  const focusRuns = [];
+
+  for (const [key, group] of Object.entries(groups)) {
+    const reasons = [];
+    const { stats, runs } = group;
+
+    if (stats.successRate !== null && stats.successRate < 0.5) {
+      reasons.push('low-success-rate');
+    }
+    if (stats.meanScorePct !== null && stats.meanScorePct < 0.7) {
+      reasons.push('low-score');
+    }
+    if (stats.timedOutCount > 0 && stats.timedOutCount / stats.runCount >= 0.5) {
+      reasons.push('timeout-heavy');
+    }
+    if ((stats.commonFailures || []).length > 0) {
+      reasons.push('common-failures');
+    }
+    if ((stats.commonWarnings || []).length > 0) {
+      reasons.push('common-warnings');
+    }
+    if ((stats.unresolvedCriteriaRunCount || 0) > 0) {
+      reasons.push('unresolved-criteria');
+    }
+    if (stats.stddev > 1) {
+      reasons.push('high-variance');
+    }
+
+    if (reasons.length > 0) {
+      focusGroups.push({
+        key,
+        task: group.task,
+        agent: group.agent,
+        reasons,
+        stats
+      });
+    }
+
+    for (const run of runs) {
+      const runReasons = [];
+      if (run.timedOut) {
+        runReasons.push('timed-out');
+      }
+      if (run.overallSuccess === false) {
+        runReasons.push('failed');
+      }
+      if ((run.warnings || []).length > 0) {
+        runReasons.push(...run.warnings);
+      }
+      if (typeof run.unresolvedCriteriaCount === 'number' && run.unresolvedCriteriaCount > 0) {
+        runReasons.push('unresolved-criteria');
+      }
+
+      if (runReasons.length > 0) {
+        focusRuns.push({
+          key,
+          folderName: run.folderName,
+          task: run.task,
+          agent: run.agent,
+          iteration: run.iteration,
+          reasons: Array.from(new Set(runReasons))
+        });
+      }
+    }
+  }
+
+  focusGroups.sort((a, b) => b.reasons.length - a.reasons.length || a.key.localeCompare(b.key));
+  focusRuns.sort((a, b) => b.reasons.length - a.reasons.length || a.folderName.localeCompare(b.folderName));
+
+  return {
+    mode: 'scripted',
+    focusGroups,
+    focusRuns
   };
 }
 
@@ -215,11 +344,16 @@ export async function summarizeBatch(batchDir) {
 
   // Compute overall batch stats
   const batchStats = computeBatchStats(groups);
+  const focus = deriveBatchFocus(groups);
 
   return {
     batchDir: targetDir,
     batch,
     batchStats,
+    analysis: {
+      mode: 'scripted',
+      focus
+    },
     groups: Object.fromEntries(
       Object.entries(groups).map(([key, g]) => [key, {
         task: g.task,
@@ -230,7 +364,8 @@ export async function summarizeBatch(batchDir) {
           iteration: r.iteration,
           score: r.score,
           maxScore: r.maxScore,
-          overallSuccess: r.overallSuccess
+          overallSuccess: r.overallSuccess,
+          warnings: r.warnings
         }))
       }])
     ),
@@ -258,10 +393,23 @@ async function main() {
   const targetDir = path.resolve(args.batchDir);
 
   // Write batch-summary.json (raw stats only — batch-summary-data.js is
-  // produced by assemble-batch-summary.js after analysis is merged in)
+  // produced here for scripted-only summaries; assemble-batch-summary.js can
+  // still merge optional narrative analysis later.
   const summaryPath = path.join(targetDir, 'batch-summary.json');
   await fs.writeFile(summaryPath, JSON.stringify(summary, null, 2), 'utf-8');
   console.log(`Wrote ${summaryPath}`);
+
+  const focusPath = path.join(targetDir, 'batch-focus.json');
+  await fs.writeFile(focusPath, JSON.stringify(summary.analysis.focus, null, 2), 'utf-8');
+  console.log(`Wrote ${focusPath}`);
+
+  const dataPath = path.join(targetDir, 'batch-summary-data.js');
+  await fs.writeFile(
+    dataPath,
+    `const batchSummaryData = ${JSON.stringify(summary, null, 2)};\n`,
+    'utf-8'
+  );
+  console.log(`Wrote ${dataPath}`);
 
   // Print summary
   console.log(`\nBatch: ${targetDir}`);
@@ -279,6 +427,9 @@ async function main() {
     console.log(`  ${key}: score=${scoreStr}, success=${successStr}, n=${s.runCount}`);
     if (s.commonFailures.length > 0) {
       console.log(`    common failures: ${s.commonFailures.join(', ')}`);
+    }
+    if (s.commonWarnings.length > 0) {
+      console.log(`    common warnings: ${s.commonWarnings.join(', ')}`);
     }
   }
 

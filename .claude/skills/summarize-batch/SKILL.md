@@ -12,7 +12,7 @@ description: >
 
 # Summarize Batch
 
-Summarize evaluation results for all runs in a batch directory. Produces aggregate statistics per task+agent group and overall batch metrics, then analyzes the results to surface patterns and findings.
+Summarize evaluation results for all runs in a batch directory. Produces aggregate statistics per task+agent group and overall batch metrics, plus a deterministic focus list for later comparison-stage drill-down.
 
 ## Pipeline
 
@@ -38,13 +38,18 @@ This reports how many runs have `eval-result.json` and lists any that are missin
 node scripts/summarize-batch.js <batch-dir>
 ```
 
-This produces `batch-summary.json` — structured summary with per-group and overall stats.
-The viewer data file (`batch-summary-data.js`) is produced later by the assembly step after
-analysis is merged in.
+This produces:
 
-### Step 4: Analyze results with subagent
+- `batch-summary.json` — structured summary with per-group and overall stats
+- `batch-summary-data.js` — viewer-ready batch summary
+- `batch-focus.json` — deterministic focus list for groups and runs worth deeper review
 
-This step is **required** — it produces the analytical findings that appear in the batch viewer.
+This step is the primary summary path. No analytical subagent is required.
+
+### Optional Step 4: Add narrative analysis
+
+If the user explicitly wants narrative findings, you may still add them as a second pass.
+This is optional and should not be the default path.
 
 Launch an analysis subagent using the **Agent tool** that reads the batch summary and individual eval results to produce structured findings.
 
@@ -103,7 +108,7 @@ Rules:
 - Focus on what's useful for understanding agent behavior, NOT on task design issues
 ```
 
-#### Merging analysis into batch summary
+#### Merging optional analysis into batch summary
 
 After the subagent returns, write the analysis into the batch summary:
 
@@ -125,8 +130,9 @@ This merges `batch-summary.json` with `batch-analysis.json` and writes an update
 Show the user:
 1. Overall batch stats (mean score, success rate, mean tokens, run count)
 2. Per task+agent breakdown (mean ± stddev, success rate, min/max, common failures)
-3. Key findings from the analysis (highlights and cross-cutting patterns)
+3. Scripted focus groups and runs worth deeper review
 4. Batch viewer URL for visual inspection
+5. Optional narrative findings if you ran the analysis pass
 
 ### Viewer URL
 
