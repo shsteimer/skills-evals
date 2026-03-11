@@ -12,59 +12,41 @@ import { getEnv, getAgentConfig } from './utils/env-config.js';
 import { createRunLogger } from './utils/run-logger.js';
 import { runTaskChecks } from './utils/task-checks.js';
 import { hasUserFlags, confirmOrEdit, runInteractiveFlow } from './utils/interactive-prompts.js';
-import { bootstrapWorkspace, copyAgentConfig } from './utils/workspace-setup.js';
+import { bootstrapWorkspace, copyAgentConfig, loadScriptedAugmentation } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function findTasks(args, tasksDir = null, augmentationsFiles = null) {
-  // Validate that both task names and tags are not specified
-  if (args.tasks && args.tasks.length > 0 && args.tags && args.tags.length > 0) {
-    throw new Error('Cannot specify both task names and tags. Use one or the other.');
-  }
-
-  const baseDir = tasksDir || path.join(__dirname, '..', 'tasks');
-
-  // Load global augmentations from one or more files (JSON or JS)
-  const globalAugmentations = [];
-  const globalScriptedAugmentations = [];
-  let augmentationSetName = null;
-  const augPaths = augmentationsFiles || args.augmentationsFiles || [];
+/**
+ * Load augmentations from a list of file paths.
+ * JS/MJS files are loaded as scripted augmentations.
+ * JSON files are loaded as file-copy augmentation lists.
+ *
+ * @param {string[]} augPaths - Array of file paths
+ * @returns {{ fileCopy: Object[], scripted: Object[], names: string[] }}
+ */
+async function loadAugmentationsFromPaths(augPaths) {
+  const fileCopy = [];
+  const scripted = [];
+  const names = [];
 
   for (const augPath of augPaths) {
     if (augPath.endsWith('.js') || augPath.endsWith('.mjs')) {
-      // Scripted augmentation: JS module with { name, augment } default export
-      const mod = await import(path.resolve(augPath));
-      const script = mod.default;
-      if (!script || typeof script.augment !== 'function') {
-        throw new Error(`Scripted augmentation must export default { name, augment } (${augPath})`);
-      }
-      globalScriptedAugmentations.push({ ...script, path: augPath });
-      if (script.name) {
-        augmentationSetName = augmentationSetName
-          ? `${augmentationSetName} + ${script.name}`
-          : script.name;
-      }
+      const loaded = await loadScriptedAugmentation({ path: augPath });
+      scripted.push(loaded);
+      if (loaded.name) names.push(loaded.name);
     } else {
-      // JSON augmentation: file copy entries
       try {
-        const globalAugContent = await fs.readFile(augPath, 'utf-8');
-        const parsed = JSON.parse(globalAugContent);
+        const content = await fs.readFile(augPath, 'utf-8');
+        const parsed = JSON.parse(content);
 
-        // Support both formats:
-        //   New: { name: "...", augmentations: [...] }
-        //   Legacy: [...]
         if (Array.isArray(parsed)) {
-          globalAugmentations.push(...parsed);
+          fileCopy.push(...parsed);
         } else if (parsed && Array.isArray(parsed.augmentations)) {
-          globalAugmentations.push(...parsed.augmentations);
-          if (parsed.name) {
-            augmentationSetName = augmentationSetName
-              ? `${augmentationSetName} + ${parsed.name}`
-              : parsed.name;
-          }
+          fileCopy.push(...parsed.augmentations);
+          if (parsed.name) names.push(parsed.name);
         } else {
           throw new Error(`Augmentations file must contain an array or {name, augmentations} object (${augPath})`);
         }
@@ -74,6 +56,22 @@ export async function findTasks(args, tasksDir = null, augmentationsFiles = null
       }
     }
   }
+
+  return { fileCopy, scripted, names };
+}
+
+export async function findTasks(args, tasksDir = null, augmentationsFiles = null) {
+  // Validate that both task names and tags are not specified
+  if (args.tasks && args.tasks.length > 0 && args.tags && args.tags.length > 0) {
+    throw new Error('Cannot specify both task names and tags. Use one or the other.');
+  }
+
+  const baseDir = tasksDir || path.join(__dirname, '..', 'tasks');
+
+  // Load global augmentations from CLI --augmentations flags
+  const globalAugPaths = augmentationsFiles || args.augmentationsFiles || [];
+  const global = await loadAugmentationsFromPaths(globalAugPaths);
+  const augmentationSetName = global.names.length > 0 ? global.names.join(' + ') : null;
   
   // Read all directories in the tasks folder
   let entries;
@@ -105,18 +103,30 @@ export async function findTasks(args, tasksDir = null, augmentationsFiles = null
       // Read criteria.txt
       const criteria = await fs.readFile(criteriaPath, 'utf-8');
       
-      // Combine global augmentations with task-specific ones
-      // Global augmentations come first, task-specific can override
-      const augmentations = [
-        ...globalAugmentations,
-        ...(taskData.augmentations || [])
-      ];
-      
+      // Split task augmentations: strings and .js paths are scripted, objects with source/target are file-copy
+      const taskAugEntries = taskData.augmentations || [];
+      const taskPaths = [];
+      const taskFileCopy = [];
+      for (const aug of taskAugEntries) {
+        if (typeof aug === 'string') {
+          taskPaths.push(aug);
+        } else if (aug.source && aug.target) {
+          taskFileCopy.push(aug);
+        }
+      }
+      const taskLoaded = taskPaths.length > 0
+        ? await loadAugmentationsFromPaths(taskPaths)
+        : { fileCopy: [], scripted: [], names: [] };
+
+      // Combine global + task augmentations
+      const augmentations = [...global.fileCopy, ...taskFileCopy, ...taskLoaded.fileCopy];
+      const scriptedAugmentations = [...global.scripted, ...taskLoaded.scripted];
+
       // Combine all data
       allTasks.push({
         ...taskData,
         augmentations,
-        scriptedAugmentations: globalScriptedAugmentations,
+        scriptedAugmentations,
         augmentationSetName,
         taskPath,
         prompt,
@@ -166,7 +176,10 @@ export async function createTaskWorkspace(task) {
   addAndCommit(task.workspaceDir, 'Workspace setup');
 
   // Create and checkout new branch for the agent (after setup commits)
-  const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}-${task.iteration}`;
+  // Short branch name to stay under 63-char DNS label limit for AEM dev server
+  // Full timestamp is 20260311-140750 → trim to 0311-1407
+  const shortTs = task.timestamp.replace(/^20\d{2}/, '').replace(/\d{2}$/, '');
+  const agentBranch = `${sanitizeName(task.agent)}-${shortTs}-${task.iteration}`;
   checkoutBranch(task.workspaceDir, agentBranch, true);
   
   // Install dependencies if package.json exists

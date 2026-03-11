@@ -1,11 +1,13 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
+import { execSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { copyDirectoryRecursive, ensureDir, cleanupDir } from './fs-utils.js';
 import { cloneRepository } from './git-utils.js';
 import { downloadFromGitHub } from './github-utils.js';
 import { sanitizeName } from './string-utils.js';
+import { createAskpassScript, configureGitIdentity } from './agent-launch.js';
 
 const configDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'config');
 
@@ -76,11 +78,8 @@ export async function cloneStartFromIntoWorkspace(startFrom, workspaceDir) {
 
 export async function copyAgentConfig(agent, workspaceDir) {
   const copies = {
-    claude: [
-      { src: 'claude-settings.json', dest: '.claude/settings.json' },
-    ],
+    claude: [],
     cursor: [
-      { src: 'cursor-cli.json', dest: '.cursor/cli.json' },
       { src: 'cursor-system-prompt.md', dest: '.cursor/rules/system-prompt.md' },
     ],
     codex: [
@@ -153,7 +152,7 @@ async function applyFileCopyAugmentation(workspaceDir, aug, taskPath) {
   }
 }
 
-async function loadScriptedAugmentation(script) {
+export async function loadScriptedAugmentation(script) {
   if (typeof script.augment === 'function') {
     return script;
   }
@@ -202,6 +201,10 @@ export async function applyWorkspaceAugmentations(task) {
 export async function bootstrapWorkspace(task, options = {}) {
   await ensureDir(task.workspaceDir);
   await cloneStartFromIntoWorkspace(task.startFrom, task.workspaceDir);
+
+  // Set up bot auth before any git operations that might need identity
+  configureGitIdentity(task.workspaceDir, execSync);
+  await createAskpassScript(task.workspaceDir);
 
   if (options.copyAgentConfig !== false) {
     await copyAgentConfig(sanitizeName(task.agent), task.workspaceDir);

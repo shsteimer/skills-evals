@@ -3,6 +3,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('../scripts/utils/env-config.js', () => ({
   getAgentConfig: vi.fn(() => ({ model: undefined, additionalArgs: '' })),
   parseAdditionalArgs: vi.fn(() => []),
+  getSafehouseConfig: vi.fn(() => ({ bin: 'safehouse' })),
+  getBotAuthConfig: vi.fn(() => ({
+    ghToken: undefined,
+    gitName: 'skills-evals-bot',
+    gitEmail: 'skills-evals-bot@users.noreply.github.com',
+  })),
 }));
 
 import { buildArgs } from '../scripts/handlers/codex.js';
@@ -20,16 +26,14 @@ describe('codex buildArgs', () => {
     expect(args[0]).toBe('exec');
   });
 
-  it('should include --sandbox workspace-write', () => {
+  it('should include --dangerously-bypass-approvals-and-sandbox', () => {
     const args = buildArgs();
-    const sandboxIdx = args.indexOf('--sandbox');
-    expect(sandboxIdx).toBeGreaterThan(-1);
-    expect(args[sandboxIdx + 1]).toBe('workspace-write');
+    expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
   });
 
-  it('should NOT include --dangerously-bypass-approvals-and-sandbox', () => {
+  it('should not include --full-auto (replaced by bypass mode)', () => {
     const args = buildArgs();
-    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(args).not.toContain('--full-auto');
   });
 
   it('should include --json', () => {

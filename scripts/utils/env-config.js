@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -8,6 +9,15 @@ const __dirname = path.dirname(__filename);
 // Load .env file from project root
 const projectRoot = path.join(__dirname, '..', '..');
 dotenv.config({ path: path.join(projectRoot, '.env') });
+
+// Load safehouse config from config/safehouse/config.json
+let safehouseFileConfig = {};
+try {
+  const raw = readFileSync(path.join(projectRoot, 'config', 'safehouse', 'config.json'), 'utf-8');
+  safehouseFileConfig = JSON.parse(raw);
+} catch {
+  // No config file — use defaults
+}
 
 /**
  * Get environment variable with optional default value
@@ -55,6 +65,29 @@ export function getEvalConfig() {
   return {
     apiKey: getRequiredEnv('OPENAI_API_KEY'),
     model: getEnv('EVAL_MODEL', 'gpt-5-mini')
+  };
+}
+
+/**
+ * Get safehouse configuration
+ * @returns {Object} Safehouse configuration
+ */
+export function getSafehouseConfig() {
+  return {
+    bin: getEnv('SAFEHOUSE_BIN', safehouseFileConfig.bin || 'safehouse'),
+    enableFeatures: getEnv('SAFEHOUSE_ENABLE', safehouseFileConfig.enableFeatures || ''),
+  };
+}
+
+/**
+ * Get bot auth configuration for workspace isolation
+ * @returns {Object} Bot auth config (token may be undefined if not configured)
+ */
+export function getBotAuthConfig() {
+  return {
+    ghToken: getEnv('EVAL_GH_TOKEN'),
+    gitName: getEnv('EVAL_GIT_NAME', 'skills-evals-bot'),
+    gitEmail: getEnv('EVAL_GIT_EMAIL', 'skills-evals-bot@users.noreply.github.com'),
   };
 }
 

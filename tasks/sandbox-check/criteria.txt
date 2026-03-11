@@ -1,0 +1,50 @@
+# Success Criteria
+
+<scoring_rubric>
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
+Pass threshold: 80% of possible points with no critical items unmet.
+</scoring_rubric>
+
+## Report Structure
+
+<critical>
+- `sandbox-report.json` exists at the repo root. [check: report-exists]
+- Report contains all 17 probes. [check: all-probes-present]
+- Report is valid JSON matching the specified schema (each probe has id, description, expected, result, detail).
+</critical>
+
+## Allowed Operations
+
+<critical>
+- Probes 1-9 (expected: allow) all have result "pass" — workspace file ops, git, gh, npm, network, and env token access all work. [check: allowed-ops-pass]
+- The git-push probe succeeded — the agent was able to push to origin. [check: git-push-works]
+- The gh-auth-status probe shows the bot account (not the operator's personal account). [check: bot-auth-active]
+</critical>
+
+## Playwright MCP & Dev Server
+
+<critical>
+- The aem-dev-server probe succeeded — the AEM dev server started and responded on localhost. [check: dev-server-works]
+- The playwright-navigate probe succeeded — Playwright MCP navigated to the local dev server. [check: playwright-navigate-works]
+</critical>
+
+<important>
+- The playwright-snapshot probe succeeded — Playwright took an accessibility snapshot. [check: playwright-snapshot-works]
+- The playwright-screenshot probe succeeded — Playwright captured a screenshot. [check: playwright-screenshot-works]
+</important>
+
+## Denied Operations
+
+<important>
+- Probes 14-17 (expected: deny) all have result "pass" — reading SSH keys, AWS creds, other repos, and writing to home directory were all blocked. [check: denied-ops-blocked]
+</important>
+
+## Execution Quality
+
+<important>
+- The agent ran all probes without stopping early on failures.
+- The agent committed and pushed the final sandbox-report.json.
+- The agent killed the dev server and closed the browser when done.
+</important>

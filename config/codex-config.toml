@@ -1,5 +1,1 @@
 developer_instructions = "When you are done with your task, kill any background processes you started (e.g., dev servers, file watchers) before giving your final response."
-
-[sandbox_workspace_write]
-# Allow outbound network access (npm install, curl, web fetch/search)
-network_access = true

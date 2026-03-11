@@ -116,7 +116,7 @@ describe('createTaskWorkspace', () => {
 
       // Verify git checkout was called with agent branch including iteration
       expect(execSync).toHaveBeenCalledWith(
-        'git checkout -b claude-20231215-143022-1',
+        'git checkout -b claude-1215-1430-1',
         expect.objectContaining({ cwd: task.workspaceDir })
       );
     });
@@ -738,27 +738,25 @@ describe('copyAgentConfig', () => {
     await fs.rm(testWorkspaceRoot, { recursive: true, force: true });
   });
 
-  it('should copy claude settings to .claude/settings.json', async () => {
+  it('should not copy any config files for claude', async () => {
     await copyAgentConfig('claude', workspaceDir);
 
-    const destPath = path.join(workspaceDir, '.claude', 'settings.json');
-    const content = JSON.parse(await fs.readFile(destPath, 'utf-8'));
-    expect(content.permissions).toBeDefined();
-    expect(content.permissions.allow).toBeInstanceOf(Array);
+    const entries = await fs.readdir(workspaceDir);
+    expect(entries).toHaveLength(0);
   });
 
-  it('should copy cursor config to .cursor/cli.json and .cursor/rules/', async () => {
+  it('should copy cursor system prompt to .cursor/rules/', async () => {
     await copyAgentConfig('cursor', workspaceDir);
-
-    const cliPath = path.join(workspaceDir, '.cursor', 'cli.json');
-    const cliContent = JSON.parse(await fs.readFile(cliPath, 'utf-8'));
-    expect(cliContent.permissions).toBeDefined();
-    expect(cliContent.permissions.allow).toBeInstanceOf(Array);
 
     const rulesPath = path.join(workspaceDir, '.cursor', 'rules', 'system-prompt.md');
     const rulesContent = await fs.readFile(rulesPath, 'utf-8');
     expect(rulesContent).toContain('alwaysApply: true');
     expect(rulesContent).toContain('kill any background processes');
+
+    // cli.json should not exist (permissions ignored in --yolo mode)
+    const cliExists = await fs.access(path.join(workspaceDir, '.cursor', 'cli.json'))
+      .then(() => true).catch(() => false);
+    expect(cliExists).toBe(false);
   });
 
   it('should copy codex config to .codex/config.toml', async () => {
@@ -767,7 +765,11 @@ describe('copyAgentConfig', () => {
     const destPath = path.join(workspaceDir, '.codex', 'config.toml');
     const content = await fs.readFile(destPath, 'utf-8');
     expect(content).toContain('developer_instructions');
-    expect(content).toContain('network_access = true');
+
+    // rules file should not exist (no sandbox to escape in bypass mode)
+    const rulesExists = await fs.access(path.join(workspaceDir, '.codex', 'rules', 'default.rules'))
+      .then(() => true).catch(() => false);
+    expect(rulesExists).toBe(false);
   });
 
   it('should handle unknown agent gracefully', async () => {

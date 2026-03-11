@@ -2,11 +2,13 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
+import { wrapWithSafehouse, buildBotAuthEnv } from '../utils/agent-launch.js';
 import {
   killOrphanedProcesses,
   createIdleTimeout,
   wireAbortSignal,
   parseCodexActivity,
+  captureStderr,
 } from './shared.js';
 
 /**
@@ -18,7 +20,7 @@ export function buildArgs() {
 
   const args = [
     'exec',
-    '--sandbox', 'workspace-write',
+    '--dangerously-bypass-approvals-and-sandbox',
     '--json',
   ];
 
@@ -40,13 +42,18 @@ export function buildArgs() {
  */
 export default async function runCodex(task, onActivity, signal) {
   return new Promise((resolve, reject) => {
-    const args = buildArgs();
+    const agentArgs = buildArgs();
+    const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
+    const codexEnvPass = [...envPass, 'OPENAI_API_KEY'];
+    const { bin, args } = wrapWithSafehouse('codex', agentArgs, { envPass: codexEnvPass });
 
-    const codex = spawn('codex', args, {
+    const codex = spawn(bin, args, {
       cwd: task.workspaceDir,
-      stdio: ['pipe', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...authEnv },
     });
 
+    const { getStderr } = captureStderr(codex, task.taskInfoFolder);
     const idle = createIdleTimeout(codex, onActivity);
     wireAbortSignal(signal, codex, idle);
 
@@ -83,7 +90,9 @@ export default async function runCodex(task, onActivity, signal) {
       if (idle.idledOut) {
         reject(new Error(`Agent idle for ${idle.timeoutMs / 1000}s with no output`));
       } else if (code !== 0) {
-        reject(new Error(`Codex CLI exited with code ${code}`));
+        const stderr = getStderr().trim().slice(-500);
+        const detail = stderr ? `\n${stderr}` : '';
+        reject(new Error(`Codex CLI exited with code ${code}${detail}`));
       } else {
         resolve();
       }

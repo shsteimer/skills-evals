@@ -7,6 +7,12 @@ vi.mock('../scripts/utils/env-config.js', () => ({
   getAgentConfig: vi.fn(() => ({ model: undefined, additionalArgs: '' })),
   parseAdditionalArgs: vi.fn(() => []),
   getEnv: vi.fn(() => undefined),
+  getSafehouseConfig: vi.fn(() => ({ bin: 'safehouse' })),
+  getBotAuthConfig: vi.fn(() => ({
+    ghToken: undefined,
+    gitName: 'skills-evals-bot',
+    gitEmail: 'skills-evals-bot@users.noreply.github.com',
+  })),
 }));
 
 import { buildArgs } from '../scripts/handlers/claude.js';
@@ -28,6 +34,7 @@ describe('buildArgs', () => {
 
   it('should include base args', async () => {
     const args = await buildArgs(configDir);
+    expect(args).toContain('--dangerously-skip-permissions');
     expect(args).toContain('--verbose');
     expect(args).toContain('--output-format');
     expect(args).toContain('stream-json');

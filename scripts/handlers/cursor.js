@@ -2,11 +2,13 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
 import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
+import { wrapWithSafehouse, buildBotAuthEnv } from '../utils/agent-launch.js';
 import {
   killOrphanedProcesses,
   createIdleTimeout,
   wireAbortSignal,
   parseStreamActivity,
+  captureStderr,
 } from './shared.js';
 
 /**
@@ -17,8 +19,7 @@ export function buildArgs() {
   const config = getAgentConfig('cursor');
 
   const args = [
-    '--trust',
-    '--approve-mcps',
+    '--yolo',
     '--output-format', 'stream-json',
   ];
 
@@ -40,13 +41,18 @@ export function buildArgs() {
  */
 export default async function runCursor(task, onActivity, signal) {
   return new Promise((resolve, reject) => {
-    const args = buildArgs();
+    const agentArgs = buildArgs();
+    const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
+    const cursorEnvPass = [...envPass, 'CURSOR_API_KEY'];
+    const { bin, args } = wrapWithSafehouse('cursor-agent', agentArgs, { envPass: cursorEnvPass });
 
-    const cursor = spawn('cursor-agent', args, {
+    const cursor = spawn(bin, args, {
       cwd: task.workspaceDir,
-      stdio: ['pipe', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...authEnv },
     });
 
+    const { getStderr } = captureStderr(cursor, task.taskInfoFolder);
     const idle = createIdleTimeout(cursor, onActivity);
     wireAbortSignal(signal, cursor, idle);
 
@@ -83,7 +89,9 @@ export default async function runCursor(task, onActivity, signal) {
       if (idle.idledOut) {
         reject(new Error(`Agent idle for ${idle.timeoutMs / 1000}s with no output`));
       } else if (code !== 0) {
-        reject(new Error(`Cursor agent CLI exited with code ${code}`));
+        const stderr = getStderr().trim().slice(-500);
+        const detail = stderr ? `\n${stderr}` : '';
+        reject(new Error(`Cursor agent CLI exited with code ${code}${detail}`));
       } else {
         resolve();
       }

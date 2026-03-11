@@ -1,0 +1,4 @@
+{
+  "bin": "safehouse",
+  "enableFeatures": "chromium-headless"
+}

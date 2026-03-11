@@ -1,0 +1,11 @@
+{
+  "name": "sandbox-check",
+  "description": "Diagnostic task to verify sandbox boundaries, bot auth, git push, and Playwright MCP capabilities",
+  "tags": [
+    "diagnostic"
+  ],
+  "startFrom": "https://github.com/skills-evals-bot/aem-boilerplate-evals",
+  "augmentations": [
+    "augmentations/playwright-mcp.js"
+  ]
+}

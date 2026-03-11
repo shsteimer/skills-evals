@@ -3,6 +3,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('../scripts/utils/env-config.js', () => ({
   getAgentConfig: vi.fn(() => ({ model: undefined, additionalArgs: '' })),
   parseAdditionalArgs: vi.fn(() => []),
+  getSafehouseConfig: vi.fn(() => ({ bin: 'safehouse' })),
+  getBotAuthConfig: vi.fn(() => ({
+    ghToken: undefined,
+    gitName: 'skills-evals-bot',
+    gitEmail: 'skills-evals-bot@users.noreply.github.com',
+  })),
 }));
 
 import { buildArgs } from '../scripts/handlers/cursor.js';
@@ -15,19 +21,15 @@ describe('cursor buildArgs', () => {
     parseAdditionalArgs.mockReturnValue([]);
   });
 
-  it('should include --trust flag', () => {
+  it('should include --yolo flag', () => {
     const args = buildArgs();
-    expect(args).toContain('--trust');
+    expect(args).toContain('--yolo');
   });
 
-  it('should include --approve-mcps flag', () => {
+  it('should not include --trust or --approve-mcps (replaced by --yolo)', () => {
     const args = buildArgs();
-    expect(args).toContain('--approve-mcps');
-  });
-
-  it('should NOT include --force flag', () => {
-    const args = buildArgs();
-    expect(args).not.toContain('--force');
+    expect(args).not.toContain('--trust');
+    expect(args).not.toContain('--approve-mcps');
   });
 
   it('should include output format', () => {

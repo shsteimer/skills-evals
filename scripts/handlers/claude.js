@@ -3,30 +3,25 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getAgentConfig, parseAdditionalArgs } from '../utils/env-config.js';
+import { wrapWithSafehouse, buildBotAuthEnv } from '../utils/agent-launch.js';
 import {
   killOrphanedProcesses,
   createIdleTimeout,
   wireAbortSignal,
   parseStreamActivity,
+  captureStderr,
 } from './shared.js';
 
-/**
- * Run a task using the Claude CLI agent.
- * @param {Object} task - The enriched task object
- * @param {Function} [onActivity] - Optional callback for activity updates
- * @param {AbortSignal} [signal] - Optional signal to abort/kill the agent
- */
 /**
  * Build the CLI args array for the claude command.
  * Exported for testing.
  */
 export async function buildArgs(configDir) {
   const args = [
+    '--dangerously-skip-permissions',
     '--verbose',
     '--output-format', 'stream-json',
-    // Isolate from user's personal settings (~/.claude/CLAUDE.md, ~/.claude/settings.json)
-    // Permissions and tool lists are managed via config/claude-settings.json,
-    // copied into the workspace as .claude/settings.json during bootstrapping
+    // Isolate from operator's personal ~/.claude/CLAUDE.md and ~/.claude/settings.json
     '--setting-sources', 'project',
   ];
 
@@ -56,18 +51,21 @@ export async function buildArgs(configDir) {
 const defaultConfigDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'config');
 
 export default async function runClaude(task, onActivity, signal) {
-  const args = await buildArgs(defaultConfigDir);
+  const agentArgs = await buildArgs(defaultConfigDir);
+  const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
+  const { bin, args } = wrapWithSafehouse('claude', agentArgs, { envPass });
 
-  const env = { ...process.env };
+  const env = { ...process.env, ...authEnv };
   delete env.CLAUDECODE;
 
   return new Promise((resolve, reject) => {
-    const claude = spawn('claude', args, {
+    const claude = spawn(bin, args, {
       cwd: task.workspaceDir,
-      stdio: ['pipe', 'pipe', 'inherit'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       env,
     });
 
+    const { getStderr } = captureStderr(claude, task.taskInfoFolder);
     const idle = createIdleTimeout(claude, onActivity);
     wireAbortSignal(signal, claude, idle);
 
@@ -102,7 +100,9 @@ export default async function runClaude(task, onActivity, signal) {
       if (idle.idledOut) {
         reject(new Error(`Agent idle for ${idle.timeoutMs / 1000}s with no output`));
       } else if (code !== 0) {
-        reject(new Error(`Claude CLI exited with code ${code}`));
+        const stderr = getStderr().trim().slice(-500);
+        const detail = stderr ? `\n${stderr}` : '';
+        reject(new Error(`Claude CLI exited with code ${code}${detail}`));
       } else {
         resolve();
       }

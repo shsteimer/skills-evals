@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { addAndCommit } from './utils/git-utils.js';
 import { ensureDir, cleanupDir } from './utils/fs-utils.js';
 import { execAsync } from './utils/process-utils.js';
-import { bootstrapWorkspace } from './utils/workspace-setup.js';
+import { bootstrapWorkspace, loadScriptedAugmentation } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,14 +27,26 @@ export async function reconstructWorkspace(resultFolder) {
   const taskJsonPath = path.join(resultFolder, 'task.json');
   const taskJson = JSON.parse(await fs.readFile(taskJsonPath, 'utf-8'));
 
-  const { startFrom, augmentations } = taskJson;
+  const projectRoot = path.join(__dirname, '..');
+  const { startFrom, augmentations, scriptedAugmentations } = taskJson;
 
   if (!startFrom) {
     throw new Error(`task.json in ${resultFolder} is missing startFrom`);
   }
 
+  // Load scripted augmentations from saved paths
+  const loadedScripted = [];
+  for (const s of (scriptedAugmentations || [])) {
+    if (!s.path) continue;
+    try {
+      const loaded = await loadScriptedAugmentation(s);
+      loadedScripted.push(loaded);
+    } catch {
+      // Scripted augmentation not available — skip
+    }
+  }
+
   // Create workspace in project-local directory (so subagents have permission to read it)
-  const projectRoot = path.join(__dirname, '..');
   const folderName = path.basename(resultFolder);
   const batchId = taskJson.runSetId || taskJson.timestamp || path.basename(path.dirname(resultFolder));
   const workspaceDir = path.join(projectRoot, '.eval-workspaces', batchId, folderName);
@@ -45,6 +57,7 @@ export async function reconstructWorkspace(resultFolder) {
     await bootstrapWorkspace({
       ...taskJson,
       augmentations,
+      scriptedAugmentations: loadedScripted,
       taskPath: path.join(projectRoot, 'tasks', taskJson.name),
       workspaceDir
     });

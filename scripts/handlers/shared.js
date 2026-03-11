@@ -1,4 +1,6 @@
 import { execSync } from 'child_process';
+import fs from 'fs/promises';
+import path from 'path';
 import { getEnv } from '../utils/env-config.js';
 
 /**
@@ -154,10 +156,42 @@ function describeToolUse(block) {
   }
 }
 
-// Inline basename to avoid importing path (keeps this module lightweight)
+// Inline basename to avoid importing path for tool descriptions
 function basename(filePath) {
   const i = filePath.lastIndexOf('/');
   return i >= 0 ? filePath.slice(i + 1) : filePath;
+}
+
+/**
+ * Capture stderr from a child process and save it to the task info folder.
+ * Returns a function to get the captured stderr content.
+ *
+ * @param {import('child_process').ChildProcess} child - The spawned process
+ * @param {string} taskInfoFolder - Path to the task's result folder
+ * @returns {{ getStderr: () => string }} Accessor for captured stderr
+ */
+export function captureStderr(child, taskInfoFolder) {
+  let stderrData = '';
+
+  child.stderr.on('data', (data) => {
+    stderrData += data.toString();
+  });
+
+  child.on('close', async () => {
+    if (stderrData.trim()) {
+      try {
+        await fs.writeFile(path.join(taskInfoFolder, 'stderr.log'), stderrData, 'utf-8');
+      } catch {
+        // best-effort save
+      }
+    }
+  });
+
+  return {
+    getStderr() {
+      return stderrData;
+    },
+  };
 }
 
 /**
