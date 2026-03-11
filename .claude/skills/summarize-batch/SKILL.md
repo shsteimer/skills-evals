@@ -46,62 +46,15 @@ analysis is merged in.
 
 This step is **required** — it produces the analytical findings that appear in the batch viewer.
 
-Launch an analysis subagent using the **Agent tool** that reads the batch summary and individual eval results to produce structured findings.
+Launch an analysis subagent using the **Agent tool**. Generate the prompt deterministically:
 
-#### Subagent prompt structure
-
+```bash
+node scripts/assemble-summarize-prompt.js <batch-dir>
 ```
-You are analyzing evaluation results for a batch of agent task runs. Your job is to
-identify patterns, explain outcomes, and surface findings that the raw numbers alone
-don't reveal.
 
-## Batch summary
-{batch-summary.json contents}
+This reads the template from `.claude/skills/summarize-batch/resources/summarize-prompt.template.md`, fills in the batch summary data, and outputs the complete prompt to stdout. Pass the output directly as the subagent prompt.
 
-## Your task
-
-1. Read the batch-summary.json to understand overall and per-group performance.
-
-2. For groups with notable patterns (high variance, low success rates, common failures,
-   unusual token usage), read the individual eval-result.json files in those groups to
-   understand WHY:
-
-   Batch dir: {batch_dir}
-   Run folders follow the pattern: {batch_dir}/{task}-{agent}-{iteration}/eval-result.json
-
-3. Analyze each group and produce per-group findings:
-   - What happened? (succeeded, failed, mixed results)
-   - Why? (specific evidence from eval results)
-   - Consistency — was behavior stable across iterations or variable?
-
-4. Look for cross-cutting patterns:
-   - Which agents performed best/worst overall?
-   - Are there efficiency differences (token usage, duration) worth noting?
-   - Any systematic failures that appear across multiple groups?
-
-5. Produce your output as a JSON object (no markdown fences, no commentary):
-{
-  "perGroup": {
-    "task::agent": {
-      "findings": "2-3 sentence analysis of this group's performance with specific evidence",
-      "concerns": ["specific concern if any — e.g. high variance, systematic failure"]
-    }
-  },
-  "crossCutting": [
-    "Pattern or finding that spans multiple groups — be specific"
-  ],
-  "highlights": [
-    "Notable positive or negative outcome worth calling attention to"
-  ]
-}
-
-Rules:
-- Be specific — reference actual scores, failure names, and evidence from eval results
-- Don't just restate the numbers — explain what they mean
-- Keep each finding concise (2-3 sentences max)
-- If a group is straightforward (perfect scores, zero variance), a brief note is fine
-- Focus on what's useful for understanding agent behavior, NOT on task design issues
-```
+The template is in `resources/summarize-prompt.template.md` — edit that file to change the subagent's instructions.
 
 #### Merging analysis into batch summary
 
