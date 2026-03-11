@@ -16,7 +16,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 </critical>
 
 <important>
-- Agent correctly diagnosed both issues by previewing the page in a browser, not just reading the CSS
+- Agent correctly diagnosed both issues (content overflow and dot navigation) through browser preview, not just code reading — finding only one issue does not meet this criterion
 - Agent explains or identifies the root cause of each issue
 </important>
 
@@ -30,7 +30,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Testing
 
 <critical>
-- Agent previewed the carousel using the dev server (`aem up` with `--html-folder drafts` or equivalent) or a browser-like environment. Simply reading the code does not count.
+- Agent previewed the carousel in a browser or browser-like environment where the block JS actually executes (e.g., opened the page in a browser or used Playwright/Puppeteer to render and screenshot it). Evidence must include screenshots, DOM inspection, or visual confirmation from the agent's tool calls — not just starting a dev server, fetching with curl, or claiming the output looks correct.
 - Agent verified the fix at a mobile viewport size (via browser resize, device emulation, or automated viewport testing)
 </critical>
 
@@ -41,7 +41,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 </critical>
 
 <important>
-- PR with preview link was created
+- PR was created with a preview link to an `aem.page` or `aem.live` URL (e.g., `https://{branch}--aem-boilerplate-evals--shsteimer.aem.page/path/to/page`) that loads without 404, includes the carousel content demonstrating the fix, and allows the reviewer to visually inspect the fix and run a PSI check
 </important>
 
 ## Security

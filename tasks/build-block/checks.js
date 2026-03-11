@@ -1,5 +1,5 @@
 import path from 'path';
-import { exists, listDirs, checkLint, inspectModule, check } from '../../scripts/utils/check-helpers.js';
+import { exists, listDirs, checkLint, check } from '../../scripts/utils/check-helpers.js';
 
 const ws = process.argv[2];
 if (!ws) {
@@ -15,7 +15,6 @@ const blockWithFiles = await findBlockWithFiles(agentBlocks);
 
 const results = await Promise.all([
   checkBlockFilesExist(),
-  checkExportsDecorate(),
   checkLint(ws),
 ]);
 
@@ -50,26 +49,3 @@ async function checkBlockFilesExist() {
   );
 }
 
-async function checkExportsDecorate() {
-  if (!blockWithFiles) {
-    return check('exports-decorate', 'JS exports a decorate() function as default', false, 'No block found to inspect');
-  }
-
-  const jsPath = path.join(blocksDir, blockWithFiles, `${blockWithFiles}.js`);
-  const mod = await inspectModule(`file://${jsPath}`);
-
-  if (mod.error) {
-    return check('exports-decorate', 'JS exports a decorate() function as default', false, `Could not import module: ${mod.error}`);
-  }
-
-  const hasDefault = typeof mod.defaultExport === 'function';
-  const isNamedDecorate = hasDefault && mod.defaultExport.name === 'decorate';
-
-  if (isNamedDecorate) {
-    return check('exports-decorate', 'JS exports a decorate() function as default', true, 'Module exports default function named "decorate"');
-  }
-  if (hasDefault) {
-    return check('exports-decorate', 'JS exports a decorate() function as default', true, `Module exports default function (named "${mod.defaultExport.name}")`);
-  }
-  return check('exports-decorate', 'JS exports a decorate() function as default', false, 'No default function export found');
-}

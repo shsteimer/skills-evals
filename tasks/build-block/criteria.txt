@@ -12,7 +12,7 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 
 <critical>
 - Block created in `blocks/{block-name}/` with matching `{block-name}.js` and `{block-name}.css` files following AEM naming conventions [check: block-files-exist]
-- js exports a `decorate()` function as the default block entry point [check: exports-decorate]
+- js exports a `decorate()` function as the default block entry point
 - Displays a responsive grid: 3 columns on desktop, scaling down to 1 on mobile
 - Each card renders an image, product name, description, and CTA link
 - Badge overlay renders on top of the card image (positioned over the image, not beside or below it) with text like "Sale", "New", etc.
@@ -23,7 +23,6 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 - Block implementation goes beyond renaming/copying the existing `cards` block — the structure, styling, or behavior reflects the product cards use case rather than being a mechanical clone
 - Uses semantic HTML structure (e.g., `<ul>/<li>` for the card list, headings for product names, `<a>` for CTAs)
 - All styles are scoped to the block (selectors namespaced to the block class) and do not leak to other elements
-- CSS handles edge cases: long product names and descriptions wrap or truncate gracefully rather than breaking the layout
 - Badge is optional — cards without a badge render cleanly with no empty/broken badge element
 - Lazy loading for images (via `createOptimizedPicture` eager parameter or explicit `loading="lazy"`)
 </important>
@@ -31,19 +30,18 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 ## Content Modeling & Authoring
 
 <critical>
-- Author-friendly content model: one card per row in the block table, with columns for image and text content
-- Badge is authored in the text column, not as a separate column in the block table
-- Badge text is distinguished using semantic formatting (e.g., bold or italic) and the JS identifies it by that formatting rather than by position or special syntax
+- Content model uses at most 2 columns per row in the block table (e.g., one for image, one for text content) — models with 3+ columns that split individual fields into separate cells are not acceptable
 </critical>
 
 <important>
+- Badge is authored inline within an existing content column (not as a dedicated column) and distinguished using semantic formatting (e.g., bold or italic) so the JS can identify it by formatting rather than by position or special syntax
 - Sample/demo content was created as a `.plain.html` file (e.g., in `drafts/`) that can be previewed with the AEM dev server — not just described in a summary
 </important>
 
 ## Testing
 
 <critical>
-- Agent tested the block in a browser or browser-like environment (e.g., started a dev server with `aem up` or wrote a playwright/puppeteer script to render the page). Simply creating files and reviewing code does not count.
+- Agent tested the block in a browser or browser-like environment where the block JS actually executes (e.g., opened the page in a browser or used Playwright/Puppeteer to render and screenshot it). Evidence must include screenshots, DOM inspection, or visual confirmation from the agent's tool calls — not just starting a dev server, fetching with curl, or claiming the output looks correct.
 - Agent verified responsive behavior across at least two viewport sizes (e.g., desktop and mobile)
 </critical>
 
@@ -54,13 +52,12 @@ Pass threshold: 80% of possible points (excluding bonus) with no critical items 
 </critical>
 
 <important>
-- PR with preview link was created
+- PR was created with a preview link to an `aem.page` or `aem.live` URL (e.g., `https://{branch}--aem-boilerplate-evals--shsteimer.aem.page/path/to/page`) that loads without 404, includes content demonstrating the block (e.g., sample product cards), and allows the reviewer to visually inspect the work and run a PSI check
 </important>
 
 ## Skill Discovery
 
 <bonus>
-- (+1) Agent followed a structured workflow (analyze existing blocks → design content model → build → test → review) without being told
-- (+1) Agent performed a self-review that goes beyond linting — e.g., checked accessibility, ran a PSI audit, or critically reviewed their own code for issues
+- (+1) Agent followed a structured workflow (analyze existing blocks → design content model → build → test in browser → review) without being told
 - (+1) Uses CSS grid with `auto-fit` or `auto-fill` and `minmax()` for fluid column sizing rather than discrete breakpoints
 </bonus>
