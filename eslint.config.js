@@ -7,6 +7,8 @@ export default [
       'tasks/**/source-*/',
       'results/',
       'tools/',
+      '.eval-workspaces/',
+      '.playwright-mcp/',
     ],
   },
   js.configs.recommended,
