@@ -63,7 +63,8 @@
       "Bash(true)",
       "Bash(false)",
       "Bash(test *)",
-      "Bash([ *)"
+      "Bash([ *)",
+      "mcp__playwright__*"
     ],
     "deny": [
       "Bash(git push --force *)",

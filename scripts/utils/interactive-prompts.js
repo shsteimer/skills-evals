@@ -49,7 +49,7 @@ async function discoverAugmentations() {
   try {
     const entries = await fs.readdir(augDir);
     return entries
-      .filter(f => f.endsWith('.json'))
+      .filter(f => f.endsWith('.json') || f.endsWith('.js') || f.endsWith('.mjs'))
       .map(f => path.join(augDir, f));
   } catch {
     return [];
@@ -129,22 +129,18 @@ export async function runInteractiveFlow(defaults = {}) {
   });
   const times = parseInt(timesStr, 10);
 
-  // Step 4: Augmentations file
+  // Step 4: Augmentation files (multi-select)
   const augFiles = await discoverAugmentations();
-  let augmentationsFile = null;
+  let augmentationsFiles = [];
   if (augFiles.length > 0) {
-    const augChoice = await select({
-      message: 'Augmentations file:',
-      choices: [
-        { name: 'None', value: null },
-        ...augFiles.map(f => ({
-          name: path.basename(f),
-          value: f
-        }))
-      ],
-      default: defaults.augmentationsFile ?? null
+    augmentationsFiles = await checkbox({
+      message: 'Augmentation files:',
+      choices: augFiles.map(f => ({
+        name: path.basename(f),
+        value: f,
+        checked: defaults.augmentationsFiles?.includes(f) ?? false
+      }))
     });
-    augmentationsFile = augChoice;
   }
 
   // Build args object
@@ -154,7 +150,7 @@ export async function runInteractiveFlow(defaults = {}) {
     tags: selectedTags,
     agents: selectedAgents,
     workspaceDir: defaults.workspaceDir ?? defaultWorkspace,
-    augmentationsFile,
+    augmentationsFiles,
     times,
     showHelp: false
   };
@@ -222,7 +218,10 @@ function showSettingsSummary(args, allTasks) {
 
   console.log(`  Agents:         ${args.agents.join(', ')}`);
   console.log(`  Iterations:     ${args.times}`);
-  console.log(`  Augmentations:  ${args.augmentationsFile ? path.basename(args.augmentationsFile) : 'None'}`);
+  const augDisplay = args.augmentationsFiles?.length > 0
+    ? args.augmentationsFiles.map(f => path.basename(f)).join(', ')
+    : 'None';
+  console.log(`  Augmentations:  ${augDisplay}`);
 
   // Total runs
   const totalRuns = taskNames.length * args.agents.length * args.times;

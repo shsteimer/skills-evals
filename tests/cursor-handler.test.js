@@ -20,6 +20,11 @@ describe('cursor buildArgs', () => {
     expect(args).toContain('--trust');
   });
 
+  it('should include --approve-mcps flag', () => {
+    const args = buildArgs();
+    expect(args).toContain('--approve-mcps');
+  });
+
   it('should NOT include --force flag', () => {
     const args = buildArgs();
     expect(args).not.toContain('--force');

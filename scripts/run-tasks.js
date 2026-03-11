@@ -19,38 +19,59 @@ const __dirname = path.dirname(__filename);
 
 const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-export async function findTasks(args, tasksDir = null, augmentationsFile = null) {
+export async function findTasks(args, tasksDir = null, augmentationsFiles = null) {
   // Validate that both task names and tags are not specified
   if (args.tasks && args.tasks.length > 0 && args.tags && args.tags.length > 0) {
     throw new Error('Cannot specify both task names and tags. Use one or the other.');
   }
 
   const baseDir = tasksDir || path.join(__dirname, '..', 'tasks');
-  
-  // Load global augmentations if a file path is specified
-  let globalAugmentations = [];
+
+  // Load global augmentations from one or more files (JSON or JS)
+  const globalAugmentations = [];
+  const globalScriptedAugmentations = [];
   let augmentationSetName = null;
-  const globalAugmentationsPath = augmentationsFile || args.augmentationsFile;
+  const augPaths = augmentationsFiles || args.augmentationsFiles || [];
 
-  if (globalAugmentationsPath) {
-    try {
-      const globalAugContent = await fs.readFile(globalAugmentationsPath, 'utf-8');
-      const parsed = JSON.parse(globalAugContent);
-
-      // Support both formats:
-      //   New: { name: "...", augmentations: [...] }
-      //   Legacy: [...]
-      if (Array.isArray(parsed)) {
-        globalAugmentations = parsed;
-      } else if (parsed && Array.isArray(parsed.augmentations)) {
-        globalAugmentations = parsed.augmentations;
-        augmentationSetName = parsed.name || null;
-      } else {
-        throw new Error(`Augmentations file must contain an array or {name, augmentations} object (${globalAugmentationsPath})`);
+  for (const augPath of augPaths) {
+    if (augPath.endsWith('.js') || augPath.endsWith('.mjs')) {
+      // Scripted augmentation: JS module with { name, augment } default export
+      const mod = await import(path.resolve(augPath));
+      const script = mod.default;
+      if (!script || typeof script.augment !== 'function') {
+        throw new Error(`Scripted augmentation must export default { name, augment } (${augPath})`);
       }
-    } catch (error) {
-      if (error.message.includes('Augmentations file must contain')) throw error;
-      throw new Error(`Error reading augmentations file ${globalAugmentationsPath}: ${error.message}`);
+      globalScriptedAugmentations.push({ ...script, path: augPath });
+      if (script.name) {
+        augmentationSetName = augmentationSetName
+          ? `${augmentationSetName} + ${script.name}`
+          : script.name;
+      }
+    } else {
+      // JSON augmentation: file copy entries
+      try {
+        const globalAugContent = await fs.readFile(augPath, 'utf-8');
+        const parsed = JSON.parse(globalAugContent);
+
+        // Support both formats:
+        //   New: { name: "...", augmentations: [...] }
+        //   Legacy: [...]
+        if (Array.isArray(parsed)) {
+          globalAugmentations.push(...parsed);
+        } else if (parsed && Array.isArray(parsed.augmentations)) {
+          globalAugmentations.push(...parsed.augmentations);
+          if (parsed.name) {
+            augmentationSetName = augmentationSetName
+              ? `${augmentationSetName} + ${parsed.name}`
+              : parsed.name;
+          }
+        } else {
+          throw new Error(`Augmentations file must contain an array or {name, augmentations} object (${augPath})`);
+        }
+      } catch (error) {
+        if (error.message.includes('Augmentations file must contain')) throw error;
+        throw new Error(`Error reading augmentations file ${augPath}: ${error.message}`);
+      }
     }
   }
   
@@ -95,6 +116,7 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
       allTasks.push({
         ...taskData,
         augmentations,
+        scriptedAugmentations: globalScriptedAugmentations,
         augmentationSetName,
         taskPath,
         prompt,
@@ -236,8 +258,11 @@ export async function createTaskWorkspace(task) {
     await fs.rmdir(tempDir);
   }
   
-  // Apply augmentations if specified
-  // Augmentation sources can be:
+  // Copy agent-specific config into workspace (baseline, before augmentations)
+  await copyAgentConfig(sanitizeName(task.agent), task.workspaceDir);
+
+  // Apply file-copy augmentations
+  // Sources can be:
   //   1. Local file or folder (relative or absolute path)
   //   2. GitHub URL (file or folder) - uses git clone with your credentials
   //      - https://github.com/org/repo/blob/branch/path/to/file.txt (single file)
@@ -247,10 +272,14 @@ export async function createTaskWorkspace(task) {
   //   3. HTTP/HTTPS URL to a file (any publicly accessible URL)
   if (task.augmentations && Array.isArray(task.augmentations)) {
     for (const aug of task.augmentations) {
+      // Skip augmentations that target specific agents if current agent doesn't match
+      if (Array.isArray(aug.agents) && aug.agents.length > 0 && !aug.agents.includes(task.agent)) {
+        continue;
+      }
       if (aug.source && aug.target) {
         const targetPath = path.join(task.workspaceDir, aug.target);
         const mode = aug.mode || 'merge'; // Default to merge mode
-        
+
         // Determine source type and handle accordingly
         if (aug.source.startsWith('http://') || aug.source.startsWith('https://')) {
           // HTTP/HTTPS URL - could be GitHub or any other URL
@@ -260,7 +289,7 @@ export async function createTaskWorkspace(task) {
           } else {
             // Regular HTTP/HTTPS URL - treat as single file
             await fs.mkdir(path.dirname(targetPath), { recursive: true });
-            
+
             const response = await fetch(aug.source);
             if (!response.ok) {
               throw new Error(`Failed to fetch ${aug.source}: ${response.statusText}`);
@@ -277,7 +306,7 @@ export async function createTaskWorkspace(task) {
             // Relative path - could be relative to taskPath (task-specific) or CWD (global)
             const taskRelativePath = path.join(task.taskPath, aug.source);
             const cwdRelativePath = path.resolve(process.cwd(), aug.source);
-            
+
             try {
               await fs.access(taskRelativePath);
               sourcePath = taskRelativePath;
@@ -286,16 +315,16 @@ export async function createTaskWorkspace(task) {
               sourcePath = cwdRelativePath;
             }
           }
-          
+
           // Check if source exists and is file or directory
           const stats = await fs.stat(sourcePath);
-          
+
           if (stats.isDirectory()) {
             // Handle replace mode for directories
             if (mode === 'replace') {
               await cleanupDir(targetPath);
             }
-            
+
             // Copy directory recursively
             await copyDirectoryRecursive(sourcePath, targetPath);
           } else {
@@ -306,11 +335,20 @@ export async function createTaskWorkspace(task) {
         }
       }
     }
-    
+
   }
 
-  // Copy agent-specific config into workspace
-  await copyAgentConfig(sanitizeName(task.agent), task.workspaceDir);
+  // Run scripted augmentations
+  if (task.scriptedAugmentations && Array.isArray(task.scriptedAugmentations)) {
+    const context = {
+      workspaceDir: task.workspaceDir,
+      agent: task.agent,
+      taskName: task.name
+    };
+    for (const script of task.scriptedAugmentations) {
+      await script.augment(context);
+    }
+  }
 
   // Single commit for all workspace setup (augmentations + agent settings)
   addAndCommit(task.workspaceDir, 'Workspace setup');
@@ -355,6 +393,7 @@ export async function createTaskInfoFolder(task) {
     tags: task.tags,
     startFrom: task.startFrom,
     augmentations: task.augmentations,
+    scriptedAugmentations: (task.scriptedAugmentations || []).map(s => ({ name: s.name, path: s.path })),
     augmentationSetName: task.augmentationSetName || null,
     agent: task.agent,
     model: task.model || null,
@@ -385,7 +424,7 @@ export function parseArgs(argv) {
     tags: [],
     agents: [],
     workspaceDir: path.join(os.tmpdir(), 'skills-evals-workspace'),
-    augmentationsFile: null, // Only load if explicitly specified
+    augmentationsFiles: [], // Only load if explicitly specified
     times: 1, // Number of times to run each task
     showHelp: false
   };
@@ -414,7 +453,7 @@ export function parseArgs(argv) {
     } else if (arg === '--workspace' && i + 1 < argv.length) {
       result.workspaceDir = argv[++i];
     } else if (arg === '--augmentations' && i + 1 < argv.length) {
-      result.augmentationsFile = argv[++i];
+      result.augmentationsFiles.push(argv[++i]);
     } else if (arg === '--times' && i + 1 < argv.length) {
       const value = parseInt(argv[++i], 10);
       if (isNaN(value) || value < 1) {
@@ -440,6 +479,7 @@ Options:
   --task <name>       Task name(s) to run (can be used multiple times or comma-separated)
   --tag <tag>         Filter tasks by tag(s) - matches ANY tag (can be used multiple times or comma-separated)
   --agents <name>     Agent(s) to run tasks with (default: claude,cursor,codex)
+  --augmentations <f> Augmentation file(s) to apply (can be used multiple times)
   --workspace <path>  Directory to create task workspaces (default: system temp)
   --times <number>    Number of times to run each task (default: 1)
   -h, --help          Show this help message
@@ -449,6 +489,8 @@ Examples:
   npm run run-tasks --task build-block,deploy-service
   npm run run-tasks --tag cdd --tag blocks
   npm run run-tasks --agents claude --task build-block
+  npm run run-tasks --augmentations augmentations/skills-only.json
+  npm run run-tasks --augmentations augmentations/a.json --augmentations augmentations/b.json
   npm run run-tasks --workspace /tmp/my-workspace --task build-block
   npm run run-tasks --task build-block --times 3
 `);
@@ -653,7 +695,7 @@ export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, h
       agents: args.agents,
       times: args.times,
       workspaceDir: args.workspaceDir,
-      augmentationsFile: args.augmentationsFile
+      augmentationsFiles: args.augmentationsFiles
     },
     augmentationSetName: enrichedTasks[0]?.augmentationSetName || null,
     agentModels,

@@ -179,6 +179,29 @@ describe('parseArgs', () => {
   });
 });
 
+  describe('augmentations', () => {
+    it('should default augmentationsFiles to empty array', () => {
+      const args = ['node', 'script.js'];
+      const result = parseArgs(args);
+
+      expect(result.augmentationsFiles).toEqual([]);
+    });
+
+    it('should parse single --augmentations flag', () => {
+      const args = ['node', 'script.js', '--augmentations', 'augmentations/skills-only.json'];
+      const result = parseArgs(args);
+
+      expect(result.augmentationsFiles).toEqual(['augmentations/skills-only.json']);
+    });
+
+    it('should parse multiple --augmentations flags', () => {
+      const args = ['node', 'script.js', '--augmentations', 'augmentations/a.json', '--augmentations', 'augmentations/b.json'];
+      const result = parseArgs(args);
+
+      expect(result.augmentationsFiles).toEqual(['augmentations/a.json', 'augmentations/b.json']);
+    });
+  });
+
 describe('buildBatchMetadata', () => {
   const baseArgs = {
     tasks: ['build-block'],
@@ -186,7 +209,7 @@ describe('buildBatchMetadata', () => {
     agents: ['claude'],
     times: 3,
     workspaceDir: '/tmp/workspace',
-    augmentationsFile: 'augmentations/cdd.json'
+    augmentationsFiles: ['augmentations/cdd.json']
   };
 
   const enrichedTasks = [
@@ -227,14 +250,14 @@ describe('buildBatchMetadata', () => {
       agents: ['claude'],
       times: 3,
       workspaceDir: '/tmp/workspace',
-      augmentationsFile: 'augmentations/cdd.json'
+      augmentationsFiles: ['augmentations/cdd.json']
     });
   });
 
-  it('should set augmentationSetName to null when no augmentation file', () => {
+  it('should set augmentationSetName to null when no augmentation files', () => {
     const tasksNoAug = enrichedTasks.map(t => ({ ...t, augmentationSetName: null }));
     const result = buildBatchMetadata(
-      { ...baseArgs, augmentationsFile: null }, tasksNoAug,
+      { ...baseArgs, augmentationsFiles: [] }, tasksNoAug,
       '2026-03-08T13:53:05.000Z', '2026-03-08T13:59:02.000Z',
       false
     );

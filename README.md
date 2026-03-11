@@ -135,22 +135,52 @@ Create a JSON file with augmentations to apply to all tasks:
 ]
 ```
 
-Use with `--augmentations` flag:
+Use with `--augmentations` flag (can be specified multiple times):
 ```bash
 npm run run-tasks -- --augmentations ./my-augmentations.json
+npm run run-tasks -- --augmentations ./base.json --augmentations ./extras.json
 ```
+
+In interactive mode, augmentation files are multi-select.
+
+### Augmentation Properties
+
+Each augmentation entry supports:
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `source` | yes | File/folder path or URL |
+| `target` | yes | Destination path in workspace |
+| `mode`   | no  | `"merge"` (default) or `"replace"` for folders |
+| `agents` | no  | Array of agent names (e.g. `["claude"]`). When set, the augmentation is only applied for those agents. Omit to apply for all agents. |
+
+### Scripted Augmentations
+
+For complex setup that can't be expressed as simple file copies (e.g. modifying existing config files, agent-specific logic), use a JS augmentation file. Export a default object with a `name` and an `augment` function:
+
+```js
+// augmentations/my-setup.js
+import fs from 'fs/promises';
+import path from 'path';
+
+export default {
+  name: 'My Setup',
+  async augment({ workspaceDir, agent, taskName }) {
+    // Full access to the workspace — read, write, modify files
+    if (agent === 'codex') {
+      const configPath = path.join(workspaceDir, '.codex', 'config.toml');
+      const existing = await fs.readFile(configPath, 'utf-8');
+      await fs.writeFile(configPath, existing + '\n[extra]\nkey = "value"\n');
+    }
+  },
+};
+```
+
+Scripted augmentations run after agent config and file-copy augmentations, so they can read and modify any files already in the workspace. They're discovered alongside JSON files in `augmentations/` and appear in the interactive multi-select.
 
 ### Augmentation Modes
 
-For folders, control merge behavior:
-```json
-{
-  "source": "./folder",
-  "target": "dest",
-  "mode": "merge"
-}
-```
-
+For folders, control merge behavior with `mode`:
 - `merge` (default): Add/overwrite files, keep existing
 - `replace`: Delete target first, then copy
 

@@ -18,6 +18,7 @@ export function buildArgs() {
 
   const args = [
     '--trust',
+    '--approve-mcps',
     '--output-format', 'stream-json',
   ];
 

@@ -73,6 +73,10 @@ export async function reconstructWorkspace(resultFolder) {
   // Apply augmentations
   if (augmentations && Array.isArray(augmentations)) {
     for (const aug of augmentations) {
+      // Skip augmentations that target specific agents if current agent doesn't match
+      if (Array.isArray(aug.agents) && aug.agents.length > 0 && !aug.agents.includes(taskJson.agent)) {
+        continue;
+      }
       if (!aug.source || !aug.target) continue;
 
       const targetPath = path.join(workspaceDir, aug.target);
