@@ -18,6 +18,7 @@ vi.mock('child_process', async (importOriginal) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const fixturesDir = path.join(__dirname, 'fixtures', 'reconstruct');
+const projectRoot = path.join(__dirname, '..');
 
 // Helper to create a mock result folder
 async function createMockResultFolder(dir, overrides = {}) {
@@ -88,7 +89,7 @@ describe('reconstructWorkspace', () => {
     const workspacePath = await reconstructWorkspace(resultDir);
 
     expect(workspacePath).toContain('.eval-workspaces');
-    expect(workspacePath).toContain('build-block-claude-1');
+    expect(workspacePath).toContain(path.join('20260308-135305', 'build-block-claude-1'));
 
     // Clean up workspace
     await fs.rm(workspacePath, { recursive: true, force: true });
@@ -183,5 +184,55 @@ describe('reconstructWorkspace', () => {
     expect(cloneCalls[0][0]).toContain('--branch develop');
 
     await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('should scope reconstructed workspaces by batch timestamp', async () => {
+    const resultDir = path.join(fixturesDir, 'build-block-claude-1');
+    await createMockResultFolder(resultDir, {
+      timestamp: '20260308-135305'
+    });
+
+    const workspacePath = await reconstructWorkspace(resultDir);
+
+    expect(workspacePath).toBe(
+      path.join(projectRoot, '.eval-workspaces', '20260308-135305', 'build-block-claude-1')
+    );
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('should replay scripted augmentations recorded in task.json', async () => {
+    const resultDir = path.join(fixturesDir, 'with-scripted-augmentation');
+    const scriptPath = path.join(projectRoot, 'tests', 'fixtures', 'reconstruct-scripted-augmentation.mjs');
+
+    await fs.mkdir(path.dirname(scriptPath), { recursive: true });
+    await fs.writeFile(
+      scriptPath,
+      `import fs from 'fs/promises';
+import path from 'path';
+
+export default {
+  name: 'Replay Test',
+  async augment({ workspaceDir }) {
+    await fs.writeFile(path.join(workspaceDir, 'scripted.txt'), 'Scripted content', 'utf-8');
+  }
+};
+`,
+      'utf-8'
+    );
+
+    await createMockResultFolder(resultDir, {
+      scriptedAugmentations: [
+        { name: 'Replay Test', path: scriptPath }
+      ]
+    });
+
+    const workspacePath = await reconstructWorkspace(resultDir);
+    const scriptedContent = await fs.readFile(path.join(workspacePath, 'scripted.txt'), 'utf-8');
+
+    expect(scriptedContent).toBe('Scripted content');
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+    await fs.rm(scriptPath, { force: true });
   });
 });

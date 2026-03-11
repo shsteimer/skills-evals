@@ -3,9 +3,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { sanitizeName, getCurrentTimestamp, computeTaskHash } from './utils/string-utils.js';
-import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
-import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
-import { downloadFromGitHub } from './utils/github-utils.js';
+import { ensureDir, cleanupDir } from './utils/fs-utils.js';
+import { checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
@@ -13,6 +12,7 @@ import { getEnv, getAgentConfig } from './utils/env-config.js';
 import { createRunLogger } from './utils/run-logger.js';
 import { runTaskChecks } from './utils/task-checks.js';
 import { hasUserFlags, confirmOrEdit, runInteractiveFlow } from './utils/interactive-prompts.js';
+import { bootstrapWorkspace, copyAgentConfig } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,198 +157,10 @@ export async function findTasks(args, tasksDir = null, augmentationsFiles = null
   return filteredTasks;
 }
 
-const configDir = path.join(__dirname, '..', 'config');
-
-/**
- * Copy agent-specific config files into the workspace.
- * Each agent has its own config layout:
- * - claude: config/claude-settings.json → .claude/settings.json
- * - cursor: config/cursor-cli.json → .cursor/cli.json, config/cursor-system-prompt.md → .cursor/rules/system-prompt.md
- * - codex: config/codex-config.toml → .codex/config.toml
- */
-export async function copyAgentConfig(agent, workspaceDir) {
-  const copies = {
-    claude: [
-      { src: 'claude-settings.json', dest: '.claude/settings.json' },
-    ],
-    cursor: [
-      { src: 'cursor-cli.json', dest: '.cursor/cli.json' },
-      { src: 'cursor-system-prompt.md', dest: '.cursor/rules/system-prompt.md' },
-    ],
-    codex: [
-      { src: 'codex-config.toml', dest: '.codex/config.toml' },
-    ],
-  };
-
-  const filesToCopy = copies[agent] || [];
-  for (const { src, dest } of filesToCopy) {
-    const srcPath = path.join(configDir, src);
-    try {
-      await fs.access(srcPath);
-      const destPath = path.join(workspaceDir, dest);
-      await ensureDir(path.dirname(destPath));
-      await fs.copyFile(srcPath, destPath);
-    } catch {
-      // Config file doesn't exist — skip
-    }
-  }
-}
+export { copyAgentConfig };
 
 export async function createTaskWorkspace(task) {
-  // Create workspace directory
-  await ensureDir(task.workspaceDir);
-  
-  // Setup git repository - startFrom is required
-  if (!task.startFrom) {
-    throw new Error('startFrom is required');
-  }
-  
-  {
-    // Parse GitHub URL
-    // Supports: https://github.com/org/repo or https://github.com/org/repo/tree/branch
-    let url;
-    try {
-      url = new URL(task.startFrom);
-    } catch (error) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    if (!url.hostname.includes('github.com')) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    const pathParts = url.pathname.split('/').filter(p => p);
-    const org = pathParts[0];
-    const repo = pathParts[1];
-    
-    if (!org || !repo) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    let branch = 'main';
-    if (pathParts[2] === 'tree' && pathParts[3]) {
-      branch = pathParts[3];
-    }
-    
-    const cloneUrl = `https://github.com/${org}/${repo}.git`;
-    
-    // Clone the repo into a temp location first
-    const tempDir = path.join(os.tmpdir(), `clone-${Date.now()}`);
-    
-    try {
-      cloneRepository(cloneUrl, tempDir, { branch });
-    } catch (error) {
-      throw new Error(
-        `Failed to clone repository from ${task.startFrom}.\n` +
-        `Make sure the repository exists, you have access, and the branch '${branch}' exists.\n` +
-        `Error: ${error.message}`
-      );
-    }
-    
-    // Move contents to workspace dir
-    const entries = await fs.readdir(tempDir);
-    for (const entry of entries) {
-      await fs.rename(
-        path.join(tempDir, entry),
-        path.join(task.workspaceDir, entry)
-      );
-    }
-    
-    // Clean up temp dir
-    await fs.rmdir(tempDir);
-  }
-  
-  // Copy agent-specific config into workspace (baseline, before augmentations)
-  await copyAgentConfig(sanitizeName(task.agent), task.workspaceDir);
-
-  // Apply file-copy augmentations
-  // Sources can be:
-  //   1. Local file or folder (relative or absolute path)
-  //   2. GitHub URL (file or folder) - uses git clone with your credentials
-  //      - https://github.com/org/repo/blob/branch/path/to/file.txt (single file)
-  //      - https://github.com/org/repo/blob/commit-hash/path/to/file.txt (file at specific commit)
-  //      - https://github.com/org/repo/tree/branch/path/to/folder (folder)
-  //      - https://raw.githubusercontent.com/org/repo/branch/path/to/file.txt (single file)
-  //   3. HTTP/HTTPS URL to a file (any publicly accessible URL)
-  if (task.augmentations && Array.isArray(task.augmentations)) {
-    for (const aug of task.augmentations) {
-      // Skip augmentations that target specific agents if current agent doesn't match
-      if (Array.isArray(aug.agents) && aug.agents.length > 0 && !aug.agents.includes(task.agent)) {
-        continue;
-      }
-      if (aug.source && aug.target) {
-        const targetPath = path.join(task.workspaceDir, aug.target);
-        const mode = aug.mode || 'merge'; // Default to merge mode
-
-        // Determine source type and handle accordingly
-        if (aug.source.startsWith('http://') || aug.source.startsWith('https://')) {
-          // HTTP/HTTPS URL - could be GitHub or any other URL
-          if (aug.source.includes('github.com')) {
-            // GitHub URL - handle files and folders via API
-            await downloadFromGitHub(aug.source, targetPath, mode);
-          } else {
-            // Regular HTTP/HTTPS URL - treat as single file
-            await fs.mkdir(path.dirname(targetPath), { recursive: true });
-
-            const response = await fetch(aug.source);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch ${aug.source}: ${response.statusText}`);
-            }
-            const content = await response.text();
-            await fs.writeFile(targetPath, content, 'utf-8');
-          }
-        } else {
-          // Local file or folder path (relative or absolute)
-          let sourcePath;
-          if (path.isAbsolute(aug.source)) {
-            sourcePath = aug.source;
-          } else {
-            // Relative path - could be relative to taskPath (task-specific) or CWD (global)
-            const taskRelativePath = path.join(task.taskPath, aug.source);
-            const cwdRelativePath = path.resolve(process.cwd(), aug.source);
-
-            try {
-              await fs.access(taskRelativePath);
-              sourcePath = taskRelativePath;
-            } catch {
-              // If not found in task path, assume it's relative to CWD
-              sourcePath = cwdRelativePath;
-            }
-          }
-
-          // Check if source exists and is file or directory
-          const stats = await fs.stat(sourcePath);
-
-          if (stats.isDirectory()) {
-            // Handle replace mode for directories
-            if (mode === 'replace') {
-              await cleanupDir(targetPath);
-            }
-
-            // Copy directory recursively
-            await copyDirectoryRecursive(sourcePath, targetPath);
-          } else {
-            // Handle single file
-            await ensureDir(path.dirname(targetPath));
-            await fs.copyFile(sourcePath, targetPath);
-          }
-        }
-      }
-    }
-
-  }
-
-  // Run scripted augmentations
-  if (task.scriptedAugmentations && Array.isArray(task.scriptedAugmentations)) {
-    const context = {
-      workspaceDir: task.workspaceDir,
-      agent: task.agent,
-      taskName: task.name
-    };
-    for (const script of task.scriptedAugmentations) {
-      await script.augment(context);
-    }
-  }
+  await bootstrapWorkspace(task);
 
   // Single commit for all workspace setup (augmentations + agent settings)
   addAndCommit(task.workspaceDir, 'Workspace setup');

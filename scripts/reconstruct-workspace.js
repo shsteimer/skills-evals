@@ -3,10 +3,10 @@ import path from 'path';
 import fs from 'fs/promises';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { cloneRepository, addAndCommit } from './utils/git-utils.js';
-import { downloadFromGitHub } from './utils/github-utils.js';
-import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
+import { addAndCommit } from './utils/git-utils.js';
+import { ensureDir, cleanupDir } from './utils/fs-utils.js';
 import { execAsync } from './utils/process-utils.js';
+import { bootstrapWorkspace } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,98 +33,23 @@ export async function reconstructWorkspace(resultFolder) {
     throw new Error(`task.json in ${resultFolder} is missing startFrom`);
   }
 
-  // Parse startFrom URL
-  const url = new URL(startFrom);
-  const pathParts = url.pathname.split('/').filter(p => p);
-  const org = pathParts[0];
-  const repo = pathParts[1];
-  let branch = 'main';
-  if (pathParts[2] === 'tree' && pathParts[3]) {
-    branch = pathParts[3];
-  }
-  const cloneUrl = `https://github.com/${org}/${repo}.git`;
-
   // Create workspace in project-local directory (so subagents have permission to read it)
   const projectRoot = path.join(__dirname, '..');
   const folderName = path.basename(resultFolder);
-  const workspaceDir = path.join(projectRoot, '.eval-workspaces', folderName);
+  const batchId = taskJson.runSetId || taskJson.timestamp || path.basename(path.dirname(resultFolder));
+  const workspaceDir = path.join(projectRoot, '.eval-workspaces', batchId, folderName);
   await cleanupDir(workspaceDir);
   await ensureDir(workspaceDir);
 
-  // Clone repo to temp, then move contents to workspace
-  const tempCloneDir = path.join(os.tmpdir(), `eval-clone-${Date.now()}`);
   try {
-    cloneRepository(cloneUrl, tempCloneDir, { branch });
+    await bootstrapWorkspace({
+      ...taskJson,
+      augmentations,
+      taskPath: path.join(projectRoot, 'tasks', taskJson.name),
+      workspaceDir
+    });
   } catch (error) {
-    throw new Error(
-      `Failed to clone ${startFrom}: ${error.message}`
-    );
-  }
-
-  const entries = await fs.readdir(tempCloneDir);
-  for (const entry of entries) {
-    await fs.rename(
-      path.join(tempCloneDir, entry),
-      path.join(workspaceDir, entry)
-    );
-  }
-  await fs.rmdir(tempCloneDir);
-
-  // Apply augmentations
-  if (augmentations && Array.isArray(augmentations)) {
-    for (const aug of augmentations) {
-      // Skip augmentations that target specific agents if current agent doesn't match
-      if (Array.isArray(aug.agents) && aug.agents.length > 0 && !aug.agents.includes(taskJson.agent)) {
-        continue;
-      }
-      if (!aug.source || !aug.target) continue;
-
-      const targetPath = path.join(workspaceDir, aug.target);
-      const mode = aug.mode || 'merge';
-
-      if (aug.source.startsWith('http://') || aug.source.startsWith('https://')) {
-        if (aug.source.includes('github.com')) {
-          await downloadFromGitHub(aug.source, targetPath, mode);
-        } else {
-          await fs.mkdir(path.dirname(targetPath), { recursive: true });
-          const response = await fetch(aug.source);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${aug.source}: ${response.statusText}`);
-          }
-          const content = await response.text();
-          await fs.writeFile(targetPath, content, 'utf-8');
-        }
-      } else {
-        // Local path — try task directory first, then project root (matching run-tasks.js)
-        const projectRoot = path.join(__dirname, '..');
-        let sourcePath;
-        if (path.isAbsolute(aug.source)) {
-          sourcePath = aug.source;
-        } else {
-          const taskName = taskJson.name;
-          const taskRelativePath = path.join(projectRoot, 'tasks', taskName, aug.source);
-          const projectRelativePath = path.resolve(projectRoot, aug.source);
-
-          try {
-            await fs.access(taskRelativePath);
-            sourcePath = taskRelativePath;
-          } catch {
-            sourcePath = projectRelativePath;
-          }
-        }
-
-        const stats = await fs.stat(sourcePath);
-        if (stats.isDirectory()) {
-          if (mode === 'replace') {
-            await cleanupDir(targetPath);
-          }
-          await copyDirectoryRecursive(sourcePath, targetPath);
-        } else {
-          await ensureDir(path.dirname(targetPath));
-          await fs.copyFile(sourcePath, targetPath);
-        }
-      }
-    }
+    throw new Error(`Failed to reconstruct workspace for ${startFrom}: ${error.message}`);
   }
 
   // Commit all setup

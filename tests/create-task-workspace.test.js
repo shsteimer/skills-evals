@@ -211,6 +211,41 @@ describe('createTaskWorkspace', () => {
       const checkoutCmd = cloneCommands.find(cmd => cmd.includes('git checkout') && cmd.includes('abc123'));
       expect(checkoutCmd).toBeDefined();
     });
+
+    it('should support startFrom pinned to a commit hash', async () => {
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        iteration: 1,
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        startFrom: 'https://github.com/adobe/aem-boilerplate/tree/abc123def456789012345678901234567890abcd'
+      };
+
+      const cloneCommands = [];
+      execSync.mockImplementation((cmd) => {
+        cloneCommands.push(cmd);
+        if (cmd.includes('git clone')) {
+          const match = cmd.match(/git clone[^"]*"([^"]+)"/);
+          if (match) {
+            const targetDir = match[1];
+            const fsSync = require('fs');
+            fsSync.mkdirSync(path.join(targetDir, '.git'), { recursive: true });
+            fsSync.writeFileSync(path.join(targetDir, 'README.md'), '# Test');
+          }
+        }
+        return Buffer.from('');
+      });
+
+      await createTaskWorkspace(task);
+
+      const cloneCmd = cloneCommands.find(cmd => cmd.includes('git clone'));
+      expect(cloneCmd).toBeDefined();
+      expect(cloneCmd).not.toContain('--depth 1');
+
+      const checkoutCmd = cloneCommands.find(cmd => cmd.includes('git checkout abc123def456789012345678901234567890abcd'));
+      expect(checkoutCmd).toBeDefined();
+    });
   });
 
   describe('augmentations', () => {
@@ -743,4 +778,3 @@ describe('copyAgentConfig', () => {
     expect(entries).toHaveLength(0);
   });
 });
-
