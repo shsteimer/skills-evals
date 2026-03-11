@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   cloneRepository,
+  addWorktree,
+  removeWorktree,
+  pushBranch,
   checkoutBranch,
   addAndCommit,
   captureGitChanges,
@@ -173,6 +176,56 @@ describe('git-utils', () => {
         expect.any(String),
         expect.objectContaining({ cwd: '/custom/workspace' })
       );
+    });
+  });
+
+  describe('addWorktree', () => {
+    it('should add worktree with new branch', () => {
+      addWorktree('/bare/repo', '/workspace/task-1', 'claude-0311-1407-1');
+
+      expect(execSync).toHaveBeenCalledWith(
+        'git worktree add -b claude-0311-1407-1 "/workspace/task-1"',
+        { cwd: '/bare/repo', stdio: 'pipe' }
+      );
+    });
+
+    it('should handle paths with spaces', () => {
+      addWorktree('/bare/repo', '/path with spaces/task', 'branch-name');
+
+      expect(execSync).toHaveBeenCalledWith(
+        'git worktree add -b branch-name "/path with spaces/task"',
+        { cwd: '/bare/repo', stdio: 'pipe' }
+      );
+    });
+  });
+
+  describe('removeWorktree', () => {
+    it('should remove worktree with force', () => {
+      removeWorktree('/bare/repo', '/workspace/task-1');
+
+      expect(execSync).toHaveBeenCalledWith(
+        'git worktree remove "/workspace/task-1" --force',
+        { cwd: '/bare/repo', stdio: 'pipe' }
+      );
+    });
+  });
+
+  describe('pushBranch', () => {
+    it('should push branch to origin', async () => {
+      execAsync.mockResolvedValueOnce({ stdout: '', stderr: '' });
+
+      await pushBranch('/workspace/task-1', 'claude-0311-1407-1');
+
+      expect(execAsync).toHaveBeenCalledWith(
+        'git push origin claude-0311-1407-1',
+        { cwd: '/workspace/task-1' }
+      );
+    });
+
+    it('should propagate push errors', async () => {
+      execAsync.mockRejectedValueOnce(new Error('push failed'));
+
+      await expect(pushBranch('/workspace', 'branch')).rejects.toThrow('push failed');
     });
   });
 

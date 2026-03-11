@@ -201,6 +201,68 @@ describe('reconstructWorkspace', () => {
     await fs.rm(workspacePath, { recursive: true, force: true });
   });
 
+  it('should use branch-based reconstruction when branchName is present', async () => {
+    const resultDir = path.join(fixturesDir, 'branch-recon');
+    await createMockResultFolder(resultDir, {
+      branchName: 'claude-0308-1353-1'
+    });
+
+    const workspacePath = await reconstructWorkspace(resultDir);
+
+    // Should clone the repo, fetch the branch, and checkout
+    const allCmds = execSync.mock.calls.map(([cmd]) => cmd);
+    const fetchCmd = allCmds.find(c => c.includes('git fetch origin claude-0308-1353-1'));
+    const checkoutCmd = allCmds.find(c => c.includes('git checkout claude-0308-1353-1'));
+    expect(fetchCmd).toBeDefined();
+    expect(checkoutCmd).toBeDefined();
+
+    // Should NOT apply diff (branch has everything)
+    const applyCalls = allCmds.filter(c => c.includes('git apply'));
+    expect(applyCalls).toHaveLength(0);
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('should fall back to diff reconstruction when branch fetch fails', async () => {
+    const resultDir = path.join(fixturesDir, 'branch-fail');
+    await createMockResultFolder(resultDir, {
+      branchName: 'nonexistent-branch'
+    });
+
+    // Make fetch fail
+    const originalImpl = execSync.getMockImplementation();
+    execSync.mockImplementation((cmd, opts) => {
+      if (cmd.includes('git fetch origin nonexistent-branch')) {
+        throw new Error('branch not found');
+      }
+      return originalImpl(cmd, opts);
+    });
+
+    const workspacePath = await reconstructWorkspace(resultDir);
+
+    // Should fall back and apply diff
+    const allCmds = execSync.mock.calls.map(([cmd]) => cmd);
+    const applyCalls = allCmds.filter(c => c.includes('git apply'));
+    expect(applyCalls.length).toBe(1);
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
+  it('should use diff reconstruction when branchName is absent', async () => {
+    const resultDir = path.join(fixturesDir, 'no-branch');
+    await createMockResultFolder(resultDir);
+    // Default createMockResultFolder doesn't set branchName
+
+    const workspacePath = await reconstructWorkspace(resultDir);
+
+    // Should use diff path — no fetch
+    const allCmds = execSync.mock.calls.map(([cmd]) => cmd);
+    const fetchCalls = allCmds.filter(c => c.includes('git fetch'));
+    expect(fetchCalls).toHaveLength(0);
+
+    await fs.rm(workspacePath, { recursive: true, force: true });
+  });
+
   it('should replay scripted augmentations recorded in task.json', async () => {
     const resultDir = path.join(fixturesDir, 'with-scripted-augmentation');
     const scriptPath = path.join(projectRoot, 'tests', 'fixtures', 'reconstruct-scripted-augmentation.mjs');

@@ -4,7 +4,8 @@ import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { sanitizeName, getCurrentTimestamp, computeTaskHash } from './utils/string-utils.js';
 import { ensureDir, cleanupDir } from './utils/fs-utils.js';
-import { checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
+import { addAndCommit, captureGitChanges, captureGitCommits, pushBranch, removeWorktree } from './utils/git-utils.js';
+import { CloneRegistry } from './utils/clone-registry.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
 import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
@@ -169,19 +170,18 @@ export async function findTasks(args, tasksDir = null, augmentationsFiles = null
 
 export { copyAgentConfig };
 
-export async function createTaskWorkspace(task) {
-  await bootstrapWorkspace(task);
+export async function createTaskWorkspace(task, options = {}) {
+  const { cloneRegistry, clonesBaseDir } = options;
+
+  await bootstrapWorkspace(task, {
+    cloneRegistry,
+    clonesBaseDir,
+    branchName: task.branchName
+  });
 
   // Single commit for all workspace setup (augmentations + agent settings)
   addAndCommit(task.workspaceDir, 'Workspace setup');
 
-  // Create and checkout new branch for the agent (after setup commits)
-  // Short branch name to stay under 63-char DNS label limit for AEM dev server
-  // Full timestamp is 20260311-140750 → trim to 0311-1407
-  const shortTs = task.timestamp.replace(/^20\d{2}/, '').replace(/\d{2}$/, '');
-  const agentBranch = `${sanitizeName(task.agent)}-${shortTs}-${task.iteration}`;
-  checkoutBranch(task.workspaceDir, agentBranch, true);
-  
   // Install dependencies if package.json exists
   const packageJsonPath = path.join(task.workspaceDir, 'package.json');
   try {
@@ -225,6 +225,7 @@ export async function createTaskInfoFolder(task) {
     runSetId: task.timestamp,
     iteration: task.iteration,
     timestamp: task.timestamp,
+    branchName: task.branchName || null,
     workspaceDir: task.workspaceDir,
     taskHash
   };
@@ -325,16 +326,26 @@ export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
   // Generate timestamp once for the entire run
   const timestamp = getCurrentTimestamp();
   const resultsBaseDir = path.join(__dirname, '..', 'results');
-  
+
   // Create enriched task objects for each task/agent/iteration combination
   // Order by iteration first, then agent - this ensures parallel execution spreads across agents
+  // Global counter ensures unique branch names across all tasks sharing a bare repo
+  let taskCounter = 0;
+  // Short timestamp for branch names: 20260311-140750 → 03111407
+  const shortTs = timestamp.replace(/^20\d{2}/, '').replace(/-/, '').replace(/\d{2}$/, '');
+
   const enrichedTasks = [];
   for (const task of tasks) {
     for (let iteration = 1; iteration <= times; iteration++) {
       for (const agent of agents) {
+        taskCounter++;
         const sanitizedAgent = sanitizeName(agent);
         const folderName = `${task.name}-${sanitizedAgent}-${iteration}`;
-        
+
+        // Keep branch name short for AEM dev server DNS label limit (63 chars).
+        // Use a global counter instead of task name for uniqueness.
+        const branchName = `${sanitizedAgent}-${shortTs}-${taskCounter}`;
+
         const config = getAgentConfig(agent);
         const enrichedTask = {
           ...task,
@@ -342,15 +353,16 @@ export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
           model: config.model || null,
           timestamp,
           iteration,
+          branchName,
           taskInfoFolder: path.join(resultsBaseDir, timestamp, folderName),
           workspaceDir: path.join(workspaceDir, timestamp, folderName)
         };
-        
+
         enrichedTasks.push(enrichedTask);
       }
     }
   }
-  
+
   return enrichedTasks;
 }
 
@@ -444,9 +456,25 @@ async function captureResults(task, runMetrics = null) {
 }
 
 async function cleanUp(task) {
-  // Remove the workspace directory
+  // Commit any uncommitted agent work
+  addAndCommit(task.workspaceDir, 'Final state');
+
+  // Push branch to remote for reconstruction (best-effort)
+  if (task.branchName) {
+    try {
+      await pushBranch(task.workspaceDir, task.branchName);
+    } catch (error) {
+      console.error(`Warning: Failed to push branch ${task.branchName}: ${error.message}`);
+    }
+  }
+
+  // Remove worktree or fall back to directory cleanup
   try {
-    await cleanupDir(task.workspaceDir);
+    if (task.parentRepoPath) {
+      removeWorktree(task.parentRepoPath, task.workspaceDir);
+    } else {
+      await cleanupDir(task.workspaceDir);
+    }
   } catch (error) {
     // Log error but don't fail - workspace cleanup is best-effort
     console.error(`Warning: Failed to cleanup workspace ${task.workspaceDir}: ${error.message}`);
@@ -457,10 +485,10 @@ function getTaskId(task) {
   return `${task.name}-${sanitizeName(task.agent)}-${task.iteration}`;
 }
 
-async function processTask(task, onActivity) {
+async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir } = {}) {
   // Bootstrap workspace just-in-time so setup pipelines with other tasks running
   if (onActivity) onActivity('bootstrapping workspace...');
-  await createTaskWorkspace(task);
+  await createTaskWorkspace(task, { cloneRegistry, clonesBaseDir });
 
   const timeoutMs = parseInt(getEnv('AGENT_TIMEOUT_MS', ''), 10) || DEFAULT_AGENT_TIMEOUT_MS;
   const ac = new AbortController();
@@ -583,11 +611,23 @@ async function runTasks() {
     await logger.init();
   }
 
+  // Set up clone registry for worktree-based workspaces
+  const cloneRegistry = new CloneRegistry();
+  const clonesBaseDir = path.join(args.workspaceDir, timestamp, '.clones');
+
   // Run the tasks in parallel
   const startedAt = new Date().toISOString();
   const concurrency = args.agents.length;
-  const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId, { logger });
+  const taskRunner = (task, onActivity) => processTask(task, onActivity, { cloneRegistry, clonesBaseDir });
+  const hasFailures = await runInParallel(enrichedTasks, concurrency, taskRunner, getTaskId, { logger });
   const finishedAt = new Date().toISOString();
+
+  // Clean up bare clones directory
+  try {
+    await cleanupDir(clonesBaseDir);
+  } catch {
+    // Best-effort cleanup
+  }
 
   // Write batch.json
   if (timestamp) {

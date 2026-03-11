@@ -3,13 +3,38 @@ import path from 'path';
 import fs from 'fs/promises';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { addAndCommit } from './utils/git-utils.js';
+import { addAndCommit, cloneRepository } from './utils/git-utils.js';
 import { ensureDir, cleanupDir } from './utils/fs-utils.js';
 import { execAsync } from './utils/process-utils.js';
-import { bootstrapWorkspace, loadScriptedAugmentation } from './utils/workspace-setup.js';
+import { bootstrapWorkspace, loadScriptedAugmentation, parseGitHubStartFrom } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Try to reconstruct workspace by fetching the pushed branch.
+ * Returns true if successful, false if branch not available.
+ */
+async function tryBranchReconstruction(startFrom, branchName, workspaceDir) {
+  try {
+    const { cloneUrl } = parseGitHubStartFrom(startFrom);
+    cloneRepository(cloneUrl, workspaceDir);
+    execSync(`git fetch origin ${branchName}`, {
+      cwd: workspaceDir,
+      stdio: 'pipe'
+    });
+    execSync(`git checkout ${branchName}`, {
+      cwd: workspaceDir,
+      stdio: 'pipe'
+    });
+    return true;
+  } catch {
+    // Branch not available — fall back to diff reconstruction
+    await cleanupDir(workspaceDir);
+    await ensureDir(workspaceDir);
+    return false;
+  }
+}
 
 /**
  * Reconstruct an agent's workspace from a result folder.
@@ -28,10 +53,34 @@ export async function reconstructWorkspace(resultFolder) {
   const taskJson = JSON.parse(await fs.readFile(taskJsonPath, 'utf-8'));
 
   const projectRoot = path.join(__dirname, '..');
-  const { startFrom, augmentations, scriptedAugmentations } = taskJson;
+  const { startFrom, augmentations, scriptedAugmentations, branchName } = taskJson;
 
   if (!startFrom) {
     throw new Error(`task.json in ${resultFolder} is missing startFrom`);
+  }
+
+  // Create workspace in project-local directory (so subagents have permission to read it)
+  const folderName = path.basename(resultFolder);
+  const batchId = taskJson.runSetId || taskJson.timestamp || path.basename(path.dirname(resultFolder));
+  const workspaceDir = path.join(projectRoot, '.eval-workspaces', batchId, folderName);
+  await cleanupDir(workspaceDir);
+  await ensureDir(workspaceDir);
+
+  // Try branch-based reconstruction first (faster, more reliable)
+  if (branchName) {
+    const reconstructed = await tryBranchReconstruction(startFrom, branchName, workspaceDir);
+    if (reconstructed) {
+      // Install npm dependencies
+      const packageJsonPath = path.join(workspaceDir, 'package.json');
+      try {
+        await fs.access(packageJsonPath);
+        await execAsync('npm ci', { cwd: workspaceDir });
+      } catch {
+        // No package.json or npm ci failed — continue
+      }
+      return workspaceDir;
+    }
+    // Fall through to diff-based reconstruction
   }
 
   // Load scripted augmentations from saved paths
@@ -45,13 +94,6 @@ export async function reconstructWorkspace(resultFolder) {
       // Scripted augmentation not available — skip
     }
   }
-
-  // Create workspace in project-local directory (so subagents have permission to read it)
-  const folderName = path.basename(resultFolder);
-  const batchId = taskJson.runSetId || taskJson.timestamp || path.basename(path.dirname(resultFolder));
-  const workspaceDir = path.join(projectRoot, '.eval-workspaces', batchId, folderName);
-  await cleanupDir(workspaceDir);
-  await ensureDir(workspaceDir);
 
   try {
     await bootstrapWorkspace({

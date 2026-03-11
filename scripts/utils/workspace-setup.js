@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import { execSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { copyDirectoryRecursive, ensureDir, cleanupDir } from './fs-utils.js';
-import { cloneRepository } from './git-utils.js';
+import { cloneRepository, addWorktree } from './git-utils.js';
 import { downloadFromGitHub } from './github-utils.js';
 import { sanitizeName } from './string-utils.js';
 import { createAskpassScript, configureGitIdentity } from './agent-launch.js';
@@ -198,9 +198,27 @@ export async function applyWorkspaceAugmentations(task) {
   }
 }
 
+export async function createWorktreeWorkspace(startFrom, workspaceDir, branchName, cloneRegistry, clonesBaseDir) {
+  const { cloneUrl, ref, isCommitHash } = parseGitHubStartFrom(startFrom);
+  const parentRepoPath = await cloneRegistry.getOrCreate(cloneUrl, ref, isCommitHash, clonesBaseDir);
+  addWorktree(parentRepoPath, workspaceDir, branchName);
+  return parentRepoPath;
+}
+
 export async function bootstrapWorkspace(task, options = {}) {
-  await ensureDir(task.workspaceDir);
-  await cloneStartFromIntoWorkspace(task.startFrom, task.workspaceDir);
+  const { cloneRegistry, clonesBaseDir, branchName } = options;
+
+  if (cloneRegistry && clonesBaseDir && branchName) {
+    // Worktree-based workspace
+    const parentRepoPath = await createWorktreeWorkspace(
+      task.startFrom, task.workspaceDir, branchName, cloneRegistry, clonesBaseDir
+    );
+    task.parentRepoPath = parentRepoPath;
+  } else {
+    // Legacy clone-based workspace (used by reconstruct-workspace)
+    await ensureDir(task.workspaceDir);
+    await cloneStartFromIntoWorkspace(task.startFrom, task.workspaceDir);
+  }
 
   // Set up bot auth before any git operations that might need identity
   configureGitIdentity(task.workspaceDir, execSync);

@@ -167,6 +167,61 @@ describe('enrichTasks', () => {
     });
   });
 
+  describe('branchName', () => {
+    it('should compute branchName from agent, timestamp, and counter', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir);
+
+      // Format: {agent}-{shortTs}-{counter}, shortTs is 8 digits (no dash)
+      expect(enriched[0].branchName).toMatch(/^claude-\d{8}-1$/);
+    });
+
+    it('should produce unique branchNames for different iterations', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir, 3);
+
+      const branches = enriched.map(t => t.branchName);
+      expect(new Set(branches).size).toBe(3);
+      expect(branches[0]).toMatch(/-1$/);
+      expect(branches[1]).toMatch(/-2$/);
+      expect(branches[2]).toMatch(/-3$/);
+    });
+
+    it('should produce unique branchNames for different agents', () => {
+      const tasks = [{ name: 'build-block' }];
+      const agents = ['claude', 'cursor'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir);
+
+      expect(enriched[0].branchName).toContain('claude');
+      expect(enriched[1].branchName).toContain('cursor');
+      expect(enriched[0].branchName).not.toBe(enriched[1].branchName);
+    });
+
+    it('should use a global counter to ensure uniqueness across tasks', () => {
+      const tasks = [
+        { name: 'task-a' },
+        { name: 'task-b' }
+      ];
+      const agents = ['claude'];
+      const workspaceDir = '/tmp/workspace';
+
+      const enriched = enrichTasks(tasks, agents, workspaceDir);
+
+      // Counter increments globally, so different tasks get different numbers
+      expect(enriched[0].branchName).not.toBe(enriched[1].branchName);
+      expect(enriched[0].branchName).toMatch(/-1$/);
+      expect(enriched[1].branchName).toMatch(/-2$/);
+    });
+  });
+
   describe('iteration parameter', () => {
     it('should always include iteration number in folder name', () => {
       const tasks = [{ name: 'build-block' }];

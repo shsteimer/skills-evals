@@ -102,7 +102,7 @@ describe('createTaskWorkspace', () => {
       expect(cloneCalls[0][0]).toContain('https://github.com/adobe/aem-boilerplate.git');
     });
 
-    it('should create a new branch for the agent', async () => {
+    it('should not create branch in legacy (no cloneRegistry) mode', async () => {
       const task = {
         name: 'test-task',
         agent: 'claude',
@@ -114,11 +114,12 @@ describe('createTaskWorkspace', () => {
 
       await createTaskWorkspace(task);
 
-      // Verify git checkout was called with agent branch including iteration
-      expect(execSync).toHaveBeenCalledWith(
-        'git checkout -b claude-1215-1430-1',
-        expect.objectContaining({ cwd: task.workspaceDir })
+      // In legacy mode (no cloneRegistry), no branch checkout happens
+      // Branch creation is handled by the worktree flow
+      const checkoutCalls = execSync.mock.calls.filter(call =>
+        call[0].includes('git checkout -b')
       );
+      expect(checkoutCalls).toHaveLength(0);
     });
 
     it('should throw error when startFrom is not defined', async () => {
