@@ -84,9 +84,10 @@ function render(d, m) {
     const assetBase = '/' + dataDir(dataPath);
     html += '<h2>Screenshots</h2><div class="screenshots">';
     for (const s of d.screenshots) {
-      const rawSrc = s.path || s.url || '';
+      let rawSrc = s.path || s.url || '';
+      if (!rawSrc && s.filename) rawSrc = 'screenshots/' + s.filename;
       const src = rawSrc.startsWith('/') || rawSrc.startsWith('http') ? rawSrc : assetBase + rawSrc;
-      const cap = s.caption || s.label || '';
+      const cap = s.caption || s.label || s.description || '';
       html += `<div class="screenshot"><img src="${esc(src)}" alt="${esc(cap)}" onclick="showLightbox(this.src)"><div class="caption">${esc(cap)}</div></div>`;
     }
     html += '</div>';

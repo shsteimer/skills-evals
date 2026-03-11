@@ -13,11 +13,14 @@ import { parseAgentLog } from './parse-agent-log.js';
  * Computes scores, merges sources, writes eval-result.json + eval-data.js + eval-result.html.
  */
 export async function assembleEval(resultFolder, subagentOutput, resolvedChecks = []) {
-  // Merge check-resolved and judgment criteria
-  const allChecks = [
-    ...resolvedChecks.map(c => ({ ...c, source: 'check' })),
-    ...subagentOutput.criteriaChecks.map(c => ({ ...c, source: 'judgment' }))
-  ];
+  // Merge check-resolved and judgment criteria, deduplicating where the LLM
+  // re-evaluated a criterion already resolved by a deterministic check
+  const checkResolved = resolvedChecks.map(c => ({ ...c, source: 'check' }));
+  const checkNames = new Set(checkResolved.map(c => c.name));
+  const judgmentChecks = subagentOutput.criteriaChecks
+    .filter(c => !checkNames.has(c.name))
+    .map(c => ({ ...c, source: 'judgment' }));
+  const allChecks = [...checkResolved, ...judgmentChecks];
 
   // Compute scores
   let score = 0;
