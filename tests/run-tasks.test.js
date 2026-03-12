@@ -269,7 +269,8 @@ describe('buildBatchMetadata', () => {
       agents: ['claude'],
       times: 3,
       workspaceDir: '/tmp/workspace',
-      augmentationsFiles: ['augmentations/cdd.json']
+      augmentationsFiles: ['augmentations/cdd.json'],
+      debug: false,
     });
   });
 

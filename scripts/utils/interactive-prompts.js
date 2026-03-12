@@ -152,6 +152,7 @@ export async function runInteractiveFlow(defaults = {}) {
     workspaceDir: defaults.workspaceDir ?? defaultWorkspace,
     augmentationsFiles,
     times,
+    debug: defaults.debug ?? false,
     showHelp: false
   };
 

@@ -581,7 +581,8 @@ export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, h
       agents: args.agents,
       times: args.times,
       workspaceDir: args.workspaceDir,
-      augmentationsFiles: args.augmentationsFiles
+      augmentationsFiles: args.augmentationsFiles,
+      debug: args.debug || false,
     },
     augmentationSetName: enrichedTasks[0]?.augmentationSetName || null,
     agentModels,
