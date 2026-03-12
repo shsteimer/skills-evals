@@ -13,7 +13,7 @@ import path from 'path';
  * @returns {Object} Logger with event methods
  */
 export function createRunLogger(logPath, options = {}) {
-  const { activityThrottleMs = 10000, now = () => new Date() } = options;
+  const { activityThrottleMs = 10000, now = () => new Date(), debug: debugMode = false } = options;
   const lastActivity = new Map(); // taskId -> timestamp of last logged activity
 
   function formatTime(date) {
@@ -51,10 +51,12 @@ export function createRunLogger(logPath, options = {}) {
     },
 
     async taskActivity(taskId, message) {
-      const current = now().getTime();
-      const last = lastActivity.get(taskId) || 0;
-      if (current - last < activityThrottleMs) return;
-      lastActivity.set(taskId, current);
+      if (!debugMode) {
+        const current = now().getTime();
+        const last = lastActivity.get(taskId) || 0;
+        if (current - last < activityThrottleMs) return;
+        lastActivity.set(taskId, current);
+      }
       await writeLine(`${taskId} | ${message}`);
     },
 
@@ -66,6 +68,11 @@ export function createRunLogger(logPath, options = {}) {
     async taskFailed(taskId, durationMs, error) {
       lastActivity.delete(taskId);
       await writeLine(`${taskId} | failed (${formatDuration(durationMs)}): ${error}`);
+    },
+
+    async debug(taskId, message) {
+      if (!debugMode) return;
+      await writeLine(`${taskId} | [debug] ${message}`);
     },
 
     async runFinished(completed, failed, totalDurationMs) {

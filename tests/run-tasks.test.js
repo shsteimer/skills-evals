@@ -179,6 +179,25 @@ describe('parseArgs', () => {
   });
 });
 
+  describe('debug flag', () => {
+    it('should default debug to false', () => {
+      const result = parseArgs(['node', 'script.js']);
+      expect(result.debug).toBe(false);
+    });
+
+    it('should set debug to true with --debug flag', () => {
+      const result = parseArgs(['node', 'script.js', '--debug']);
+      expect(result.debug).toBe(true);
+    });
+
+    it('should combine --debug with other flags', () => {
+      const result = parseArgs(['node', 'script.js', '--debug', '--task', 'sandbox-check', '--agents', 'claude']);
+      expect(result.debug).toBe(true);
+      expect(result.tasks).toEqual(['sandbox-check']);
+      expect(result.agents).toEqual(['claude']);
+    });
+  });
+
   describe('augmentations', () => {
     it('should default augmentationsFiles to empty array', () => {
       const args = ['node', 'script.js'];

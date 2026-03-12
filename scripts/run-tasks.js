@@ -252,6 +252,7 @@ export function parseArgs(argv) {
     workspaceDir: path.join(os.tmpdir(), 'skills-evals-workspace'),
     augmentationsFiles: [], // Only load if explicitly specified
     times: 1, // Number of times to run each task
+    debug: false,
     showHelp: false
   };
 
@@ -261,6 +262,8 @@ export function parseArgs(argv) {
     
     if (arg === '--help' || arg === '-h') {
       result.showHelp = true;
+    } else if (arg === '--debug') {
+      result.debug = true;
     } else if (arg === '--task' && i + 1 < argv.length) {
       const value = argv[++i];
       // Handle comma-separated values
@@ -308,6 +311,7 @@ Options:
   --augmentations <f> Augmentation file(s) to apply (can be used multiple times)
   --workspace <path>  Directory to create task workspaces (default: system temp)
   --times <number>    Number of times to run each task (default: 1)
+  --debug             Verbose logging to batch.log; preserve agent workspaces for inspection
   -h, --help          Show this help message
 
 Examples:
@@ -485,12 +489,27 @@ function getTaskId(task) {
   return `${task.name}-${sanitizeName(task.agent)}-${task.iteration}`;
 }
 
-async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir } = {}) {
+async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir, debug, logger } = {}) {
+  const taskId = getTaskId(task);
+
   // Bootstrap workspace just-in-time so setup pipelines with other tasks running
   if (onActivity) onActivity('bootstrapping workspace...');
   await createTaskWorkspace(task, { cloneRegistry, clonesBaseDir });
 
+  if (logger) {
+    await logger.debug(taskId, `workspace: ${task.workspaceDir}`);
+    await logger.debug(taskId, `branch: ${task.branchName || 'none'}`);
+    await logger.debug(taskId, `agent: ${task.agent}, model: ${task.model || 'default'}`);
+    if (task.augmentations?.length) {
+      await logger.debug(taskId, `augmentations: ${task.augmentations.map(a => a.name || a.src).join(', ')}`);
+    }
+    if (task.scriptedAugmentations?.length) {
+      await logger.debug(taskId, `scripted augmentations: ${task.scriptedAugmentations.map(s => s.name).join(', ')}`);
+    }
+  }
+
   const timeoutMs = parseInt(getEnv('AGENT_TIMEOUT_MS', ''), 10) || DEFAULT_AGENT_TIMEOUT_MS;
+  if (logger) await logger.debug(taskId, `timeout: ${timeoutMs / 1000}s`);
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
 
@@ -505,6 +524,7 @@ async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir } = 
     runError = timedOut
       ? new Error(`Agent timed out after ${timeoutMs / 1000}s`)
       : error;
+    if (logger) await logger.debug(taskId, `error: ${runError.message}`);
   } finally {
     clearTimeout(timer);
   }
@@ -512,7 +532,20 @@ async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir } = 
   const finishedAt = new Date().toISOString();
   const durationMs = Date.now() - start;
   await captureResults(task, { startedAt, finishedAt, durationMs, timedOut });
-  await cleanUp(task);
+
+  if (debug) {
+    // Push branch but preserve workspace for inspection
+    if (task.branchName) {
+      try {
+        await pushBranch(task.workspaceDir, task.branchName);
+      } catch (error) {
+        console.error(`Warning: Failed to push branch ${task.branchName}: ${error.message}`);
+      }
+    }
+    if (logger) await logger.debug(taskId, `workspace preserved: ${task.workspaceDir}`);
+  } else {
+    await cleanUp(task);
+  }
   if (runError) throw runError;
 }
 
@@ -607,7 +640,7 @@ async function runTasks() {
   let logger = null;
   if (timestamp) {
     const logPath = path.join(resultsBaseDir, timestamp, 'batch.log');
-    logger = createRunLogger(logPath);
+    logger = createRunLogger(logPath, { debug: args.debug });
     await logger.init();
   }
 
@@ -618,15 +651,19 @@ async function runTasks() {
   // Run the tasks in parallel
   const startedAt = new Date().toISOString();
   const concurrency = args.agents.length;
-  const taskRunner = (task, onActivity) => processTask(task, onActivity, { cloneRegistry, clonesBaseDir });
+  const taskRunner = (task, onActivity) => processTask(task, onActivity, {
+    cloneRegistry, clonesBaseDir, debug: args.debug, logger,
+  });
   const hasFailures = await runInParallel(enrichedTasks, concurrency, taskRunner, getTaskId, { logger });
   const finishedAt = new Date().toISOString();
 
-  // Clean up bare clones directory
-  try {
-    await cleanupDir(clonesBaseDir);
-  } catch {
-    // Best-effort cleanup
+  // Clean up bare clones directory (skip in debug mode to preserve worktrees)
+  if (!args.debug) {
+    try {
+      await cleanupDir(clonesBaseDir);
+    } catch {
+      // Best-effort cleanup
+    }
   }
 
   // Write batch.json

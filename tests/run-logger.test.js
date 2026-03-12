@@ -155,6 +155,63 @@ describe('createRunLogger', () => {
     });
   });
 
+  describe('debug mode', () => {
+    it('should log debug messages when debug is true', async () => {
+      const logger = createRunLogger(logPath, {
+        now: fixedClock('2026-03-08T10:00:00'),
+        debug: true,
+      });
+      await logger.init();
+      await logger.debug('task-1', 'workspace path: /tmp/workspace');
+      const lines = await readLog();
+      expect(lines).toEqual([
+        '[10:00:00] task-1 | [debug] workspace path: /tmp/workspace',
+      ]);
+    });
+
+    it('should suppress debug messages when debug is false', async () => {
+      const logger = createRunLogger(logPath, {
+        now: fixedClock('2026-03-08T10:00:00'),
+        debug: false,
+      });
+      await logger.init();
+      await logger.debug('task-1', 'workspace path: /tmp/workspace');
+      await logger.runStarted(1, 1);
+      const lines = await readLog();
+      expect(lines).toEqual(['[10:00:00] run started — 1 tasks, concurrency 1']);
+    });
+
+    it('should suppress debug messages by default', async () => {
+      const logger = createRunLogger(logPath, {
+        now: fixedClock('2026-03-08T10:00:00'),
+      });
+      await logger.init();
+      await logger.debug('task-1', 'some debug info');
+      await logger.runStarted(1, 1);
+      const lines = await readLog();
+      expect(lines).toEqual(['[10:00:00] run started — 1 tasks, concurrency 1']);
+    });
+
+    it('should disable activity throttling when debug is true', async () => {
+      let currentTime = new Date('2026-03-08T10:00:00').getTime();
+      const logger = createRunLogger(logPath, {
+        activityThrottleMs: 10000,
+        debug: true,
+        now: () => new Date(currentTime),
+      });
+      await logger.init();
+
+      await logger.taskStarted('task-1');
+      await logger.taskActivity('task-1', 'first');
+      currentTime += 1000; // 1s later — normally throttled
+      await logger.taskActivity('task-1', 'second');
+
+      const lines = await readLog();
+      const activityLines = lines.filter(l => l.includes('task-1 |') && !l.includes('started'));
+      expect(activityLines).toHaveLength(2);
+    });
+  });
+
   describe('formatDuration', () => {
     it('should format seconds', () => {
       const logger = createRunLogger(logPath);
