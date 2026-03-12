@@ -1,23 +1,41 @@
 import fs from 'fs/promises';
+import { readdirSync, existsSync } from 'fs';
 import path from 'path';
 
 /**
- * Find the Playwright headless shell executable path.
- * This binary works under safehouse with just chromium-headless,
- * unlike system Chrome which needs extensive macOS permissions.
+ * Find a bundled Playwright browser executable.
+ * Prefers chrome-headless-shell — it works under safehouse with just
+ * chromium-headless and doesn't need Mach port bootstrap permissions.
+ * Full Chromium needs chromium-full (Mach ports) and is a fallback only.
  */
-function findHeadlessShellPath() {
+function findBundledBrowserPath() {
   try {
-    // Use Playwright's own registry to find the headless shell
     const cacheDir = path.join(process.env.HOME, 'Library', 'Caches', 'ms-playwright');
-    const entries = require('fs').readdirSync(cacheDir);
+    const entries = readdirSync(cacheDir);
+
+    // Prefer headless shell — minimal permissions, works with chromium-headless
     const shellDir = entries
       .filter(e => e.startsWith('chromium_headless_shell-'))
       .sort()
       .pop();
     if (shellDir) {
       const shellPath = path.join(cacheDir, shellDir, 'chrome-headless-shell-mac-arm64', 'chrome-headless-shell');
-      if (require('fs').existsSync(shellPath)) return shellPath;
+      if (existsSync(shellPath)) return shellPath;
+    }
+
+    // Fall back to full Chromium (needs chromium-full safehouse feature)
+    const chromiumDir = entries
+      .filter(e => /^chromium-\d+$/.test(e))
+      .sort()
+      .pop();
+    if (chromiumDir) {
+      const chromiumPath = path.join(
+        cacheDir, chromiumDir,
+        'chrome-mac-arm64',
+        'Google Chrome for Testing.app',
+        'Contents', 'MacOS', 'Google Chrome for Testing',
+      );
+      if (existsSync(chromiumPath)) return chromiumPath;
     }
   } catch {
     // Fall through
@@ -26,10 +44,20 @@ function findHeadlessShellPath() {
 }
 
 function buildMcpConfig() {
-  const headlessShell = findHeadlessShellPath();
-  const args = ['-y', '@playwright/mcp@latest', '--headless'];
-  if (headlessShell) {
-    args.push('--executable-path', headlessShell);
+  const browserPath = findBundledBrowserPath();
+  // Note: do NOT add -y/--yes before the package name — safehouse's npx-aware
+  // profile resolver treats the second arg as the package name for basename,
+  // and flags like -y cause `basename "-y"` to fail.
+  // --no-sandbox disables Chromium's internal sandbox, which conflicts with
+  // safehouse's macOS sandbox (nested sandboxing causes "Operation not permitted")
+  const args = ['@playwright/mcp@latest', '--headless', '--no-sandbox'];
+  if (browserPath) {
+    args.push('--executable-path', browserPath);
+  } else {
+    process.stderr.write(
+      '[playwright-mcp] WARNING: no bundled Playwright browser found — ' +
+        'Playwright MCP will fall back to system Chrome, which fails under safehouse\n',
+    );
   }
   return {
     mcpServers: {
@@ -42,16 +70,15 @@ function buildMcpConfig() {
   };
 }
 
-function buildCodexMcpSnippet() {
-  const headlessShell = findHeadlessShellPath();
-  const args = ['--yes', '@playwright/mcp', '--headless'];
-  if (headlessShell) {
-    args.push('--executable-path', headlessShell);
-  }
+/**
+ * Convert the MCP config object to Codex TOML format.
+ * Derives from the same buildMcpConfig() so both agents get identical args.
+ */
+function mcpConfigToToml(mcpConfig) {
+  const { command, args } = mcpConfig.mcpServers.playwright;
   const argsToml = args.map(a => `"${a}"`).join(', ');
-  return `
-[mcp_servers.playwright]
-command = "npx"
+  return `[mcp_servers.playwright]
+command = "${command}"
 args = [${argsToml}]
 `;
 }
@@ -72,7 +99,7 @@ export default {
         JSON.stringify(mcpConfig, null, 2) + '\n',
       );
     } else if (agent === 'codex') {
-      const codexMcpSnippet = buildCodexMcpSnippet();
+      const codexMcpSnippet = mcpConfigToToml(mcpConfig);
       const configPath = path.join(workspaceDir, '.codex', 'config.toml');
       try {
         const existing = await fs.readFile(configPath, 'utf-8');
