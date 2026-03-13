@@ -23,11 +23,11 @@ Pass threshold: 80% of possible points with no critical items unmet.
 - The gh-auth-status probe shows the bot account (not the operator's personal account). [check: bot-auth-active]
 </critical>
 
-## Playwright MCP & Dev Server
+## Playwright CLI & Dev Server
 
 <critical>
 - The aem-dev-server probe succeeded — the AEM dev server started and responded on localhost. [check: dev-server-works]
-- The playwright-navigate probe succeeded — Playwright MCP navigated to the local dev server. [check: playwright-navigate-works]
+- The playwright-navigate probe succeeded — Playwright CLI navigated to the local dev server. [check: playwright-navigate-works]
 </critical>
 
 <important>

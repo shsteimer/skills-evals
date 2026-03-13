@@ -117,7 +117,7 @@ All checks use the same format. A criterion can reference any check by name, e.g
 
 ## Step 4: Subjective evaluation via subagent
 
-Launch an evaluator subagent using the **Agent tool** to assess unresolved criteria. The subagent runs in the same environment and has access to all tools (file reading, bash, grep, Playwright MCP).
+Launch an evaluator subagent using the **Agent tool** to assess unresolved criteria. The subagent runs in the same environment and has access to all tools (file reading, bash, grep, Playwright CLI).
 
 ### Building the subagent prompt
 

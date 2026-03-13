@@ -76,6 +76,11 @@ export function getSafehouseConfig() {
   return {
     bin: getEnv('SAFEHOUSE_BIN', safehouseFileConfig.bin || 'safehouse'),
     enableFeatures: getEnv('SAFEHOUSE_ENABLE', safehouseFileConfig.enableFeatures || ''),
+    appendProfile: getEnv('SAFEHOUSE_APPEND_PROFILE',
+      safehouseFileConfig.appendProfile
+        ? path.resolve(projectRoot, safehouseFileConfig.appendProfile)
+        : ''),
+    env: safehouseFileConfig.env || {},
   };
 }
 

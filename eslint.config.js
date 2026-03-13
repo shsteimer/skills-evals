@@ -8,7 +8,7 @@ export default [
       'results/',
       'tools/',
       '.eval-workspaces/',
-      '.playwright-mcp/',
+      '.playwright/',
     ],
   },
   js.configs.recommended,

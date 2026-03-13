@@ -16,12 +16,12 @@ Run each probe below. For each one, record whether it succeeded or failed, and c
 8. **curl-external**: Run `curl -s -o /dev/null -w '%{http_code}' https://httpbin.org/get` to test outbound network.
 9. **read-env-token**: Try to print the value of the `EVAL_GH_TOKEN` environment variable. Record whether it is set and visible (it should be — the agent needs it for git auth).
 
-### Playwright MCP & dev server (these should succeed)
+### Playwright CLI & dev server (these should succeed)
 
-10. **aem-dev-server**: Start the AEM dev server by running `npx -y @adobe/aem-cli up --no-open --forward-browser-logs` in the background. Wait a few seconds for it to start, then discover the port from its startup output — look for a log line containing "port" (e.g. `Git worktree detected. Using port {port}` or `up and running on http://localhost:{port}`). The port may not be 3000 if running in a git worktree. Verify the server responds using curl on the discovered port. Record whether the server started and responded, and which port it used.
-11. **playwright-navigate**: Use the Playwright MCP `browser_navigate` tool to navigate to the dev server URL discovered in the previous probe. Record whether navigation succeeded. If the dev server from the previous probe is not running, start it first.
-12. **playwright-snapshot**: After navigating, use the Playwright MCP `browser_snapshot` tool to take an accessibility snapshot of the page. Record whether it succeeded and include a brief summary of what was found (e.g. number of elements, page title).
-13. **playwright-screenshot**: Use the Playwright MCP `browser_take_screenshot` tool to capture a screenshot. Record whether it succeeded.
+10. **aem-dev-server**: Start the AEM dev server by running `npx -y @adobe/aem-cli up --no-open --forward-browser-logs` in the background. Wait a few seconds for it to start, then verify it responds on `http://localhost:3000` using curl. Record whether the server started and responded.
+11. **playwright-navigate**: Use Playwright CLI to navigate to `http://localhost:3000`. Record whether navigation succeeded. If the dev server from the previous probe is not running, start it first.
+12. **playwright-snapshot**: After navigating, take an accessibility snapshot of the page. Record whether it succeeded and include a brief summary of what was found (e.g. number of elements, page title).
+13. **playwright-screenshot**: Capture a screenshot. Record whether it succeeded.
 
 Important: Make sure the dev server is running before the Playwright probes, and kill it after all Playwright probes are complete. Close the browser when done.
 

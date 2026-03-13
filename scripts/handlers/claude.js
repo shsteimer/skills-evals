@@ -53,9 +53,9 @@ const defaultConfigDir = path.join(path.dirname(fileURLToPath(import.meta.url)),
 export default async function runClaude(task, onActivity, signal) {
   const agentArgs = await buildArgs(defaultConfigDir);
   const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
-  const { bin, args } = wrapWithSafehouse('claude', agentArgs, { envPass });
+  const { bin, args, env: safehouseEnv } = wrapWithSafehouse('claude', agentArgs, { envPass });
 
-  const env = { ...process.env, ...authEnv };
+  const env = { ...process.env, ...safehouseEnv, ...authEnv };
   delete env.CLAUDECODE;
 
   return new Promise((resolve, reject) => {

@@ -1,0 +1,17 @@
+{
+  "name": "Playwright CLI",
+  "augmentations": [
+    {
+      "source": "https://github.com/microsoft/playwright-cli/tree/main/skills/playwright-cli",
+      "target": ".claude/skills/playwright-cli"
+    },
+    {
+      "source": "https://github.com/microsoft/playwright-cli/tree/main/skills/playwright-cli",
+      "target": ".agents/skills/playwright-cli"
+    },
+    {
+      "source": "augmentations/playwright-cli/cli.config.json",
+      "target": ".playwright/cli.config.json"
+    }
+  ]
+}

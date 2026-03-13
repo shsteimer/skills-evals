@@ -67,18 +67,16 @@ If no demo pages exist, skip visual verification and note the absence in your ev
 
 ### Taking screenshots
 
-Use the Playwright MCP tools to capture screenshots. Save them to `{{result_folder}}/screenshots/`.
+Use Playwright CLI to capture screenshots. Save them to `{{result_folder}}/screenshots/`.
 
 For each page found:
 
-1. Navigate: `mcp__playwright__browser_navigate` to the page URL
-2. Wait for content: use `mcp__playwright__browser_snapshot` to verify the page loaded
-3. Desktop screenshot: `mcp__playwright__browser_take_screenshot` with
-   `filename: "{{result_folder}}/screenshots/{page-name}-desktop.png"`
-4. Resize to mobile: `mcp__playwright__browser_resize` to width 375, height 812
-5. Mobile screenshot: `mcp__playwright__browser_take_screenshot` with
-   `filename: "{{result_folder}}/screenshots/{page-name}-mobile.png"`
-6. Resize back to desktop: `mcp__playwright__browser_resize` to width 1280, height 800
+1. Navigate: `playwright-cli goto <url>`
+2. Wait for content: use `playwright-cli snapshot` to verify the page loaded
+3. Desktop screenshot: `playwright-cli screenshot --output "{{result_folder}}/screenshots/{page-name}-desktop.png"`
+4. Resize to mobile: `playwright-cli resize 375 812`
+5. Mobile screenshot: `playwright-cli screenshot --output "{{result_folder}}/screenshots/{page-name}-mobile.png"`
+6. Resize back to desktop: `playwright-cli resize 1280 800`
 
 Use the screenshots as evidence when judging criteria — reference what you see in them.
 
@@ -90,7 +88,7 @@ When done with visual verification, kill the server:
 kill {pid} 2>/dev/null
 ```
 
-Also close the browser: `mcp__playwright__browser_close`
+Also close the browser: `playwright-cli close`
 
 ### Including screenshots in results
 

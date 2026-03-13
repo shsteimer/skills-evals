@@ -45,12 +45,12 @@ export default async function runCodex(task, onActivity, signal) {
     const agentArgs = buildArgs();
     const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
     const codexEnvPass = [...envPass, 'OPENAI_API_KEY'];
-    const { bin, args } = wrapWithSafehouse('codex', agentArgs, { envPass: codexEnvPass });
+    const { bin, args, env: safehouseEnv } = wrapWithSafehouse('codex', agentArgs, { envPass: codexEnvPass });
 
     const codex = spawn(bin, args, {
       cwd: task.workspaceDir,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ...authEnv },
+      env: { ...process.env, ...safehouseEnv, ...authEnv },
     });
 
     const { getStderr } = captureStderr(codex, task.taskInfoFolder);

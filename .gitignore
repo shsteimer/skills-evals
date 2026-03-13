@@ -40,8 +40,9 @@ temp/
 # Eval workspaces (reconstructed agent workspaces for evaluation)
 .eval-workspaces/
 
-# Playwright MCP logs
-.playwright-mcp/
+# Playwright CLI
+.playwright/
+.playwright-cli/
 
 # Task results
 results/

@@ -9,20 +9,25 @@ import { getSafehouseConfig, getBotAuthConfig } from './env-config.js';
  * @param {string[]} agentArgs - Args for the agent binary
  * @param {Object} [options]
  * @param {string[]} [options.envPass] - Env var names to pass through the sandbox
- * @returns {{ bin: string, args: string[] }} - Command and args to spawn
+ * @returns {{ bin: string, args: string[], env: Object }} - Command, args, and extra env vars to spawn with
  */
 export function wrapWithSafehouse(agentBin, agentArgs, options = {}) {
-  const { bin, enableFeatures } = getSafehouseConfig();
+  const { bin, enableFeatures, appendProfile, env: safehouseEnv } = getSafehouseConfig();
   const safehouseArgs = [];
   if (enableFeatures) {
     safehouseArgs.push(`--enable=${enableFeatures}`);
   }
-  if (options.envPass && options.envPass.length > 0) {
-    safehouseArgs.push(`--env-pass=${options.envPass.join(',')}`);
+  if (appendProfile) {
+    safehouseArgs.push(`--append-profile=${appendProfile}`);
+  }
+  const envPassList = [...(options.envPass || []), ...Object.keys(safehouseEnv)];
+  if (envPassList.length > 0) {
+    safehouseArgs.push(`--env-pass=${envPassList.join(',')}`);
   }
   return {
     bin,
     args: [...safehouseArgs, agentBin, ...agentArgs],
+    env: safehouseEnv,
   };
 }
 

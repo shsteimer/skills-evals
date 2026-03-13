@@ -44,12 +44,12 @@ export default async function runCursor(task, onActivity, signal) {
     const agentArgs = buildArgs();
     const { env: authEnv, envPass } = buildBotAuthEnv(task.workspaceDir);
     const cursorEnvPass = [...envPass, 'CURSOR_API_KEY'];
-    const { bin, args } = wrapWithSafehouse('cursor-agent', agentArgs, { envPass: cursorEnvPass });
+    const { bin, args, env: safehouseEnv } = wrapWithSafehouse('cursor-agent', agentArgs, { envPass: cursorEnvPass });
 
     const cursor = spawn(bin, args, {
       cwd: task.workspaceDir,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ...authEnv },
+      env: { ...process.env, ...safehouseEnv, ...authEnv },
     });
 
     const { getStderr } = captureStderr(cursor, task.taskInfoFolder);

@@ -17,16 +17,18 @@ Each agent process is spawned as `safehouse <agent-binary> <args>`. Safehouse co
 ```json
 {
   "bin": "safehouse",
-  "enableFeatures": "chromium-headless"
+  "enableFeatures": "agent-browser",
+  "appendProfile": "config/safehouse/local-overrides.sb"
 }
 ```
 
 - `bin` — path to safehouse binary (default: `safehouse` on PATH)
-- `enableFeatures` — comma-separated `--enable` features (see `safehouse --help`)
+- `enableFeatures` — optional comma-separated `--enable` features (see `safehouse --help`)
+- `appendProfile` — optional path to a `.sb` sandbox policy override file
 
-The `chromium-headless` feature grants Playwright's bundled Chromium the additional mach service and filesystem access it needs to launch inside the sandbox. The Playwright MCP augmentation is configured with `--headless` to use bundled Chromium rather than system Chrome, which requires fewer sandbox permissions.
+The `agent-browser` feature enables playwright-cli browser launching inside the sandbox. The `local-overrides.sb` file adds policy rules like read access to system Chrome.
 
-Environment variables `SAFEHOUSE_BIN` and `SAFEHOUSE_ENABLE` override the config file values.
+Environment variables `SAFEHOUSE_BIN`, `SAFEHOUSE_ENABLE`, and `SAFEHOUSE_APPEND_PROFILE` override the config file values.
 
 ### Environment variable passthrough
 
@@ -81,6 +83,7 @@ Pattern: `{AGENT}_MODEL`, `{AGENT}_ADDITIONAL_ARGS` where `{AGENT}` is `CLAUDE`,
 |----------|----------|---------|-------------|
 | `SAFEHOUSE_BIN` | no | from `config/safehouse/config.json` | Override safehouse binary path |
 | `SAFEHOUSE_ENABLE` | no | from `config/safehouse/config.json` | Override safehouse enable features |
+| `SAFEHOUSE_APPEND_PROFILE` | no | from `config/safehouse/config.json` | Override safehouse policy overlay path |
 | `EVAL_GH_TOKEN` | no | (none) | Fine-grained PAT for the bot account. When set, enables workspace-local bot auth |
 | `EVAL_GIT_NAME` | no | `skills-evals-bot` | Git author name for bot commits |
 | `EVAL_GIT_EMAIL` | no | `skills-evals-bot@users.noreply.github.com` | Git author email for bot commits |

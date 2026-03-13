@@ -8,7 +8,7 @@ const testWorkspaceRoot = path.join(__dirname, 'fixtures', 'agent-launch-workspa
 
 // Mock env-config to control env vars in tests
 vi.mock('../scripts/utils/env-config.js', () => ({
-  getSafehouseConfig: vi.fn(() => ({ bin: 'safehouse', enableFeatures: '' })),
+  getSafehouseConfig: vi.fn(() => ({ bin: 'safehouse', enableFeatures: '', appendProfile: '', env: {} })),
   getBotAuthConfig: vi.fn(() => ({
     ghToken: 'ghp_test123',
     gitName: 'test-bot',
@@ -27,7 +27,7 @@ import { getSafehouseConfig, getBotAuthConfig } from '../scripts/utils/env-confi
 describe('wrapWithSafehouse', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: '' });
+    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: '', appendProfile: '', env: {} });
   });
 
   it('should prepend safehouse binary', () => {
@@ -37,7 +37,7 @@ describe('wrapWithSafehouse', () => {
   });
 
   it('should use custom safehouse binary path', () => {
-    getSafehouseConfig.mockReturnValue({ bin: '/usr/local/bin/safehouse', enableFeatures: '' });
+    getSafehouseConfig.mockReturnValue({ bin: '/usr/local/bin/safehouse', enableFeatures: '', appendProfile: '', env: {} });
     const result = wrapWithSafehouse('codex', ['exec']);
     expect(result.bin).toBe('/usr/local/bin/safehouse');
     expect(result.args).toEqual(['codex', 'exec']);
@@ -50,9 +50,21 @@ describe('wrapWithSafehouse', () => {
   });
 
   it('should include --enable flag when features are configured', () => {
-    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: 'chromium-headless' });
+    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: 'agent-browser', appendProfile: '', env: {} });
     const result = wrapWithSafehouse('claude', ['--verbose']);
-    expect(result.args).toEqual(['--enable=chromium-headless', 'claude', '--verbose']);
+    expect(result.args).toEqual(['--enable=agent-browser', 'claude', '--verbose']);
+  });
+
+  it('should include --append-profile flag when configured', () => {
+    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: '', appendProfile: '/path/to/overrides.sb', env: {} });
+    const result = wrapWithSafehouse('claude', ['--verbose']);
+    expect(result.args).toEqual(['--append-profile=/path/to/overrides.sb', 'claude', '--verbose']);
+  });
+
+  it('should include both --enable and --append-profile when both configured', () => {
+    getSafehouseConfig.mockReturnValue({ bin: 'safehouse', enableFeatures: 'agent-browser', appendProfile: '/path/to/overrides.sb', env: {} });
+    const result = wrapWithSafehouse('claude', ['--verbose']);
+    expect(result.args).toEqual(['--enable=agent-browser', '--append-profile=/path/to/overrides.sb', 'claude', '--verbose']);
   });
 
   it('should include --env-pass flag when envPass is provided', () => {
@@ -63,6 +75,24 @@ describe('wrapWithSafehouse', () => {
   it('should omit --env-pass when envPass is empty', () => {
     const result = wrapWithSafehouse('claude', ['--verbose'], { envPass: [] });
     expect(result.args).toEqual(['claude', '--verbose']);
+  });
+
+  it('should return safehouse env vars and include them in --env-pass', () => {
+    getSafehouseConfig.mockReturnValue({
+      bin: 'safehouse', enableFeatures: '', appendProfile: '', env: { PLAYWRIGHT_MCP_SANDBOX: 'false' },
+    });
+    const result = wrapWithSafehouse('claude', ['--verbose'], { envPass: ['GH_TOKEN'] });
+    expect(result.env).toEqual({ PLAYWRIGHT_MCP_SANDBOX: 'false' });
+    expect(result.args).toContain('--env-pass=GH_TOKEN,PLAYWRIGHT_MCP_SANDBOX');
+  });
+
+  it('should pass safehouse env vars through even with no explicit envPass', () => {
+    getSafehouseConfig.mockReturnValue({
+      bin: 'safehouse', enableFeatures: '', appendProfile: '', env: { FOO: 'bar' },
+    });
+    const result = wrapWithSafehouse('claude', ['--verbose']);
+    expect(result.env).toEqual({ FOO: 'bar' });
+    expect(result.args).toContain('--env-pass=FOO');
   });
 });
 
