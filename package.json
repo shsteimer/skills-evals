@@ -7,6 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "run-tasks": "node scripts/run-tasks.js",
+    "run-tasks:debug": "node scripts/run-tasks.js --debug",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "serve": "node scripts/serve.js"
