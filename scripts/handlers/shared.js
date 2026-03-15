@@ -45,8 +45,13 @@ export function killOrphanedProcesses(workspaceDir) {
  * for AGENT_IDLE_TIMEOUT_MS (default 2 minutes).
  *
  * Returns { reset, clear, isIdledOut } control object.
+ *
+ * @param {import('child_process').ChildProcess} childProcess
+ * @param {Function} [onActivity]
+ * @param {Object} [options]
+ * @param {string} [options.workspaceDir] - workspace path for killing orphaned subprocesses
  */
-export function createIdleTimeout(childProcess, onActivity) {
+export function createIdleTimeout(childProcess, onActivity, options = {}) {
   const timeoutMs = parseInt(getEnv('AGENT_IDLE_TIMEOUT_MS', ''), 10) || 2 * 60 * 1000;
   let idledOut = false;
 
@@ -54,8 +59,7 @@ export function createIdleTimeout(childProcess, onActivity) {
     return setTimeout(() => {
       idledOut = true;
       if (onActivity) onActivity('idle timeout, killing...');
-      childProcess.kill('SIGTERM');
-      setTimeout(() => childProcess.kill('SIGKILL'), 5000);
+      forceKillTree(childProcess, options.workspaceDir);
     }, timeoutMs);
   }
 
@@ -79,20 +83,54 @@ export function createIdleTimeout(childProcess, onActivity) {
 }
 
 /**
- * Wire up an AbortSignal to kill the child process and clear the idle timer.
+ * Kill a child process with progressive escalation.
+ * Each step only runs if the previous one didn't unblock the 'close' event.
+ *
+ * Escalation sequence:
+ * 1. SIGTERM the child
+ * 2. After 5s (if still alive): SIGKILL the child + kill orphaned processes in workspaceDir
+ * 3. After 10s (if close hasn't fired): destroy stdio streams to unblock 'close'
  */
-export function wireAbortSignal(signal, childProcess, idleTimeout) {
+export function forceKillTree(childProcess, workspaceDir) {
+  let closed = false;
+  childProcess.once('close', () => { closed = true; });
+
+  childProcess.kill('SIGTERM');
+
+  setTimeout(() => {
+    if (closed) return;
+    childProcess.kill('SIGKILL');
+    if (workspaceDir) killOrphanedProcesses(workspaceDir);
+  }, 5000);
+
+  setTimeout(() => {
+    if (closed) return;
+    for (const stream of [childProcess.stdout, childProcess.stderr, childProcess.stdin]) {
+      if (stream && !stream.destroyed) stream.destroy();
+    }
+  }, 10000);
+}
+
+/**
+ * Wire up an AbortSignal to kill the child process and clear the idle timer.
+ *
+ * @param {AbortSignal} signal
+ * @param {import('child_process').ChildProcess} childProcess
+ * @param {{ clear: () => void }} idleTimeout
+ * @param {Object} [options]
+ * @param {string} [options.workspaceDir] - workspace path for killing orphaned subprocesses
+ */
+export function wireAbortSignal(signal, childProcess, idleTimeout, options = {}) {
   if (!signal) return;
 
   const onAbort = () => {
     idleTimeout.clear();
-    childProcess.kill('SIGTERM');
-    setTimeout(() => childProcess.kill('SIGKILL'), 5000);
+    forceKillTree(childProcess, options.workspaceDir);
   };
 
   if (signal.aborted) {
     idleTimeout.clear();
-    childProcess.kill('SIGTERM');
+    forceKillTree(childProcess, options.workspaceDir);
   } else {
     signal.addEventListener('abort', onAbort, { once: true });
     childProcess.on('close', () => signal.removeEventListener('abort', onAbort));

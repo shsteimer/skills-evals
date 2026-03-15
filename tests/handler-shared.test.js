@@ -9,6 +9,7 @@ import {
   parseCodexActivity,
   createIdleTimeout,
   wireAbortSignal,
+  forceKillTree,
 } from '../scripts/handlers/shared.js';
 import { getEnv } from '../scripts/utils/env-config.js';
 
@@ -235,6 +236,10 @@ describe('createIdleTimeout', () => {
     return {
       kill: vi.fn(),
       on: vi.fn(),
+      once: vi.fn(),
+      stdout: { destroyed: false, destroy: vi.fn() },
+      stderr: { destroyed: false, destroy: vi.fn() },
+      stdin: { destroyed: false, destroy: vi.fn() },
     };
   }
 
@@ -258,6 +263,29 @@ describe('createIdleTimeout', () => {
 
     vi.advanceTimersByTime(5000); // escalation fires
     expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('should destroy stdio streams after 10 seconds', () => {
+    const proc = makeMockProcess();
+    createIdleTimeout(proc, null);
+
+    vi.advanceTimersByTime(2 * 60 * 1000); // idle fires
+    vi.advanceTimersByTime(10000); // stream destruction fires
+
+    expect(proc.stdout.destroy).toHaveBeenCalled();
+    expect(proc.stderr.destroy).toHaveBeenCalled();
+    expect(proc.stdin.destroy).toHaveBeenCalled();
+  });
+
+  it('should not destroy already-destroyed streams', () => {
+    const proc = makeMockProcess();
+    proc.stdout.destroyed = true;
+    createIdleTimeout(proc, null);
+
+    vi.advanceTimersByTime(2 * 60 * 1000 + 10000);
+
+    expect(proc.stdout.destroy).not.toHaveBeenCalled();
+    expect(proc.stderr.destroy).toHaveBeenCalled();
   });
 
   it('should not fire if reset before timeout', () => {
@@ -328,6 +356,10 @@ describe('wireAbortSignal', () => {
     return {
       kill: vi.fn(),
       on: vi.fn(),
+      once: vi.fn(),
+      stdout: { destroyed: false, destroy: vi.fn() },
+      stderr: { destroyed: false, destroy: vi.fn() },
+      stdin: { destroyed: false, destroy: vi.fn() },
     };
   }
 
@@ -374,6 +406,19 @@ describe('wireAbortSignal', () => {
     expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
   });
 
+  it('should destroy stdio after 10 seconds on abort', () => {
+    const proc = makeMockProcess();
+    const idle = makeMockIdle();
+    const ac = new AbortController();
+
+    wireAbortSignal(ac.signal, proc, idle);
+    ac.abort();
+
+    vi.advanceTimersByTime(10000);
+    expect(proc.stdout.destroy).toHaveBeenCalled();
+    expect(proc.stderr.destroy).toHaveBeenCalled();
+  });
+
   it('should do nothing if signal is null', () => {
     const proc = makeMockProcess();
     const idle = makeMockIdle();
@@ -397,6 +442,74 @@ describe('wireAbortSignal', () => {
     proc.kill.mockClear();
     ac.abort();
     expect(proc.kill).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+});
+
+describe('forceKillTree', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  function makeMockProcess() {
+    const listeners = {};
+    return {
+      kill: vi.fn(),
+      once(event, fn) { listeners[event] = fn; },
+      _emit(event) { if (listeners[event]) listeners[event](); },
+      stdout: { destroyed: false, destroy: vi.fn() },
+      stderr: { destroyed: false, destroy: vi.fn() },
+      stdin: { destroyed: false, destroy: vi.fn() },
+    };
+  }
+
+  it('should fully escalate when process never closes', () => {
+    const proc = makeMockProcess();
+    forceKillTree(proc);
+
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(proc.kill).not.toHaveBeenCalledWith('SIGKILL');
+
+    vi.advanceTimersByTime(5000);
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+
+    vi.advanceTimersByTime(5000);
+    expect(proc.stdout.destroy).toHaveBeenCalled();
+    expect(proc.stderr.destroy).toHaveBeenCalled();
+    expect(proc.stdin.destroy).toHaveBeenCalled();
+  });
+
+  it('should skip SIGKILL and stream destroy if close fires after SIGTERM', () => {
+    const proc = makeMockProcess();
+    forceKillTree(proc);
+
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+
+    // Simulate close firing at 2s
+    vi.advanceTimersByTime(2000);
+    proc._emit('close');
+
+    vi.advanceTimersByTime(8000); // past both escalation points
+    expect(proc.kill).not.toHaveBeenCalledWith('SIGKILL');
+    expect(proc.stdout.destroy).not.toHaveBeenCalled();
+  });
+
+  it('should skip stream destroy if close fires after orphan kill', () => {
+    const proc = makeMockProcess();
+    forceKillTree(proc);
+
+    vi.advanceTimersByTime(5000); // SIGKILL + orphan kill fires
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+
+    // Simulate close firing at 7s (orphan kill unblocked it)
+    vi.advanceTimersByTime(2000);
+    proc._emit('close');
+
+    vi.advanceTimersByTime(3000); // past stream destroy point
+    expect(proc.stdout.destroy).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

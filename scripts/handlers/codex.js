@@ -54,8 +54,9 @@ export default async function runCodex(task, onActivity, signal) {
     });
 
     const { getStderr } = captureStderr(codex, task.taskInfoFolder);
-    const idle = createIdleTimeout(codex, onActivity);
-    wireAbortSignal(signal, codex, idle);
+    const killOptions = { workspaceDir: task.workspaceDir };
+    const idle = createIdleTimeout(codex, onActivity, killOptions);
+    wireAbortSignal(signal, codex, idle, killOptions);
 
     // Write prompt to stdin
     codex.stdin.write(task.prompt);

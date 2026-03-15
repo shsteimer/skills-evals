@@ -10,7 +10,9 @@
     "run-tasks:debug": "node scripts/run-tasks.js --debug",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "serve": "node scripts/serve.js"
+    "serve": "node scripts/serve.js",
+    "cleanup": "node scripts/cleanup-branches.js",
+    "cleanup:dry-run": "node scripts/cleanup-branches.js --dry-run"
   },
   "author": "",
   "engines": {

@@ -53,8 +53,9 @@ export default async function runCursor(task, onActivity, signal) {
     });
 
     const { getStderr } = captureStderr(cursor, task.taskInfoFolder);
-    const idle = createIdleTimeout(cursor, onActivity);
-    wireAbortSignal(signal, cursor, idle);
+    const killOptions = { workspaceDir: task.workspaceDir };
+    const idle = createIdleTimeout(cursor, onActivity, killOptions);
+    wireAbortSignal(signal, cursor, idle, killOptions);
 
     // Write prompt to stdin
     cursor.stdin.write(task.prompt);

@@ -66,8 +66,9 @@ export default async function runClaude(task, onActivity, signal) {
     });
 
     const { getStderr } = captureStderr(claude, task.taskInfoFolder);
-    const idle = createIdleTimeout(claude, onActivity);
-    wireAbortSignal(signal, claude, idle);
+    const killOptions = { workspaceDir: task.workspaceDir };
+    const idle = createIdleTimeout(claude, onActivity, killOptions);
+    wireAbortSignal(signal, claude, idle, killOptions);
 
     claude.stdin.write(task.prompt);
     claude.stdin.end();
