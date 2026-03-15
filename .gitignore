@@ -37,6 +37,13 @@ tmp/
 temp/
 *.tmp
 
+# Eval workspaces (reconstructed agent workspaces for evaluation)
+.eval-workspaces/
+
+# Playwright CLI
+.playwright/
+.playwright-cli/
+
 # Task results
 results/
 

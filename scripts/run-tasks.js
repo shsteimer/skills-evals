@@ -2,39 +2,77 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
-import { sanitizeName, getCurrentTimestamp } from './utils/string-utils.js';
-import { copyDirectoryRecursive, ensureDir, cleanupDir } from './utils/fs-utils.js';
-import { cloneRepository, checkoutBranch, addAndCommit, captureGitChanges, captureGitCommits } from './utils/git-utils.js';
-import { downloadFromGitHub } from './utils/github-utils.js';
+import { sanitizeName, getCurrentTimestamp, computeTaskHash } from './utils/string-utils.js';
+import { ensureDir, cleanupDir } from './utils/fs-utils.js';
+import { addAndCommit, captureGitChanges, captureGitCommits, pushBranch, removeWorktree } from './utils/git-utils.js';
+import { CloneRegistry } from './utils/clone-registry.js';
 import { hasNpmScript, runNpmScript } from './utils/npm-utils.js';
 import { runInParallel } from './utils/progress-utils.js';
+import { extractAgentMetricsFromOutput } from './utils/agent-metrics.js';
+import { getEnv, getAgentConfig } from './utils/env-config.js';
+import { createRunLogger } from './utils/run-logger.js';
+import { runTaskChecks } from './utils/task-checks.js';
+import { hasUserFlags, confirmOrEdit, runInteractiveFlow } from './utils/interactive-prompts.js';
+import { bootstrapWorkspace, copyAgentConfig, loadScriptedAugmentation } from './utils/workspace-setup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function findTasks(args, tasksDir = null, augmentationsFile = null) {
+const DEFAULT_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load augmentations from a list of file paths.
+ * JS/MJS files are loaded as scripted augmentations.
+ * JSON files are loaded as file-copy augmentation lists.
+ *
+ * @param {string[]} augPaths - Array of file paths
+ * @returns {{ fileCopy: Object[], scripted: Object[], names: string[] }}
+ */
+async function loadAugmentationsFromPaths(augPaths) {
+  const fileCopy = [];
+  const scripted = [];
+  const names = [];
+
+  for (const augPath of augPaths) {
+    if (augPath.endsWith('.js') || augPath.endsWith('.mjs')) {
+      const loaded = await loadScriptedAugmentation({ path: augPath });
+      scripted.push(loaded);
+      if (loaded.name) names.push(loaded.name);
+    } else {
+      try {
+        const content = await fs.readFile(augPath, 'utf-8');
+        const parsed = JSON.parse(content);
+
+        if (Array.isArray(parsed)) {
+          fileCopy.push(...parsed);
+        } else if (parsed && Array.isArray(parsed.augmentations)) {
+          fileCopy.push(...parsed.augmentations);
+          if (parsed.name) names.push(parsed.name);
+        } else {
+          throw new Error(`Augmentations file must contain an array or {name, augmentations} object (${augPath})`);
+        }
+      } catch (error) {
+        if (error.message.includes('Augmentations file must contain')) throw error;
+        throw new Error(`Error reading augmentations file ${augPath}: ${error.message}`);
+      }
+    }
+  }
+
+  return { fileCopy, scripted, names };
+}
+
+export async function findTasks(args, tasksDir = null, augmentationsFiles = null) {
   // Validate that both task names and tags are not specified
   if (args.tasks && args.tasks.length > 0 && args.tags && args.tags.length > 0) {
     throw new Error('Cannot specify both task names and tags. Use one or the other.');
   }
 
   const baseDir = tasksDir || path.join(__dirname, '..', 'tasks');
-  
-  // Load global augmentations if a file path is specified
-  let globalAugmentations = [];
-  const globalAugmentationsPath = augmentationsFile || args.augmentationsFile;
-  
-  if (globalAugmentationsPath) {
-    try {
-      const globalAugContent = await fs.readFile(globalAugmentationsPath, 'utf-8');
-      globalAugmentations = JSON.parse(globalAugContent);
-      if (!Array.isArray(globalAugmentations)) {
-        throw new Error(`Augmentations file must contain an array (${globalAugmentationsPath})`);
-      }
-    } catch (error) {
-      throw new Error(`Error reading augmentations file ${globalAugmentationsPath}: ${error.message}`);
-    }
-  }
+
+  // Load global augmentations from CLI --augmentations flags
+  const globalAugPaths = augmentationsFiles || args.augmentationsFiles || [];
+  const global = await loadAugmentationsFromPaths(globalAugPaths);
+  const augmentationSetName = global.names.length > 0 ? global.names.join(' + ') : null;
   
   // Read all directories in the tasks folder
   let entries;
@@ -66,17 +104,31 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
       // Read criteria.txt
       const criteria = await fs.readFile(criteriaPath, 'utf-8');
       
-      // Combine global augmentations with task-specific ones
-      // Global augmentations come first, task-specific can override
-      const augmentations = [
-        ...globalAugmentations,
-        ...(taskData.augmentations || [])
-      ];
-      
+      // Split task augmentations: strings and .js paths are scripted, objects with source/target are file-copy
+      const taskAugEntries = taskData.augmentations || [];
+      const taskPaths = [];
+      const taskFileCopy = [];
+      for (const aug of taskAugEntries) {
+        if (typeof aug === 'string') {
+          taskPaths.push(aug);
+        } else if (aug.source && aug.target) {
+          taskFileCopy.push(aug);
+        }
+      }
+      const taskLoaded = taskPaths.length > 0
+        ? await loadAugmentationsFromPaths(taskPaths)
+        : { fileCopy: [], scripted: [], names: [] };
+
+      // Combine global + task augmentations
+      const augmentations = [...global.fileCopy, ...taskFileCopy, ...taskLoaded.fileCopy];
+      const scriptedAugmentations = [...global.scripted, ...taskLoaded.scripted];
+
       // Combine all data
       allTasks.push({
         ...taskData,
         augmentations,
+        scriptedAugmentations,
+        augmentationSetName,
         taskPath,
         prompt,
         criteria
@@ -105,154 +157,31 @@ export async function findTasks(args, tasksDir = null, augmentationsFile = null)
       }
       return args.tags.some(tag => task.tags.includes(tag));
     });
+  } else if (!args.tasks || args.tasks.length === 0) {
+    // When no tags or task names specified, exclude diagnostic tasks
+    filteredTasks = filteredTasks.filter(task => {
+      if (!task.tags || !Array.isArray(task.tags)) return true;
+      return !task.tags.includes('diagnostic');
+    });
   }
   
   return filteredTasks;
 }
 
-export async function createTaskWorkspace(task) {
-  // Create workspace directory
-  await ensureDir(task.workspaceDir);
-  
-  // Setup git repository - startFrom is required
-  if (!task.startFrom) {
-    throw new Error('startFrom is required');
-  }
-  
-  {
-    // Parse GitHub URL
-    // Supports: https://github.com/org/repo or https://github.com/org/repo/tree/branch
-    let url;
-    try {
-      url = new URL(task.startFrom);
-    } catch (error) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    if (!url.hostname.includes('github.com')) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    const pathParts = url.pathname.split('/').filter(p => p);
-    const org = pathParts[0];
-    const repo = pathParts[1];
-    
-    if (!org || !repo) {
-      throw new Error('startFrom must be a valid GitHub URL');
-    }
-    
-    let branch = 'main';
-    if (pathParts[2] === 'tree' && pathParts[3]) {
-      branch = pathParts[3];
-    }
-    
-    const cloneUrl = `https://github.com/${org}/${repo}.git`;
-    
-    // Clone the repo into a temp location first
-    const tempDir = path.join(os.tmpdir(), `clone-${Date.now()}`);
-    
-    try {
-      cloneRepository(cloneUrl, tempDir, { branch });
-    } catch (error) {
-      throw new Error(
-        `Failed to clone repository from ${task.startFrom}.\n` +
-        `Make sure the repository exists, you have access, and the branch '${branch}' exists.\n` +
-        `Error: ${error.message}`
-      );
-    }
-    
-    // Move contents to workspace dir
-    const entries = await fs.readdir(tempDir);
-    for (const entry of entries) {
-      await fs.rename(
-        path.join(tempDir, entry),
-        path.join(task.workspaceDir, entry)
-      );
-    }
-    
-    // Clean up temp dir
-    await fs.rmdir(tempDir);
-  }
-  
-  // Apply augmentations if specified
-  // Augmentation sources can be:
-  //   1. Local file or folder (relative or absolute path)
-  //   2. GitHub URL (file or folder) - uses git clone with your credentials
-  //      - https://github.com/org/repo/blob/branch/path/to/file.txt (single file)
-  //      - https://github.com/org/repo/blob/commit-hash/path/to/file.txt (file at specific commit)
-  //      - https://github.com/org/repo/tree/branch/path/to/folder (folder)
-  //      - https://raw.githubusercontent.com/org/repo/branch/path/to/file.txt (single file)
-  //   3. HTTP/HTTPS URL to a file (any publicly accessible URL)
-  if (task.augmentations && Array.isArray(task.augmentations)) {
-    for (const aug of task.augmentations) {
-      if (aug.source && aug.target) {
-        const targetPath = path.join(task.workspaceDir, aug.target);
-        const mode = aug.mode || 'merge'; // Default to merge mode
-        
-        // Determine source type and handle accordingly
-        if (aug.source.startsWith('http://') || aug.source.startsWith('https://')) {
-          // HTTP/HTTPS URL - could be GitHub or any other URL
-          if (aug.source.includes('github.com')) {
-            // GitHub URL - handle files and folders via API
-            await downloadFromGitHub(aug.source, targetPath, mode);
-          } else {
-            // Regular HTTP/HTTPS URL - treat as single file
-            await fs.mkdir(path.dirname(targetPath), { recursive: true });
-            
-            const response = await fetch(aug.source);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch ${aug.source}: ${response.statusText}`);
-            }
-            const content = await response.text();
-            await fs.writeFile(targetPath, content, 'utf-8');
-          }
-        } else {
-          // Local file or folder path (relative or absolute)
-          let sourcePath;
-          if (path.isAbsolute(aug.source)) {
-            sourcePath = aug.source;
-          } else {
-            // Relative path - could be relative to taskPath (task-specific) or CWD (global)
-            const taskRelativePath = path.join(task.taskPath, aug.source);
-            const cwdRelativePath = path.resolve(process.cwd(), aug.source);
-            
-            try {
-              await fs.access(taskRelativePath);
-              sourcePath = taskRelativePath;
-            } catch {
-              // If not found in task path, assume it's relative to CWD
-              sourcePath = cwdRelativePath;
-            }
-          }
-          
-          // Check if source exists and is file or directory
-          const stats = await fs.stat(sourcePath);
-          
-          if (stats.isDirectory()) {
-            // Handle replace mode for directories
-            if (mode === 'replace') {
-              await cleanupDir(targetPath);
-            }
-            
-            // Copy directory recursively
-            await copyDirectoryRecursive(sourcePath, targetPath);
-          } else {
-            // Handle single file
-            await ensureDir(path.dirname(targetPath));
-            await fs.copyFile(sourcePath, targetPath);
-          }
-        }
-      }
-    }
-    
-    // Commit augmentations
-    addAndCommit(task.workspaceDir, 'Add task augmentations');
-  }
-  
-  // Create and checkout new branch for the agent (after augmentations are committed)
-  const agentBranch = `${sanitizeName(task.agent)}-${task.timestamp}-${task.iteration}`;
-  checkoutBranch(task.workspaceDir, agentBranch, true);
-  
+export { copyAgentConfig };
+
+export async function createTaskWorkspace(task, options = {}) {
+  const { cloneRegistry, clonesBaseDir } = options;
+
+  await bootstrapWorkspace(task, {
+    cloneRegistry,
+    clonesBaseDir,
+    branchName: task.branchName
+  });
+
+  // Single commit for all workspace setup (augmentations + agent settings)
+  addAndCommit(task.workspaceDir, 'Workspace setup');
+
   // Install dependencies if package.json exists
   const packageJsonPath = path.join(task.workspaceDir, 'package.json');
   try {
@@ -270,30 +199,45 @@ export async function createTaskInfoFolder(task) {
   // Create the directory structure
   await ensureDir(task.taskInfoFolder);
   
+  // Compute a content hash from the source task definition files
+  // so results can be grouped by task version
+  const sourcePromptPath = path.join(task.taskPath, 'prompt.txt');
+  const sourceCriteriaPath = path.join(task.taskPath, 'criteria.txt');
+  const sourceTaskJsonPath = path.join(task.taskPath, 'task.json');
+  const [sourcePrompt, sourceCriteria, sourceTaskJsonContent] = await Promise.all([
+    fs.readFile(sourcePromptPath, 'utf-8'),
+    fs.readFile(sourceCriteriaPath, 'utf-8'),
+    fs.readFile(sourceTaskJsonPath, 'utf-8')
+  ]);
+  const taskHash = computeTaskHash(sourcePrompt, sourceCriteria, sourceTaskJsonContent);
+
   // Build task.json with all runtime information
-  // Use task data directly (includes global + task-specific augmentations)
   const taskJson = {
     name: task.name,
     description: task.description,
     tags: task.tags,
     startFrom: task.startFrom,
-    augmentations: task.augmentations, // This includes global + task-specific
+    augmentations: task.augmentations,
+    scriptedAugmentations: (task.scriptedAugmentations || []).map(s => ({ name: s.name, path: s.path })),
+    augmentationSetName: task.augmentationSetName || null,
     agent: task.agent,
+    model: task.model || null,
+    runSetId: task.timestamp,
+    iteration: task.iteration,
     timestamp: task.timestamp,
-    workspaceDir: task.workspaceDir
+    branchName: task.branchName || null,
+    workspaceDir: task.workspaceDir,
+    taskHash
   };
-  
+
   // Write task.json to task info folder
   const destTaskJsonPath = path.join(task.taskInfoFolder, 'task.json');
   await fs.writeFile(destTaskJsonPath, JSON.stringify(taskJson, null, 2), 'utf-8');
-  
-  // Copy prompt.txt
-  const sourcePromptPath = path.join(task.taskPath, 'prompt.txt');
+
+  // Copy prompt.txt and criteria.txt
   const destPromptPath = path.join(task.taskInfoFolder, 'prompt.txt');
   await fs.copyFile(sourcePromptPath, destPromptPath);
-  
-  // Copy criteria.txt
-  const sourceCriteriaPath = path.join(task.taskPath, 'criteria.txt');
+
   const destCriteriaPath = path.join(task.taskInfoFolder, 'criteria.txt');
   await fs.copyFile(sourceCriteriaPath, destCriteriaPath);
   
@@ -306,8 +250,9 @@ export function parseArgs(argv) {
     tags: [],
     agents: [],
     workspaceDir: path.join(os.tmpdir(), 'skills-evals-workspace'),
-    augmentationsFile: null, // Only load if explicitly specified
+    augmentationsFiles: [], // Only load if explicitly specified
     times: 1, // Number of times to run each task
+    debug: false,
     showHelp: false
   };
 
@@ -317,6 +262,8 @@ export function parseArgs(argv) {
     
     if (arg === '--help' || arg === '-h') {
       result.showHelp = true;
+    } else if (arg === '--debug') {
+      result.debug = true;
     } else if (arg === '--task' && i + 1 < argv.length) {
       const value = argv[++i];
       // Handle comma-separated values
@@ -335,7 +282,7 @@ export function parseArgs(argv) {
     } else if (arg === '--workspace' && i + 1 < argv.length) {
       result.workspaceDir = argv[++i];
     } else if (arg === '--augmentations' && i + 1 < argv.length) {
-      result.augmentationsFile = argv[++i];
+      result.augmentationsFiles.push(argv[++i]);
     } else if (arg === '--times' && i + 1 < argv.length) {
       const value = parseInt(argv[++i], 10);
       if (isNaN(value) || value < 1) {
@@ -361,8 +308,10 @@ Options:
   --task <name>       Task name(s) to run (can be used multiple times or comma-separated)
   --tag <tag>         Filter tasks by tag(s) - matches ANY tag (can be used multiple times or comma-separated)
   --agents <name>     Agent(s) to run tasks with (default: claude,cursor,codex)
+  --augmentations <f> Augmentation file(s) to apply (can be used multiple times)
   --workspace <path>  Directory to create task workspaces (default: system temp)
   --times <number>    Number of times to run each task (default: 1)
+  --debug             Verbose logging to batch.log; preserve agent workspaces for inspection
   -h, --help          Show this help message
 
 Examples:
@@ -370,6 +319,8 @@ Examples:
   npm run run-tasks --task build-block,deploy-service
   npm run run-tasks --tag cdd --tag blocks
   npm run run-tasks --agents claude --task build-block
+  npm run run-tasks --augmentations augmentations/skills-only.json
+  npm run run-tasks --augmentations augmentations/a.json --augmentations augmentations/b.json
   npm run run-tasks --workspace /tmp/my-workspace --task build-block
   npm run run-tasks --task build-block --times 3
 `);
@@ -379,46 +330,59 @@ export function enrichTasks(tasks, agents, workspaceDir, times = 1) {
   // Generate timestamp once for the entire run
   const timestamp = getCurrentTimestamp();
   const resultsBaseDir = path.join(__dirname, '..', 'results');
-  
+
   // Create enriched task objects for each task/agent/iteration combination
   // Order by iteration first, then agent - this ensures parallel execution spreads across agents
+  // Global counter ensures unique branch names across all tasks sharing a bare repo
+  let taskCounter = 0;
+  // Short timestamp for branch names: 20260311-140750 → 03111407
+  const shortTs = timestamp.replace(/^20\d{2}/, '').replace(/-/, '').replace(/\d{2}$/, '');
+
   const enrichedTasks = [];
   for (const task of tasks) {
     for (let iteration = 1; iteration <= times; iteration++) {
       for (const agent of agents) {
+        taskCounter++;
         const sanitizedAgent = sanitizeName(agent);
         const folderName = `${task.name}-${sanitizedAgent}-${iteration}`;
-        
+
+        // Keep branch name short for AEM dev server DNS label limit (63 chars).
+        // Use a global counter instead of task name for uniqueness.
+        const branchName = `${sanitizedAgent}-${shortTs}-${taskCounter}`;
+
+        const config = getAgentConfig(agent);
         const enrichedTask = {
           ...task,
           agent,
+          model: config.model || null,
           timestamp,
           iteration,
+          branchName,
           taskInfoFolder: path.join(resultsBaseDir, timestamp, folderName),
           workspaceDir: path.join(workspaceDir, timestamp, folderName)
         };
-        
+
         enrichedTasks.push(enrichedTask);
       }
     }
   }
-  
+
   return enrichedTasks;
 }
 
-async function runTask(task) {
+async function runTask(task, onActivity, signal) {
   // Dynamically load the handler for the specified agent
   const handlerPath = `./handlers/${sanitizeName(task.agent)}.js`;
-  
+
   try {
     const handler = await import(handlerPath);
     const runHandler = handler.default;
-    
+
     if (typeof runHandler !== 'function') {
       throw new Error(`Handler at ${handlerPath} does not export a default function`);
     }
-    
-    await runHandler(task);
+
+    await runHandler(task, onActivity, signal);
   } catch (error) {
     if (error.code === 'ERR_MODULE_NOT_FOUND') {
       throw new Error(`No handler found for agent '${task.agent}'. Expected handler at ${handlerPath}`);
@@ -427,40 +391,37 @@ async function runTask(task) {
   }
 }
 
-async function captureResults(task) {
+async function captureResults(task, runMetrics = null) {
   const results = {};
-  
-  // Run npm run lint and capture status (if lint script exists)
-  if (await hasNpmScript(task.workspaceDir, 'lint')) {
-    results.lint = await runNpmScript(task.workspaceDir, 'lint');
-  } else {
-    results.lint = {
-      skipped: true,
-      reason: 'No lint script found in package.json'
-    };
-  }
-  
+
   // Capture diff of all changes from augmentations commit
-  results.diff = await captureGitChanges(task.workspaceDir, 'Add task augmentations');
+  results.diff = await captureGitChanges(task.workspaceDir, 'Workspace setup');
   
   // Capture git commit history (agent's commits)
-  results.commits = await captureGitCommits(task.workspaceDir, 'Add task augmentations');
+  results.commits = await captureGitCommits(task.workspaceDir, 'Workspace setup');
   
   // Run tests if test script exists
   if (await hasNpmScript(task.workspaceDir, 'test')) {
     results.tests = await runNpmScript(task.workspaceDir, 'test');
   }
-  
-  // Write lint results to separate file
-  const lintPath = path.join(task.taskInfoFolder, 'lint-results.json');
-  await fs.writeFile(lintPath, JSON.stringify(results.lint, null, 2), 'utf-8');
-  
+
+  // Run task-specific checks if checks.js exists
+  if (task.taskPath) {
+    results.checks = await runTaskChecks(task.taskPath, task.workspaceDir);
+  }
+
   // Write test results if they exist
   if (results.tests) {
     const testsPath = path.join(task.taskInfoFolder, 'test-results.json');
     await fs.writeFile(testsPath, JSON.stringify(results.tests, null, 2), 'utf-8');
   }
-  
+
+  // Write check results if any
+  if (results.checks) {
+    const checksPath = path.join(task.taskInfoFolder, 'check-results.json');
+    await fs.writeFile(checksPath, JSON.stringify(results.checks, null, 2), 'utf-8');
+  }
+
   // Write git commits if any
   if (results.commits && results.commits.length > 0) {
     const commitsPath = path.join(task.taskInfoFolder, 'commits.json');
@@ -470,12 +431,54 @@ async function captureResults(task) {
   // Write diff as separate file
   const diffPath = path.join(task.taskInfoFolder, 'changes.diff');
   await fs.writeFile(diffPath, results.diff || '', 'utf-8');
+
+  // Capture agent output usage metrics if available
+  const outputPath = path.join(task.taskInfoFolder, 'output.jsonl');
+  let outputMetrics = null;
+  try {
+    const output = await fs.readFile(outputPath, 'utf-8');
+    outputMetrics = extractAgentMetricsFromOutput(output);
+  } catch {
+    // output.jsonl may be missing for failed/incomplete runs
+  }
+
+  if (runMetrics || outputMetrics) {
+    const runMetricsPath = path.join(task.taskInfoFolder, 'run-metrics.json');
+    await fs.writeFile(
+      runMetricsPath,
+      JSON.stringify(
+        {
+          ...(runMetrics || {}),
+          ...(outputMetrics || {})
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+  }
 }
 
 async function cleanUp(task) {
-  // Remove the workspace directory
+  // Commit any uncommitted agent work
+  addAndCommit(task.workspaceDir, 'Final state');
+
+  // Push branch to remote for reconstruction (best-effort)
+  if (task.branchName) {
+    try {
+      await pushBranch(task.workspaceDir, task.branchName);
+    } catch (error) {
+      console.error(`Warning: Failed to push branch ${task.branchName}: ${error.message}`);
+    }
+  }
+
+  // Remove worktree or fall back to directory cleanup
   try {
-    await cleanupDir(task.workspaceDir);
+    if (task.parentRepoPath) {
+      removeWorktree(task.parentRepoPath, task.workspaceDir);
+    } else {
+      await cleanupDir(task.workspaceDir);
+    }
   } catch (error) {
     // Log error but don't fail - workspace cleanup is best-effort
     console.error(`Warning: Failed to cleanup workspace ${task.workspaceDir}: ${error.message}`);
@@ -486,33 +489,192 @@ function getTaskId(task) {
   return `${task.name}-${sanitizeName(task.agent)}-${task.iteration}`;
 }
 
-async function processTask(task) {
-  await runTask(task);
-  await captureResults(task);
-  await cleanUp(task);
+async function processTask(task, onActivity, { cloneRegistry, clonesBaseDir, debug, logger } = {}) {
+  const taskId = getTaskId(task);
+
+  // Bootstrap workspace just-in-time so setup pipelines with other tasks running
+  if (onActivity) onActivity('bootstrapping workspace...');
+  await createTaskWorkspace(task, { cloneRegistry, clonesBaseDir });
+
+  if (logger) {
+    await logger.debug(taskId, `workspace: ${task.workspaceDir}`);
+    await logger.debug(taskId, `branch: ${task.branchName || 'none'}`);
+    await logger.debug(taskId, `agent: ${task.agent}, model: ${task.model || 'default'}`);
+    if (task.augmentations?.length) {
+      await logger.debug(taskId, `augmentations: ${task.augmentations.map(a => a.name || a.src).join(', ')}`);
+    }
+    if (task.scriptedAugmentations?.length) {
+      await logger.debug(taskId, `scripted augmentations: ${task.scriptedAugmentations.map(s => s.name).join(', ')}`);
+    }
+  }
+
+  const timeoutMs = parseInt(getEnv('AGENT_TIMEOUT_MS', ''), 10) || DEFAULT_AGENT_TIMEOUT_MS;
+  if (logger) await logger.debug(taskId, `timeout: ${timeoutMs / 1000}s`);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+
+  const startedAt = new Date().toISOString();
+  const start = Date.now();
+  let runError = null;
+  let timedOut = false;
+  try {
+    await runTask(task, onActivity, ac.signal);
+  } catch (error) {
+    timedOut = ac.signal.aborted;
+    runError = timedOut
+      ? new Error(`Agent timed out after ${timeoutMs / 1000}s`)
+      : error;
+    if (logger) await logger.debug(taskId, `error: ${runError.message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (onActivity) onActivity(timedOut ? 'timed out, capturing partial results...' : 'capturing results...');
+  const finishedAt = new Date().toISOString();
+  const durationMs = Date.now() - start;
+  await captureResults(task, { startedAt, finishedAt, durationMs, timedOut });
+
+  if (debug) {
+    // Push branch but preserve workspace for inspection
+    if (task.branchName) {
+      try {
+        await pushBranch(task.workspaceDir, task.branchName);
+      } catch (error) {
+        console.error(`Warning: Failed to push branch ${task.branchName}: ${error.message}`);
+      }
+    }
+    if (logger) await logger.debug(taskId, `workspace preserved: ${task.workspaceDir}`);
+  } else {
+    await cleanUp(task);
+  }
+  if (runError) throw runError;
+}
+
+export function buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures, timedOutRuns = []) {
+  const timestamp = enrichedTasks[0]?.timestamp || null;
+  const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+
+  // Collect unique task names
+  const taskNames = [...new Set(enrichedTasks.map(t => t.name))];
+
+  // Build agent → model map
+  const agentModels = {};
+  for (const task of enrichedTasks) {
+    if (!agentModels[task.agent]) {
+      agentModels[task.agent] = task.model || null;
+    }
+  }
+
+  // Count completed vs failed based on whether taskInfoFolder has a run-metrics.json
+  // Since we don't have per-task status here, use the overall hasFailures flag
+  const runCount = enrichedTasks.length;
+  const failedCount = hasFailures ? null : 0; // null = unknown breakdown
+  const completedCount = hasFailures ? null : runCount;
+
+  return {
+    timestamp,
+    startedAt,
+    finishedAt,
+    durationMs,
+    args: {
+      tasks: args.tasks,
+      tags: args.tags,
+      agents: args.agents,
+      times: args.times,
+      workspaceDir: args.workspaceDir,
+      augmentationsFiles: args.augmentationsFiles,
+      debug: args.debug || false,
+    },
+    augmentationSetName: enrichedTasks[0]?.augmentationSetName || null,
+    agentModels,
+    taskNames,
+    runCount,
+    completedCount,
+    failedCount,
+    timedOutRuns
+  };
+}
+
+async function collectTimedOutRuns(enrichedTasks) {
+  const timedOut = [];
+  for (const task of enrichedTasks) {
+    if (!task.taskInfoFolder) continue;
+    try {
+      const metricsPath = path.join(task.taskInfoFolder, 'run-metrics.json');
+      const metrics = JSON.parse(await fs.readFile(metricsPath, 'utf-8'));
+      if (metrics.timedOut) {
+        timedOut.push(path.basename(task.taskInfoFolder));
+      }
+    } catch {
+      // run-metrics.json may not exist for runs that failed before capturing results
+    }
+  }
+  return timedOut;
 }
 
 async function runTasks() {
-  const args = parseArgs(process.argv);
-  
-  if (args.showHelp) {
+  const parsedArgs = parseArgs(process.argv);
+
+  if (parsedArgs.showHelp) {
     showHelp();
     return;
   }
-  
-  const tasks = await findTasks(args);
-  const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir, args.times);
-  
-  // Prepare task folders for each enriched task
-  for (const task of enrichedTasks) {
-    await createTaskInfoFolder(task);
-    await createTaskWorkspace(task);
+
+  // Interactive mode: guided flow or confirm-before-run
+  let args;
+  if (hasUserFlags(process.argv)) {
+    args = await confirmOrEdit(parsedArgs);
+  } else {
+    args = await runInteractiveFlow();
   }
 
+  const tasks = await findTasks(args);
+  const enrichedTasks = enrichTasks(tasks, args.agents, args.workspaceDir, args.times);
+
+  // Create result folders up front so the full run is visible immediately
+  for (const task of enrichedTasks) {
+    await createTaskInfoFolder(task);
+  }
+
+  // Set up run logger
+  const timestamp = enrichedTasks[0]?.timestamp;
+  const resultsBaseDir = path.join(__dirname, '..', 'results');
+  let logger = null;
+  if (timestamp) {
+    const logPath = path.join(resultsBaseDir, timestamp, 'batch.log');
+    logger = createRunLogger(logPath, { debug: args.debug });
+    await logger.init();
+  }
+
+  // Set up clone registry for worktree-based workspaces
+  const cloneRegistry = new CloneRegistry();
+  const clonesBaseDir = path.join(args.workspaceDir, timestamp, '.clones');
+
   // Run the tasks in parallel
+  const startedAt = new Date().toISOString();
   const concurrency = args.agents.length;
-  const hasFailures = await runInParallel(enrichedTasks, concurrency, processTask, getTaskId);
-  
+  const taskRunner = (task, onActivity) => processTask(task, onActivity, {
+    cloneRegistry, clonesBaseDir, debug: args.debug, logger,
+  });
+  const hasFailures = await runInParallel(enrichedTasks, concurrency, taskRunner, getTaskId, { logger });
+  const finishedAt = new Date().toISOString();
+
+  // Clean up bare clones directory (skip in debug mode to preserve worktrees)
+  if (!args.debug) {
+    try {
+      await cleanupDir(clonesBaseDir);
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+
+  // Write batch.json
+  if (timestamp) {
+    const timedOutRuns = await collectTimedOutRuns(enrichedTasks);
+    const batchMetadata = buildBatchMetadata(args, enrichedTasks, startedAt, finishedAt, hasFailures, timedOutRuns);
+    const batchJsonPath = path.join(resultsBaseDir, timestamp, 'batch.json');
+    await fs.writeFile(batchJsonPath, JSON.stringify(batchMetadata, null, 2), 'utf-8');
+  }
+
   // Exit with non-zero code if any tasks failed
   if (hasFailures) {
     process.exit(1);

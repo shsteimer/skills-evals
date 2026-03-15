@@ -1,0 +1,8 @@
+{
+  "bin": "safehouse",
+  "enableFeatures": "agent-browser",
+  "appendProfile": "config/safehouse/local-overrides.sb",
+  "env": {
+    "PLAYWRIGHT_MCP_SANDBOX": "false"
+  }
+}

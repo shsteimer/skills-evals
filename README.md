@@ -8,12 +8,24 @@ This framework allows you to:
 - Define development tasks with specific criteria
 - Run coding agents against those tasks in isolated workspaces
 - Evaluate agent performance based on defined criteria
+- Summarize batch results with aggregate statistics
+- Compare batches to determine if changes improved performance
+
+## Terminology
+
+- **batch** — timestamp directory (`results/20260308-135305/`) containing all tasks × agents × iterations from one `run-tasks` invocation
+- **run** — individual task execution folder (`results/.../build-block-claude-1/`)
+- **iteration** — repeat number (1-5) within a batch for same task+agent
 
 ## Structure
 
 - `tasks/` - Task definitions with prompts and evaluation criteria
-- `scripts/` - Execution and evaluation scripts
-- `results/` - Evaluation results (generated at `results/{timestamp}/{task-agent}/`)
+- `scripts/` - Execution, evaluation, summarization, comparison, and assembly scripts
+- `.claude/skills/` - Claude Code skills for evaluation workflow
+- `tools/` - Standalone HTML viewer tools
+- `results/` - Evaluation results
+  - `results/{timestamp}/` - Batch directories (runs + batch summary)
+  - `results/comparisons/{timestamp}/` - Comparison directories
 - `augmentations/` - Optional global augmentation files
 
 ## Quick Start
@@ -38,9 +50,24 @@ npm run run-tasks -- --agents claude,cursor
 # Run with augmentations
 npm run run-tasks -- --augmentations ./augmentations/agents-md-only.json
 
+# Run multiple iterations
+npm run run-tasks -- --task build-block --times 5
+
 # Show help
 npm run run-tasks -- --help
+
+# Start viewer server (index page at http://localhost:8765)
+npm run serve
 ```
+
+## Pipeline
+
+The full evaluation pipeline:
+
+1. **Run tasks** — `npm run run-tasks` executes agents against tasks, writes results + `batch.json`
+2. **Evaluate runs** — use the `eval-run` skill to evaluate individual runs
+3. **Summarize batch** — use the `summarize-batch` skill (runs `scripts/summarize-batch.js` + analytical subagent)
+4. **Compare batches** — use the `compare-batches` skill (runs `scripts/compare-batches.js` + analytical subagent)
 
 ## Defining Tasks
 
@@ -80,7 +107,7 @@ Tasks are defined in the `tasks/` directory. Each task is a folder containing:
   - GitHub files: `"https://github.com/org/repo/blob/main/file.txt"`
   - GitHub folders: `"https://github.com/org/repo/tree/main/folder"`
   - HTTP URLs: `"https://example.com/file.txt"`
-  
+
 - **`tags`** (optional): Tags for filtering tasks
 
 ## Augmentations
@@ -108,35 +135,103 @@ Create a JSON file with augmentations to apply to all tasks:
 ]
 ```
 
-Use with `--augmentations` flag:
+Use with `--augmentations` flag (can be specified multiple times):
 ```bash
 npm run run-tasks -- --augmentations ./my-augmentations.json
+npm run run-tasks -- --augmentations ./base.json --augmentations ./extras.json
 ```
+
+In interactive mode, augmentation files are multi-select.
+
+### Augmentation Properties
+
+Each augmentation entry supports:
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `source` | yes | File/folder path or URL |
+| `target` | yes | Destination path in workspace |
+| `mode`   | no  | `"merge"` (default) or `"replace"` for folders |
+| `agents` | no  | Array of agent names (e.g. `["claude"]`). When set, the augmentation is only applied for those agents. Omit to apply for all agents. |
+
+### Scripted Augmentations
+
+For complex setup that can't be expressed as simple file copies (e.g. modifying existing config files, agent-specific logic), use a JS augmentation file. Export a default object with a `name` and an `augment` function:
+
+```js
+// augmentations/my-setup.js
+import fs from 'fs/promises';
+import path from 'path';
+
+export default {
+  name: 'My Setup',
+  async augment({ workspaceDir, agent, taskName }) {
+    // Full access to the workspace — read, write, modify files
+    if (agent === 'codex') {
+      const configPath = path.join(workspaceDir, '.codex', 'config.toml');
+      const existing = await fs.readFile(configPath, 'utf-8');
+      await fs.writeFile(configPath, existing + '\n[extra]\nkey = "value"\n');
+    }
+  },
+};
+```
+
+Scripted augmentations run after agent config and file-copy augmentations, so they can read and modify any files already in the workspace. They're discovered alongside JSON files in `augmentations/` and appear in the interactive multi-select.
 
 ### Augmentation Modes
 
-For folders, control merge behavior:
-```json
-{
-  "source": "./folder",
-  "target": "dest",
-  "mode": "merge"  // or "replace"
-}
-```
-
+For folders, control merge behavior with `mode`:
 - `merge` (default): Add/overwrite files, keep existing
 - `replace`: Delete target first, then copy
 
 ## Results
 
-Results are stored at `results/{timestamp}/{task-agent}/`:
+Results are stored at `results/{timestamp}/`:
+
+### Batch-level artifacts (`results/{timestamp}/`)
+- `batch.json` — batch metadata (timestamp, args, augmentations, agents, run counts)
+- `batch-summary.json` — aggregate stats per task+agent (after `summarize-batch`)
+- `batch-summary-data.js` — data file for batch viewer
+- `batch.log` — execution log
+
+### Comparison artifacts (`results/comparisons/{timestamp}/`)
+- `comparison.json` — comparison data with analysis (recommendation, per-group verdicts)
+- `compare-data.js` — data file for comparison viewer
+
+### Run-level artifacts (per `{task-agent-iteration}/`)
 - `task.json` - Complete task configuration including augmentations
 - `prompt.txt` - The prompt given to the agent
 - `criteria.txt` - Evaluation criteria
+- `changes.diff` - Git diff of agent's changes
+- `commits.json` - Agent's git commits
+- `run-metrics.json` - Timing, token usage, timeout status
+- `output.jsonl` - Raw agent output stream
+- `check-results.json` - Deterministic check results
+- `eval-result.json` - Evaluation results (after eval)
+- `eval-data.js` - Data file for eval viewer
 
-The workspace for each run is at: `{workspace-dir}/{timestamp}/{task-agent}/`
-- Default workspace directory is system temp directory
-- Can be customized with `--workspace` flag
+## Viewer Tools
+
+Standalone HTML viewers for inspecting results:
+
+```bash
+npm run serve
+```
+
+This starts a server at http://localhost:8765 with an index page listing all batches and comparisons.
+
+- **eval-viewer** — single-run evaluation results, criteria, screenshots
+- **batch-viewer** — batch summary with per-group stats and analytical findings
+- **comparison-viewer** — A/B batch comparison with recommendation and per-group verdicts
+- **conversation-viewer** — parsed agent conversation log
+- **diff-viewer** — interactive diff view
+
+All viewers load data via `?data=` URL parameter:
+```
+http://localhost:8765/tools/eval-viewer/index.html?data=results/20260308-135305/build-block-claude-1/eval-data.js
+http://localhost:8765/tools/batch-viewer/index.html?data=results/20260308-135305/batch-summary-data.js
+http://localhost:8765/tools/comparison-viewer/index.html?data=results/comparisons/20260309-115836/compare-data.js
+```
 
 ## Testing
 
@@ -148,6 +243,5 @@ npm test
 npm run test:watch
 
 # Run specific test file
-npm test find-tasks.test.js
+npm test summarize-batch.test.js
 ```
-

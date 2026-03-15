@@ -1,0 +1,48 @@
+# Success Criteria
+
+<scoring_rubric>
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
+<bonus> items: Add points as indicated.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
+</scoring_rubric>
+
+## Variant Implementation
+
+<critical>
+- Z-pattern variant alternates image placement per row: odd rows show image left/text right, even rows show image right/text left (or vice versa). The alternation must be visible across at least 3 rows.
+- `split-33-66` variant renders the first column at roughly 1/3 width and the second at roughly 2/3 width on desktop
+- `split-66-33` variant renders the first column at roughly 2/3 width and the second at roughly 1/3 width on desktop
+- Each variant is activated via the AEM variant pattern: author writes the variant name in the block table header (e.g., `Columns (z-pattern)`, `Columns (split-33-66)`), which maps to a CSS class on the block element
+- Default columns layout still renders correctly — not broken by the variant CSS
+</critical>
+
+<important>
+- All three variants stack to single-column on mobile-width viewports with image above text
+- Variant CSS is scoped to variant classes and does not leak to unmodified columns blocks
+- Z-pattern implementation uses CSS (e.g., nth-child, flexbox order/direction) rather than JS DOM manipulation to alternate layout
+</important>
+
+## Testing
+
+<critical>
+- Agent previewed the columns in a browser or browser-like environment where the block JS actually executes (e.g., opened the page in a browser or used Playwright/Puppeteer to render and screenshot it). Evidence must include screenshots, DOM inspection, or visual confirmation from the agent's tool calls — not just starting a dev server, fetching with curl, or claiming the output looks correct.
+- Agent verified variant rendering at multiple viewport sizes (desktop and mobile at minimum)
+</critical>
+
+## Process
+
+<critical>
+- Agent ran a lint check and fixed any issues found [check: lint-passes]
+</critical>
+
+<important>
+- PR was created with a preview link to an `aem.page` or `aem.live` URL (e.g., `https://{branch}--aem-boilerplate-evals--shsteimer.aem.page/path/to/page`) that loads without 404, includes content demonstrating each variant, and allows the reviewer to visually inspect the variants and run a PSI check
+</important>
+
+## Content
+
+<important>
+- Demo content was created or updated as `.plain.html` files showing each variant with representative content
+</important>

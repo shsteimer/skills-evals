@@ -1,7 +1,22 @@
-- hello.txt file exists
-- File contains "Hello World"
-- File the agents name
-- no other changes were modified, created, or removed
-- no git commits were made
+# Success Criteria
 
+<scoring_rubric>
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
+Pass threshold: 80% of possible points with no critical items unmet.
+</scoring_rubric>
 
+## File Creation
+
+<critical>
+- `hello.txt` file exists at repository root
+- File contains the phrase "Hello World"
+- File includes the agent's name or identifier
+- No files other than `hello.txt` are created, deleted, or modified
+- No git commits were made
+</critical>
+
+<important>
+- Content is exactly one short, readable line
+</important>

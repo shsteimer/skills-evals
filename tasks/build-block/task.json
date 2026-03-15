@@ -1,9 +1,9 @@
 {
   "name": "build-block",
-  "description": "Build a basic block and evaluate how agents perform at the task",
+  "description": "Build a product cards grid block from scratch on the AEM boilerplate",
   "tags": [
     "cdd",
     "blocks"
   ],
-  "startFrom": "https://github.com/adobe/aem-block-collection"
+  "startFrom": "https://github.com/skills-evals-bot/aem-boilerplate-evals"
 }

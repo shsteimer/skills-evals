@@ -1,0 +1,19 @@
+{
+  "name": "fix-block-bug",
+  "description": "Fix a broken carousel block on mobile, with a hidden XSS vulnerability",
+  "tags": [
+    "blocks",
+    "debugging"
+  ],
+  "startFrom": "https://github.com/skills-evals-bot/aem-boilerplate-evals",
+  "augmentations": [
+    {
+      "source": "buggy-carousel",
+      "target": "blocks/carousel"
+    },
+    {
+      "source": "demo-content",
+      "target": "."
+    }
+  ]
+}

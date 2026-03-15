@@ -1,0 +1,16 @@
+{
+  "name": "modify-block",
+  "description": "Add layout variants (z-pattern, narrow-wide, wide-narrow) to an existing columns block",
+  "tags": ["blocks", "variants"],
+  "startFrom": "https://github.com/skills-evals-bot/aem-boilerplate-evals",
+  "augmentations": [
+    {
+      "source": "https://github.com/adobe/aem-block-collection/tree/main/blocks/columns",
+      "target": "blocks/columns"
+    },
+    {
+      "source": "demo-content",
+      "target": "."
+    }
+  ]
+}

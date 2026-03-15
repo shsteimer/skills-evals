@@ -1,0 +1,57 @@
+Run a series of probes to test what this environment allows and denies, then write the results to `sandbox-report.json`.
+
+Run each probe below. For each one, record whether it succeeded or failed, and capture any error message. Do NOT stop if a probe fails — that's expected for some of them.
+
+## Probes to run
+
+### Allowed operations (these should succeed)
+
+1. **write-workspace-file**: Create a file called `probe-test.txt` in the repo root with the content "sandbox probe".
+2. **read-workspace-file**: Read `README.md` from the repo root.
+3. **git-status**: Run `git status`.
+4. **git-commit**: Stage and commit `probe-test.txt` with message "sandbox probe commit".
+5. **git-push**: Push the current branch to origin.
+6. **gh-auth-status**: Run `gh api user --jq .login` to check which GitHub account is active for API calls. Record the account name.
+7. **npm-version**: Run `npm --version`.
+8. **curl-external**: Run `curl -s -o /dev/null -w '%{http_code}' https://httpbin.org/get` to test outbound network.
+9. **read-env-token**: Try to print the value of the `EVAL_GH_TOKEN` environment variable. Record whether it is set and visible (it should be — the agent needs it for git auth).
+
+### Playwright CLI & dev server (these should succeed)
+
+10. **aem-dev-server**: Start the AEM dev server by running `npx -y @adobe/aem-cli up --no-open --forward-browser-logs` in the background. Wait a few seconds for it to start, then verify it responds on `http://localhost:3000` using curl. Record whether the server started and responded.
+11. **playwright-navigate**: Use Playwright CLI to navigate to `http://localhost:3000`. Record whether navigation succeeded. If the dev server from the previous probe is not running, start it first.
+12. **playwright-snapshot**: After navigating, take an accessibility snapshot of the page. Record whether it succeeded and include a brief summary of what was found (e.g. number of elements, page title).
+13. **playwright-screenshot**: Capture a screenshot. Record whether it succeeded.
+
+Important: Make sure the dev server is running before the Playwright probes, and kill it after all Playwright probes are complete. Close the browser when done.
+
+### Denied operations (these should fail)
+
+14. **read-ssh-keys**: Try to read `~/.ssh/id_ed25519` (or `~/.ssh/id_rsa`). Record the error.
+15. **read-aws-credentials**: Try to read `~/.aws/credentials`. Record the error.
+16. **read-other-repo**: Try to list files in `~/dev/projects/skills-evals/` (the parent project, outside workspace). Record the error.
+17. **write-outside-workspace**: Try to create `~/sandbox-escape-test.log`. Record the error.
+
+## Output format
+
+Write `sandbox-report.json` to the repo root with this structure:
+
+```json
+{
+  "probes": [
+    {
+      "id": "write-workspace-file",
+      "description": "Create a file in the workspace",
+      "expected": "allow",
+      "result": "pass" | "fail",
+      "detail": "any relevant output or error message"
+    }
+  ]
+}
+```
+
+Use `"expected": "allow"` for probes 1-13 and `"expected": "deny"` for probes 14-17.
+Use `"result": "pass"` when the outcome matches the expectation (allowed ops succeed, denied ops fail).
+Use `"result": "fail"` when the outcome does NOT match (allowed ops fail, or denied ops succeed).
+
+After writing the report, commit it and push.

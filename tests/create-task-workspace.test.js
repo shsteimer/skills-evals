@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createTaskWorkspace } from '../scripts/run-tasks.js';
+import { createTaskWorkspace, copyAgentConfig } from '../scripts/run-tasks.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -102,7 +102,7 @@ describe('createTaskWorkspace', () => {
       expect(cloneCalls[0][0]).toContain('https://github.com/adobe/aem-boilerplate.git');
     });
 
-    it('should create a new branch for the agent', async () => {
+    it('should not create branch in legacy (no cloneRegistry) mode', async () => {
       const task = {
         name: 'test-task',
         agent: 'claude',
@@ -114,11 +114,12 @@ describe('createTaskWorkspace', () => {
 
       await createTaskWorkspace(task);
 
-      // Verify git checkout was called with agent branch including iteration
-      expect(execSync).toHaveBeenCalledWith(
-        'git checkout -b claude-20231215-143022-1',
-        expect.objectContaining({ cwd: task.workspaceDir })
+      // In legacy mode (no cloneRegistry), no branch checkout happens
+      // Branch creation is handled by the worktree flow
+      const checkoutCalls = execSync.mock.calls.filter(call =>
+        call[0].includes('git checkout -b')
       );
+      expect(checkoutCalls).toHaveLength(0);
     });
 
     it('should throw error when startFrom is not defined', async () => {
@@ -211,6 +212,41 @@ describe('createTaskWorkspace', () => {
       const checkoutCmd = cloneCommands.find(cmd => cmd.includes('git checkout') && cmd.includes('abc123'));
       expect(checkoutCmd).toBeDefined();
     });
+
+    it('should support startFrom pinned to a commit hash', async () => {
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        iteration: 1,
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        startFrom: 'https://github.com/adobe/aem-boilerplate/tree/abc123def456789012345678901234567890abcd'
+      };
+
+      const cloneCommands = [];
+      execSync.mockImplementation((cmd) => {
+        cloneCommands.push(cmd);
+        if (cmd.includes('git clone')) {
+          const match = cmd.match(/git clone[^"]*"([^"]+)"/);
+          if (match) {
+            const targetDir = match[1];
+            const fsSync = require('fs');
+            fsSync.mkdirSync(path.join(targetDir, '.git'), { recursive: true });
+            fsSync.writeFileSync(path.join(targetDir, 'README.md'), '# Test');
+          }
+        }
+        return Buffer.from('');
+      });
+
+      await createTaskWorkspace(task);
+
+      const cloneCmd = cloneCommands.find(cmd => cmd.includes('git clone'));
+      expect(cloneCmd).toBeDefined();
+      expect(cloneCmd).not.toContain('--depth 1');
+
+      const checkoutCmd = cloneCommands.find(cmd => cmd.includes('git checkout abc123def456789012345678901234567890abcd'));
+      expect(checkoutCmd).toBeDefined();
+    });
   });
 
   describe('augmentations', () => {
@@ -260,7 +296,7 @@ describe('createTaskWorkspace', () => {
 
       // Verify git commit was called
       expect(execSync).toHaveBeenCalledWith(
-        'git commit -m "Add task augmentations"',
+        'git commit -m "Workspace setup"',
         expect.objectContaining({ cwd: task.workspaceDir })
       );
     });
@@ -355,7 +391,7 @@ describe('createTaskWorkspace', () => {
 
       // Verify git commit was called for the augmentations
       const commitCalls = execSync.mock.calls.filter(call => 
-        call[0].includes('git commit') && call[0].includes('Add task augmentations')
+        call[0].includes('git commit') && call[0].includes('Workspace setup')
       );
       expect(commitCalls.length).toBe(1);
     });
@@ -412,6 +448,186 @@ describe('createTaskWorkspace', () => {
         // Expected to fail fetching (either "Failed to fetch" or "fetch failed")
         expect(error.message.toLowerCase()).toContain('fetch');
       }
+    });
+  });
+
+  describe('agent-filtered augmentations', () => {
+    it('should skip augmentation when agents list does not include current agent', async () => {
+      const sourceDir = path.join(testWorkspaceRoot, 'source');
+      await fs.mkdir(sourceDir, { recursive: true });
+      await fs.writeFile(path.join(sourceDir, 'file.txt'), 'Content');
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        taskPath: sourceDir,
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        augmentations: [
+          { source: 'file.txt', target: 'file.txt', agents: ['cursor', 'codex'] }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      const exists = await fs.access(path.join(task.workspaceDir, 'file.txt'))
+        .then(() => true).catch(() => false);
+      expect(exists).toBe(false);
+    });
+
+    it('should apply augmentation when agents list includes current agent', async () => {
+      const sourceDir = path.join(testWorkspaceRoot, 'source');
+      await fs.mkdir(sourceDir, { recursive: true });
+      await fs.writeFile(path.join(sourceDir, 'file.txt'), 'Content');
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        taskPath: sourceDir,
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        augmentations: [
+          { source: 'file.txt', target: 'file.txt', agents: ['claude', 'cursor'] }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      const content = await fs.readFile(path.join(task.workspaceDir, 'file.txt'), 'utf-8');
+      expect(content).toBe('Content');
+    });
+
+    it('should apply augmentation when agents property is absent', async () => {
+      const sourceDir = path.join(testWorkspaceRoot, 'source');
+      await fs.mkdir(sourceDir, { recursive: true });
+      await fs.writeFile(path.join(sourceDir, 'file.txt'), 'Content');
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        taskPath: sourceDir,
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        augmentations: [
+          { source: 'file.txt', target: 'file.txt' }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      const content = await fs.readFile(path.join(task.workspaceDir, 'file.txt'), 'utf-8');
+      expect(content).toBe('Content');
+    });
+
+    it('should selectively apply augmentations based on agent', async () => {
+      const sourceDir = path.join(testWorkspaceRoot, 'source');
+      await fs.mkdir(sourceDir, { recursive: true });
+      await fs.writeFile(path.join(sourceDir, 'for-all.txt'), 'For all');
+      await fs.writeFile(path.join(sourceDir, 'for-claude.txt'), 'For claude');
+      await fs.writeFile(path.join(sourceDir, 'for-cursor.txt'), 'For cursor');
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        taskPath: sourceDir,
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        augmentations: [
+          { source: 'for-all.txt', target: 'for-all.txt' },
+          { source: 'for-claude.txt', target: 'for-claude.txt', agents: ['claude'] },
+          { source: 'for-cursor.txt', target: 'for-cursor.txt', agents: ['cursor'] }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      const allContent = await fs.readFile(path.join(task.workspaceDir, 'for-all.txt'), 'utf-8');
+      expect(allContent).toBe('For all');
+
+      const claudeContent = await fs.readFile(path.join(task.workspaceDir, 'for-claude.txt'), 'utf-8');
+      expect(claudeContent).toBe('For claude');
+
+      const cursorExists = await fs.access(path.join(task.workspaceDir, 'for-cursor.txt'))
+        .then(() => true).catch(() => false);
+      expect(cursorExists).toBe(false);
+    });
+  });
+
+  describe('scripted augmentations', () => {
+    it('should call scripted augmentation function with context', async () => {
+      const augmentFn = vi.fn();
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        scriptedAugmentations: [
+          { name: 'Test Script', augment: augmentFn, path: 'augmentations/test.js' }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      expect(augmentFn).toHaveBeenCalledTimes(1);
+      expect(augmentFn).toHaveBeenCalledWith({
+        workspaceDir: task.workspaceDir,
+        agent: 'claude',
+        taskName: 'test-task'
+      });
+    });
+
+    it('should work with both file and scripted augmentations', async () => {
+      const sourceDir = path.join(testWorkspaceRoot, 'source');
+      await fs.mkdir(sourceDir, { recursive: true });
+      await fs.writeFile(path.join(sourceDir, 'file.txt'), 'File content');
+
+      const augmentFn = vi.fn(async ({ workspaceDir }) => {
+        await fs.writeFile(path.join(workspaceDir, 'scripted.txt'), 'Scripted content');
+      });
+
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        taskPath: sourceDir,
+        startFrom: 'https://github.com/adobe/aem-boilerplate',
+        augmentations: [
+          { source: 'file.txt', target: 'file.txt' }
+        ],
+        scriptedAugmentations: [
+          { name: 'Test Script', augment: augmentFn, path: 'augmentations/test.js' }
+        ]
+      };
+
+      await createTaskWorkspace(task);
+
+      const fileContent = await fs.readFile(path.join(task.workspaceDir, 'file.txt'), 'utf-8');
+      expect(fileContent).toBe('File content');
+
+      const scriptedContent = await fs.readFile(path.join(task.workspaceDir, 'scripted.txt'), 'utf-8');
+      expect(scriptedContent).toBe('Scripted content');
+    });
+
+    it('should work without scripted augmentations', async () => {
+      const task = {
+        name: 'test-task',
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        workspaceDir: path.join(testWorkspaceRoot, '20231215-143022', 'test-task-claude'),
+        startFrom: 'https://github.com/adobe/aem-boilerplate'
+      };
+
+      await createTaskWorkspace(task);
+
+      const stats = await fs.stat(task.workspaceDir);
+      expect(stats.isDirectory()).toBe(true);
     });
   });
 
@@ -502,7 +718,7 @@ describe('createTaskWorkspace', () => {
 
       const newFile = await fs.readFile(path.join(task.workspaceDir, 'target', 'new.txt'), 'utf-8');
       expect(newFile).toBe('New content');
-      
+
       // Old file should be gone
       const oldExists = await fs.access(path.join(task.workspaceDir, 'target', 'old.txt'))
         .then(() => true).catch(() => false);
@@ -511,3 +727,57 @@ describe('createTaskWorkspace', () => {
   });
 });
 
+describe('copyAgentConfig', () => {
+  let workspaceDir;
+
+  beforeEach(async () => {
+    workspaceDir = path.join(testWorkspaceRoot, 'config-test-workspace');
+    await fs.mkdir(workspaceDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(testWorkspaceRoot, { recursive: true, force: true });
+  });
+
+  it('should not copy any config files for claude', async () => {
+    await copyAgentConfig('claude', workspaceDir);
+
+    const entries = await fs.readdir(workspaceDir);
+    expect(entries).toHaveLength(0);
+  });
+
+  it('should copy cursor system prompt to .cursor/rules/', async () => {
+    await copyAgentConfig('cursor', workspaceDir);
+
+    const rulesPath = path.join(workspaceDir, '.cursor', 'rules', 'system-prompt.md');
+    const rulesContent = await fs.readFile(rulesPath, 'utf-8');
+    expect(rulesContent).toContain('alwaysApply: true');
+    expect(rulesContent).toContain('kill any background processes');
+
+    // cli.json should not exist (permissions ignored in --yolo mode)
+    const cliExists = await fs.access(path.join(workspaceDir, '.cursor', 'cli.json'))
+      .then(() => true).catch(() => false);
+    expect(cliExists).toBe(false);
+  });
+
+  it('should copy codex config to .codex/config.toml', async () => {
+    await copyAgentConfig('codex', workspaceDir);
+
+    const destPath = path.join(workspaceDir, '.codex', 'config.toml');
+    const content = await fs.readFile(destPath, 'utf-8');
+    expect(content).toContain('developer_instructions');
+
+    // rules file should not exist (no sandbox to escape in bypass mode)
+    const rulesExists = await fs.access(path.join(workspaceDir, '.codex', 'rules', 'default.rules'))
+      .then(() => true).catch(() => false);
+    expect(rulesExists).toBe(false);
+  });
+
+  it('should handle unknown agent gracefully', async () => {
+    await copyAgentConfig('unknown-agent', workspaceDir);
+
+    // Should not throw, workspace should be unchanged
+    const entries = await fs.readdir(workspaceDir);
+    expect(entries).toHaveLength(0);
+  });
+});

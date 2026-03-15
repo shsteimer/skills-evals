@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeName, getCurrentTimestamp } from '../scripts/utils/string-utils.js';
+import { sanitizeName, getCurrentTimestamp, computeTaskHash } from '../scripts/utils/string-utils.js';
 
 describe('string-utils', () => {
   describe('sanitizeName', () => {
@@ -105,8 +105,49 @@ describe('string-utils', () => {
         // Wait for at least 1 second
       }
       const timestamp2 = getCurrentTimestamp();
-      
+
       expect(timestamp1).not.toBe(timestamp2);
+    });
+  });
+
+  describe('computeTaskHash', () => {
+    it('should return a hex string', () => {
+      const hash = computeTaskHash('prompt', 'criteria', '{}');
+      expect(hash).toMatch(/^[a-f0-9]+$/);
+    });
+
+    it('should return a short hash (first 12 chars of sha256)', () => {
+      const hash = computeTaskHash('prompt', 'criteria', '{}');
+      expect(hash).toHaveLength(12);
+    });
+
+    it('should return the same hash for the same inputs', () => {
+      const hash1 = computeTaskHash('prompt text', 'criteria text', '{"name":"test"}');
+      const hash2 = computeTaskHash('prompt text', 'criteria text', '{"name":"test"}');
+      expect(hash1).toBe(hash2);
+    });
+
+    it('should return different hashes when prompt changes', () => {
+      const hash1 = computeTaskHash('prompt v1', 'criteria', '{}');
+      const hash2 = computeTaskHash('prompt v2', 'criteria', '{}');
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should return different hashes when criteria changes', () => {
+      const hash1 = computeTaskHash('prompt', 'criteria v1', '{}');
+      const hash2 = computeTaskHash('prompt', 'criteria v2', '{}');
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should return different hashes when task.json changes', () => {
+      const hash1 = computeTaskHash('prompt', 'criteria', '{"name":"a"}');
+      const hash2 = computeTaskHash('prompt', 'criteria', '{"name":"b"}');
+      expect(hash1).not.toBe(hash2);
+    });
+
+    it('should handle empty strings', () => {
+      const hash = computeTaskHash('', '', '');
+      expect(hash).toMatch(/^[a-f0-9]{12}$/);
     });
   });
 });

@@ -1,6 +1,16 @@
 import js from '@eslint/js';
 
 export default [
+  {
+    ignores: [
+      'tasks/**/buggy-*/',
+      'tasks/**/source-*/',
+      'results/',
+      'tools/',
+      '.eval-workspaces/',
+      '.playwright/',
+    ],
+  },
   js.configs.recommended,
   {
     languageOptions: {
@@ -16,6 +26,11 @@ export default [
         URL: 'readonly',
         fetch: 'readonly',
         require: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        AbortController: 'readonly',
       },
     },
     rules: {

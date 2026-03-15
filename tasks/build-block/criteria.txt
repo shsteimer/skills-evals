@@ -1,59 +1,63 @@
 # Success Criteria
 
 <scoring_rubric>
-Start with 10 points.
-<critical> items: Deduct 2 points for each unmet criterion.
-<important> items: Deduct 1 point for each unmet criterion.
-Minimum score: 0.
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
+<bonus> items: Add points as indicated.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
 </scoring_rubric>
 
 ## Block Implementation
 
 <critical>
-- Block files created in `blocks/testimonials/` directory (or a similar name)
-- Block directory contains only `testimonials.js` and `testimonials.css`
-- Displays testimonial quotes and renders images
-- Handles optional attribution fields (name, company, title)
-- Gracefully handles missing image or attribution
-- Implements navigation between testimonials (prev/next)
-- Testimonials cycle appropriately
-- Uses vanilla JS and CSS for carousel behavior (no third-party libraries)
+- Block created in `blocks/{block-name}/` with matching `{block-name}.js` and `{block-name}.css` files following AEM naming conventions [check: block-files-exist]
+- js exports a `decorate()` function as the default block entry point
+- Displays a responsive grid: 3 columns on desktop, scaling down to 1 on mobile
+- Each card renders an image, product name, description, and CTA link
+- Badge overlay renders on top of the card image (positioned over the image, not beside or below it) with text like "Sale", "New", etc.
+- Uses `createOptimizedPicture()` from aem.js for image optimization
 </critical>
 
 <important>
-- Shows one testimonial at a time
-- Provides visual indicator of position (e.g., dots, counter)
+- Block implementation goes beyond renaming/copying the existing `cards` block — the structure, styling, or behavior reflects the product cards use case rather than being a mechanical clone
+- Uses semantic HTML structure (e.g., `<ul>/<li>` for the card list, headings for product names, `<a>` for CTAs)
+- All styles are scoped to the block (selectors namespaced to the block class) and do not leak to other elements
+- Badge is optional — cards without a badge render cleanly with no empty/broken badge element
+- Lazy loading for images (via `createOptimizedPicture` eager parameter or explicit `loading="lazy"`)
 </important>
 
-## Authoring
+## Content Modeling & Authoring
 
 <critical>
-- Block is authored with one quote per row
-- Each row has 2 columns: 1 for image, 1 for quote content
-- Uses semantic elements (e.g., headings, strong, em, etc.) to delineate quote from attribution
-</critical>
-
-## Code Quality
-
-<critical>
-- Uses semantic HTML structure throughout
-- All styles are scoped to the block and do not leak
+- Content model uses at most 2 columns per row in the block table (e.g., one for image, one for text content) — models with 3+ columns that split individual fields into separate cells are not acceptable
 </critical>
 
 <important>
-- JavaScript is clean and maintainable
-- Styling is responsive and works across devices
-- Maintains visual hierarchy (image, quote, attribution)
-- Uses modern CSS practices
+- Badge is authored inline within an existing content column (not as a dedicated column) and distinguished using semantic formatting (e.g., bold or italic) so the JS can identify it by formatting rather than by position or special syntax
+- Sample/demo content was created as a `.plain.html` file (e.g., in `drafts/`) that can be previewed with the AEM dev server — not just described in a summary
 </important>
 
 ## Testing
 
 <critical>
-- Agent tested implementation in a browser or browser-like environment
-- Agent ran a lint check and fixed any issues found
+- Agent tested the block in a browser or browser-like environment where the block JS actually executes (e.g., opened the page in a browser or used Playwright/Puppeteer to render and screenshot it). Evidence must include screenshots, DOM inspection, or visual confirmation from the agent's tool calls — not just starting a dev server, fetching with curl, or claiming the output looks correct.
+- Agent verified responsive behavior across at least two viewport sizes (e.g., desktop and mobile)
+</critical>
+
+## Process
+
+<critical>
+- Agent ran a lint check and fixed any issues found [check: lint-passes]
 </critical>
 
 <important>
-- Sample/demo content was created or identified to test the block
+- PR was created with a preview link to an `aem.page` or `aem.live` URL (e.g., `https://{branch}--aem-boilerplate-evals--shsteimer.aem.page/path/to/page`) that loads without 404, includes content demonstrating the block (e.g., sample product cards), and allows the reviewer to visually inspect the work and run a PSI check
 </important>
+
+## Skill Discovery
+
+<bonus>
+- (+1) Agent followed a structured workflow (analyze existing blocks → design content model → build → test in browser → review) without being told
+- (+1) Uses CSS grid with `auto-fit` or `auto-fill` and `minmax()` for fluid column sizing rather than discrete breakpoints
+</bonus>

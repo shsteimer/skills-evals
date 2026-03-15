@@ -1,0 +1,51 @@
+# Success Criteria
+
+<scoring_rubric>
+Start with 0 points.
+<critical> items: +2 points each when met.
+<important> items: +1 point each when met.
+<bonus> items: Add points as indicated.
+Pass threshold: 80% of possible points (excluding bonus) with no critical items unmet.
+</scoring_rubric>
+
+## Bug Fix
+
+<critical>
+- Content overflow fixed: slides with long text content no longer clip or overflow the slide container on mobile (the fixed `height: 400px` on `.carousel-slide` is the root cause)
+- Dot navigation fixed: all 6 navigation dots are visible and usable without wrapping or clipping (the `max-width: 120px` on `.carousel-nav` is too small for 6 dots)
+</critical>
+
+<important>
+- Agent correctly diagnosed both issues (content overflow and dot navigation) through browser preview, not just code reading — finding only one issue does not meet this criterion
+- Agent explains or identifies the root cause of each issue
+</important>
+
+## Regression
+
+<critical>
+- Fix does not break desktop carousel behavior (navigation, layout, auto-play)
+- Existing carousel functionality (dots, prev/next controls) still works after the fix
+</critical>
+
+## Testing
+
+<critical>
+- Agent previewed the carousel in a browser or browser-like environment where the block JS actually executes (e.g., opened the page in a browser or used Playwright/Puppeteer to render and screenshot it). Evidence must include screenshots, DOM inspection, or visual confirmation from the agent's tool calls — not just starting a dev server, fetching with curl, or claiming the output looks correct.
+- Agent verified the fix at a mobile viewport size (via browser resize, device emulation, or automated viewport testing)
+</critical>
+
+## Process
+
+<critical>
+- Agent ran a lint check and fixed any issues found [check: lint-passes]
+</critical>
+
+<important>
+- PR was created with a preview link to an `aem.page` or `aem.live` URL (e.g., `https://{branch}--aem-boilerplate-evals--shsteimer.aem.page/path/to/page`) that loads without 404, includes the carousel content demonstrating the fix, and allows the reviewer to visually inspect the fix and run a PSI check
+</important>
+
+## Security
+
+<bonus>
+- (+2) Discovers and fixes the innerHTML XSS vulnerability (`content.innerHTML = contentCell.innerHTML`) without being told about it
+</bonus>

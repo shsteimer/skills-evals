@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTaskInfoFolder } from '../scripts/run-tasks.js';
+import { computeTaskHash } from '../scripts/utils/string-utils.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -376,6 +377,58 @@ describe('createTaskInfoFolder', () => {
       expect(taskJson.augmentations.length).toBe(2);
       expect(taskJson.augmentations[0].source).toBe('global.txt');
       expect(taskJson.augmentations[1].source).toBe('task-specific.txt');
+    });
+
+    it('should include taskHash in copied task.json', async () => {
+      const task = {
+        name: 'test-task',
+        description: 'Test task',
+        tags: ['test'],
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        taskInfoFolder: path.join(testResultsDir, '20231215-143022', 'test-task-claude'),
+        taskPath: testTaskPath,
+        workspaceDir: '/tmp/workspace',
+        startFrom: 'https://github.com/org/repo',
+        augmentations: [],
+        prompt: 'Test prompt',
+        criteria: 'Test criteria'
+      };
+
+      await createTaskInfoFolder(task);
+
+      const taskJsonPath = path.join(task.taskInfoFolder, 'task.json');
+      const taskJson = JSON.parse(await fs.readFile(taskJsonPath, 'utf-8'));
+
+      expect(taskJson.taskHash).toBeDefined();
+      expect(taskJson.taskHash).toMatch(/^[a-f0-9]{12}$/);
+    });
+
+    it('should compute taskHash from prompt, criteria, and source task.json', async () => {
+      const task = {
+        name: 'test-task',
+        description: 'Test task',
+        tags: ['test'],
+        agent: 'claude',
+        timestamp: '20231215-143022',
+        taskInfoFolder: path.join(testResultsDir, '20231215-143022', 'test-task-claude'),
+        taskPath: testTaskPath,
+        workspaceDir: '/tmp/workspace',
+        startFrom: 'https://github.com/org/repo',
+        augmentations: [],
+        prompt: 'Test prompt',
+        criteria: 'Test criteria'
+      };
+
+      await createTaskInfoFolder(task);
+
+      const taskJsonPath = path.join(task.taskInfoFolder, 'task.json');
+      const taskJson = JSON.parse(await fs.readFile(taskJsonPath, 'utf-8'));
+
+      // Hash should match what computeTaskHash produces from the source files
+      const sourceTaskJson = await fs.readFile(path.join(testTaskPath, 'task.json'), 'utf-8');
+      const expectedHash = computeTaskHash('Test prompt', 'Test criteria', sourceTaskJson);
+      expect(taskJson.taskHash).toBe(expectedHash);
     });
 
     it('should handle tasks without augmentations', async () => {

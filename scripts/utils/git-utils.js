@@ -105,6 +105,24 @@ export async function captureGitChanges(workspaceDir, sinceCommitMessage) {
   }
 }
 
+export function addWorktree(repoDir, worktreePath, branchName) {
+  execSync(`git worktree add -b ${branchName} "${worktreePath}"`, {
+    cwd: repoDir,
+    stdio: 'pipe'
+  });
+}
+
+export function removeWorktree(repoDir, worktreePath) {
+  execSync(`git worktree remove "${worktreePath}" --force`, {
+    cwd: repoDir,
+    stdio: 'pipe'
+  });
+}
+
+export async function pushBranch(cwd, branchName) {
+  await execAsync(`git push origin ${branchName}`, { cwd });
+}
+
 export async function captureGitCommits(workspaceDir, sinceCommitMessage) {
   try {
     // Find the commit with the specified message

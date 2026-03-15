@@ -1,0 +1,39 @@
+.stat-add { color: var(--green); }
+.stat-del { color: var(--red); }
+
+.file-list { margin-bottom: 1.5rem; }
+.file-list summary { cursor: pointer; font-weight: 600; font-size: 0.875rem; padding: 0.5rem 0; }
+.file-list ul { list-style: none; padding-left: 1rem; }
+.file-list li { font-size: 0.8125rem; padding: 0.125rem 0; }
+.file-list a { color: var(--blue); text-decoration: none; }
+.file-list a:hover { text-decoration: underline; }
+
+.diff-file { margin-bottom: 2rem; }
+.diff-file-header {
+  font-weight: 600; font-size: 0.875rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  position: sticky; top: 0; z-index: 1;
+}
+.diff-table {
+  width: 100%; border-collapse: collapse;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 6px 6px; overflow: hidden;
+}
+.diff-table td { padding: 0 0.75rem; white-space: pre-wrap; word-break: break-all; vertical-align: top; }
+.diff-table .ln {
+  width: 1px; text-align: right; color: var(--border);
+  user-select: none; padding-right: 0.5rem; padding-left: 0.5rem;
+  border-right: 1px solid var(--border);
+}
+.diff-table .code { width: 100%; }
+
+.line-add { background: var(--green-bg); }
+.line-add .code { color: var(--green); }
+.line-del { background: var(--red-bg); }
+.line-del .code { color: var(--red); }
+.line-hunk { background: var(--blue-bg); }
+.line-hunk .code { color: var(--blue); font-style: italic; }

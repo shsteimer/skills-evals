@@ -7,9 +7,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "run-tasks": "node scripts/run-tasks.js",
-    "eval-tasks": "node scripts/eval-tasks.js",
+    "run-tasks:debug": "node scripts/run-tasks.js --debug",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "serve": "node scripts/serve.js",
+    "cleanup": "node scripts/cleanup-branches.js",
+    "cleanup:dry-run": "node scripts/cleanup-branches.js --dry-run"
   },
   "author": "",
   "engines": {
@@ -21,6 +24,7 @@
     "vitest": "^4.0.15"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.3.0",
     "dotenv": "^17.2.3"
   }
 }

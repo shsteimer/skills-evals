@@ -1,0 +1,10 @@
+[
+  {
+    "source": "test-fixtures/agents-md/candidates/fail-missing-critical/AGENTS.md",
+    "target": "AGENTS.md"
+  },
+  {
+    "source": "test-fixtures/agents-md/candidates/fail-missing-critical/AGENTS.md",
+    "target": "CLAUDE.md"
+  }
+]
