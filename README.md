@@ -1,32 +1,41 @@
 # Skills Evals
 
-Framework for running and evaluating coding agent performance on development tasks.
+Framework for measuring how well coding agents follow project instructions. The primary use case is A/B testing changes to `AGENTS.md` and other workspace augmentations — run the same tasks with a baseline and candidate configuration, then compare scores to see if agents follow instructions better or worse.
 
-## Overview
+## Why
 
-This framework allows you to:
-- Define development tasks with specific criteria
-- Run coding agents against those tasks in isolated workspaces
-- Evaluate agent performance based on defined criteria
-- Summarize batch results with aggregate statistics
-- Compare batches to determine if changes improved performance
+When you change an `AGENTS.md` or add a skill file, you want to know if agents actually behave differently. Eyeballing a few runs doesn't scale and is subject to confirmation bias. This framework gives you a structured way to measure the impact: define tasks with scoring criteria, run agents in isolated workspaces, evaluate the output, and compare batches side-by-side.
+
+## What it does
+
+- Runs coding agents (Claude, Cursor, Codex) against defined tasks in isolated workspaces
+- Evaluates each run against task-specific criteria (deterministic checks + LLM judgment)
+- Aggregates results per task+agent with statistical summaries
+- Compares two batches to determine if augmentation changes improved agent behavior
 
 ## Terminology
 
 - **batch** — timestamp directory (`results/20260308-135305/`) containing all tasks × agents × iterations from one `run-tasks` invocation
 - **run** — individual task execution folder (`results/.../build-block-claude-1/`)
 - **iteration** — repeat number (1-5) within a batch for same task+agent
+- **augmentation** — files injected into the workspace before a run (AGENTS.md, skills, config)
 
 ## Structure
 
 - `tasks/` - Task definitions with prompts and evaluation criteria
 - `scripts/` - Execution, evaluation, summarization, comparison, and assembly scripts
+- `scripts/handlers/` - Agent-specific CLI handlers (claude, cursor, codex)
+- `scripts/utils/` - Shared utilities for git, GitHub, npm, process, and environment config
 - `.claude/skills/` - Claude Code skills for evaluation workflow
 - `tools/` - Standalone HTML viewer tools
 - `results/` - Evaluation results
   - `results/{timestamp}/` - Batch directories (runs + batch summary)
-  - `results/comparisons/{timestamp}/` - Comparison directories
+  - `results/comparisons/{baseline}_vs_{candidate}/` - Comparison directories
 - `augmentations/` - Optional global augmentation files
+- `config/` - Agent config files and [safehouse sandbox config](config/safehouse/README.md)
+- `docs/` - Additional documentation
+  - [Agent Settings & Configuration](docs/agent-settings.md) — env vars, CLI flags, sandboxing, bot auth
+  - [Evaluation Dimensions](docs/evaluation-dimensions.md) — scoring rubric, dimension definitions, task matrix
 
 ## Quick Start
 
@@ -47,8 +56,8 @@ npm run run-tasks -- --task build-block
 # Run with custom agents
 npm run run-tasks -- --agents claude,cursor
 
-# Run with augmentations
-npm run run-tasks -- --augmentations ./augmentations/agents-md-only.json
+# Run with augmentations (A/B testing an AGENTS.md change)
+npm run run-tasks -- --augmentations ./augmentations/aem-boilerplate-pr594-baseline.json
 
 # Run multiple iterations
 npm run run-tasks -- --task build-block --times 5
@@ -194,7 +203,7 @@ Results are stored at `results/{timestamp}/`:
 - `batch-summary-data.js` — data file for batch viewer
 - `batch.log` — execution log
 
-### Comparison artifacts (`results/comparisons/{timestamp}/`)
+### Comparison artifacts (`results/comparisons/{baseline}_vs_{candidate}/`)
 - `comparison.json` — comparison data with analysis (recommendation, per-group verdicts)
 - `compare-data.js` — data file for comparison viewer
 
@@ -230,7 +239,7 @@ All viewers load data via `?data=` URL parameter:
 ```
 http://localhost:8765/tools/eval-viewer/index.html?data=results/20260308-135305/build-block-claude-1/eval-data.js
 http://localhost:8765/tools/batch-viewer/index.html?data=results/20260308-135305/batch-summary-data.js
-http://localhost:8765/tools/comparison-viewer/index.html?data=results/comparisons/20260309-115836/compare-data.js
+http://localhost:8765/tools/comparison-viewer/index.html?data=results/comparisons/20260308-135305_vs_20260309-115836/compare-data.js
 ```
 
 ## Testing
