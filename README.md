@@ -1,6 +1,6 @@
 # Skills Evals
 
-Framework for measuring how well coding agents follow project instructions. The primary use case is A/B testing changes to `AGENTS.md` and other workspace augmentations — run the same tasks with a baseline and candidate configuration, then compare scores to see if agents follow instructions better or worse.
+Framework for measuring how well coding agents follow project instructions. The primary use case is A/B testing changes to skills, `AGENTS.md`, and other workspace augmentations — run the same tasks with a baseline and candidate configuration, then compare scores to see if agents follow instructions and complete tasks better or worse.
 
 ## Why
 
