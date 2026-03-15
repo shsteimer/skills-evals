@@ -96,7 +96,7 @@ function renderAggregate(d) {
           <span class="recommendation-verdict">${esc(recLabel)}</span>
           ${analysis.confidence ? `<span class="recommendation-confidence">${esc(analysis.confidence)} confidence</span>` : ''}
         </div>
-        ${analysis.reasoning ? `<p class="recommendation-reasoning">${esc(analysis.reasoning)}</p>` : ''}
+        ${analysis.comparisonSummary ? `<p class="recommendation-summary">${esc(analysis.comparisonSummary)}</p>` : ''}
       </div>`;
   }
 

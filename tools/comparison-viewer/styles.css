@@ -15,7 +15,7 @@
   font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--muted); font-weight: 600;
 }
-.recommendation-reasoning { margin: 0; font-size: 0.875rem; line-height: 1.5; }
+.recommendation-summary { margin: 0; font-size: 0.875rem; line-height: 1.5; }
 
 /* Stats grid — matches batch viewer */
 .stats-grid {

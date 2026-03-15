@@ -35,7 +35,7 @@ export async function assembleComparison(comparisonDir) {
   comparison.analysis = {
     recommendation: analysis.recommendation,
     confidence: analysis.confidence,
-    reasoning: analysis.reasoning
+    comparisonSummary: analysis.comparisonSummary
   };
 
   // Write updated comparison.json

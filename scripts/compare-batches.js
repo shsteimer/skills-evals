@@ -40,15 +40,9 @@ Arguments:
   <candidate-dir>    Path to candidate batch directory
 
 Options:
-  --output-dir <path>  Output directory (default: results/comparisons/<timestamp>)
+  --output-dir <path>  Output directory (default: results/comparisons/<baseline>_vs_<candidate>)
   -h, --help           Show this help message
 `);
-}
-
-export function generateTimestamp() {
-  const now = new Date();
-  const pad = (n, len = 2) => String(n).padStart(len, '0');
-  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
 export async function loadBatchSummary(batchDir) {
@@ -217,7 +211,11 @@ async function main() {
   console.log(formatSummary(comparison));
 
   // Write output to a comparison directory
-  const outputDir = path.resolve(args.outputDir || path.join('results', 'comparisons', generateTimestamp()));
+  // Default: canonical name from both batch timestamps so re-runs overwrite
+  const baselineTimestamp = path.basename(path.resolve(args.baselineDir));
+  const candidateTimestamp = path.basename(path.resolve(args.candidateDir));
+  const canonicalName = `${baselineTimestamp}_vs_${candidateTimestamp}`;
+  const outputDir = path.resolve(args.outputDir || path.join('results', 'comparisons', canonicalName));
   await fs.mkdir(outputDir, { recursive: true });
 
   // Write comparison.json

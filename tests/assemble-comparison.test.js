@@ -38,7 +38,7 @@ describe('assembleComparison', () => {
   const baseAnalysis = {
     recommendation: 'yes',
     confidence: 'high',
-    reasoning: 'Candidate shows clear improvements in quality scores with minimal efficiency tradeoffs.',
+    comparisonSummary: 'The candidate AGENTS.md condensed setup instructions, and agents followed the build steps more consistently. Consider adopting.',
     perGroup: [
       { key: 'hello-world::claude', verdict: 'improved', reasoning: 'Score improved by 1.5 with lower token usage.' },
       { key: 'fix-bug::claude', verdict: 'stable', reasoning: 'Minor regression within noise threshold.' }
@@ -53,7 +53,7 @@ describe('assembleComparison', () => {
 
     expect(result.analysis.recommendation).toBe('yes');
     expect(result.analysis.confidence).toBe('high');
-    expect(result.analysis.reasoning).toContain('clear improvements');
+    expect(result.analysis.comparisonSummary).toContain('condensed setup instructions');
   });
 
   it('should merge per-group verdicts into matched groups', async () => {
@@ -115,7 +115,7 @@ describe('assembleComparison', () => {
     await writeAnalysis({
       recommendation: 'inconclusive',
       confidence: 'low',
-      reasoning: 'Not enough data.'
+      comparisonSummary: 'Not enough data.'
     });
 
     const result = await assembleComparison(tmpDir);
