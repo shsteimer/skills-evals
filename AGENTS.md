@@ -23,7 +23,7 @@ This is a framework for evaluating coding agent performance on development tasks
 - `tests/` - Vitest unit tests
 - `results/` - Generated evaluation results
   - `results/<timestamp>/` - Batch directories (runs + batch summary)
-  - `results/comparisons/<timestamp>/` - Comparison directories (comparison data + analysis)
+  - `results/comparisons/<baseline>_vs_<candidate>/` - Comparison directories (comparison data + analysis)
 - `augmentations/` - Optional files to add to task workspaces
 
 ## Commands
