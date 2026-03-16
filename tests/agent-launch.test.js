@@ -79,11 +79,11 @@ describe('wrapWithSafehouse', () => {
 
   it('should return safehouse env vars and include them in --env-pass', () => {
     getSafehouseConfig.mockReturnValue({
-      bin: 'safehouse', enableFeatures: '', appendProfile: '', env: { PLAYWRIGHT_MCP_SANDBOX: 'false' },
+      bin: 'safehouse', enableFeatures: '', appendProfile: '', env: { CUSTOM_VAR: 'value' },
     });
     const result = wrapWithSafehouse('claude', ['--verbose'], { envPass: ['GH_TOKEN'] });
-    expect(result.env).toEqual({ PLAYWRIGHT_MCP_SANDBOX: 'false' });
-    expect(result.args).toContain('--env-pass=GH_TOKEN,PLAYWRIGHT_MCP_SANDBOX');
+    expect(result.env).toEqual({ CUSTOM_VAR: 'value' });
+    expect(result.args).toContain('--env-pass=GH_TOKEN,CUSTOM_VAR');
   });
 
   it('should pass safehouse env vars through even with no explicit envPass', () => {
