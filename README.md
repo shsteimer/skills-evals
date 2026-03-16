@@ -40,7 +40,7 @@ When you change an `AGENTS.md` or add a skill file, you want to know if agents a
 ## Prerequisites
 
 - **Node.js** >= 22
-- **Agent Safehouse** — macOS sandbox toolkit (`safehouse` on PATH). All agent processes run inside Safehouse for kernel-level filesystem isolation. See https://github.com/anthropics/agent-safehouse
+- **Agent Safehouse** — macOS sandbox toolkit (`safehouse` on PATH). All agent processes run inside Safehouse for kernel-level filesystem isolation. Install via `brew install eugene1g/safehouse/agent-safehouse`. See https://github.com/eugene1g/agent-safehouse
 - **Coding agents** — one or more of the following, authenticated and on PATH:
   - `claude` (Claude Code CLI)
   - `cursor` (Cursor Agent CLI)
