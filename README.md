@@ -46,7 +46,6 @@ When you change an `AGENTS.md` or add a skill file, you want to know if agents a
   - `cursor` (Cursor Agent CLI)
   - `codex` (Codex CLI)
 - **git** and **gh** (GitHub CLI) — authenticated
-- **OpenAI API key** — used for LLM-based evaluation scoring (`OPENAI_API_KEY` in `.env`)
 
 Optional:
 - `EVAL_GH_TOKEN` — fine-grained PAT for a bot account, enables workspace-local git auth isolation (see [Agent Settings](docs/agent-settings.md))
