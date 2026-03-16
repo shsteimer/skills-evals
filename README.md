@@ -37,15 +37,27 @@ When you change an `AGENTS.md` or add a skill file, you want to know if agents a
   - [Agent Settings & Configuration](docs/agent-settings.md) — env vars, CLI flags, sandboxing, bot auth
   - [Evaluation Dimensions](docs/evaluation-dimensions.md) — scoring rubric, dimension definitions, task matrix
 
+## Prerequisites
+
+- **Node.js** >= 22
+- **Agent Safehouse** — macOS sandbox toolkit (`safehouse` on PATH). All agent processes run inside Safehouse for kernel-level filesystem isolation. Install via `brew install eugene1g/safehouse/agent-safehouse`. See https://github.com/eugene1g/agent-safehouse
+- **Coding agents** — one or more of the following, authenticated and on PATH:
+  - `claude` (Claude Code CLI)
+  - `cursor` (Cursor Agent CLI)
+  - `codex` (Codex CLI)
+- **git** and **gh** (GitHub CLI) — authenticated
+
+Optional:
+- `EVAL_GH_TOKEN` — fine-grained PAT for a bot account, enables workspace-local git auth isolation (see [Agent Settings](docs/agent-settings.md))
+
 ## Quick Start
 
 ```bash
 # Install dependencies
 npm install
 
-# Set up environment variables
-# Create a .env file based on the example in .env.example
-# and add your API keys and settings
+# Copy .env.example and configure as needed
+cp .env.example .env
 
 # Run all tasks with default agents (claude, cursor, codex)
 npm run run-tasks

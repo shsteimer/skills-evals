@@ -17,16 +17,14 @@ Each agent process is spawned as `safehouse <agent-binary> <args>`. Safehouse co
 ```json
 {
   "bin": "safehouse",
-  "enableFeatures": "agent-browser",
-  "appendProfile": "config/safehouse/local-overrides.sb"
+  "enableFeatures": "agent-browser,playwright-chrome"
 }
 ```
 
 - `bin` — path to safehouse binary (default: `safehouse` on PATH)
 - `enableFeatures` — optional comma-separated `--enable` features (see `safehouse --help`)
-- `appendProfile` — optional path to a `.sb` sandbox policy override file
 
-The `agent-browser` feature enables playwright-cli browser launching inside the sandbox. The `local-overrides.sb` file adds policy rules like read access to system Chrome.
+The `agent-browser` feature enables browser launching inside the sandbox. The `playwright-chrome` feature grants the sandbox policy rules needed for Chromium/Chrome (system Chrome, Chrome for Testing, and headless Chromium startup probes).
 
 Environment variables `SAFEHOUSE_BIN`, `SAFEHOUSE_ENABLE`, and `SAFEHOUSE_APPEND_PROFILE` override the config file values.
 
@@ -83,7 +81,7 @@ Pattern: `{AGENT}_MODEL`, `{AGENT}_ADDITIONAL_ARGS` where `{AGENT}` is `CLAUDE`,
 |----------|----------|---------|-------------|
 | `SAFEHOUSE_BIN` | no | from `config/safehouse/config.json` | Override safehouse binary path |
 | `SAFEHOUSE_ENABLE` | no | from `config/safehouse/config.json` | Override safehouse enable features |
-| `SAFEHOUSE_APPEND_PROFILE` | no | from `config/safehouse/config.json` | Override safehouse policy overlay path |
+| `SAFEHOUSE_APPEND_PROFILE` | no | (none) | Override safehouse policy overlay path (not normally needed) |
 | `EVAL_GH_TOKEN` | no | (none) | Fine-grained PAT for the bot account. When set, enables workspace-local bot auth |
 | `EVAL_GIT_NAME` | no | `skills-evals-bot` | Git author name for bot commits |
 | `EVAL_GIT_EMAIL` | no | `skills-evals-bot@users.noreply.github.com` | Git author email for bot commits |
