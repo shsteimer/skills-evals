@@ -37,15 +37,28 @@ When you change an `AGENTS.md` or add a skill file, you want to know if agents a
   - [Agent Settings & Configuration](docs/agent-settings.md) — env vars, CLI flags, sandboxing, bot auth
   - [Evaluation Dimensions](docs/evaluation-dimensions.md) — scoring rubric, dimension definitions, task matrix
 
+## Prerequisites
+
+- **Node.js** >= 22
+- **Agent Safehouse** — macOS sandbox toolkit (`safehouse` on PATH). All agent processes run inside Safehouse for kernel-level filesystem isolation. See https://github.com/anthropics/agent-safehouse
+- **Coding agents** — one or more of the following, authenticated and on PATH:
+  - `claude` (Claude Code CLI)
+  - `cursor` (Cursor Agent CLI)
+  - `codex` (Codex CLI)
+- **git** and **gh** (GitHub CLI) — authenticated
+- **OpenAI API key** — used for LLM-based evaluation scoring (`OPENAI_API_KEY` in `.env`)
+
+Optional:
+- `EVAL_GH_TOKEN` — fine-grained PAT for a bot account, enables workspace-local git auth isolation (see [Agent Settings](docs/agent-settings.md))
+
 ## Quick Start
 
 ```bash
 # Install dependencies
 npm install
 
-# Set up environment variables
-# Create a .env file based on the example in .env.example
-# and add your API keys and settings
+# Create .env with at minimum OPENAI_API_KEY
+# See docs/agent-settings.md for all available variables
 
 # Run all tasks with default agents (claude, cursor, codex)
 npm run run-tasks
