@@ -56,8 +56,8 @@ Optional:
 # Install dependencies
 npm install
 
-# Optionally create .env for configuration overrides
-# See docs/agent-settings.md for available variables
+# Copy .env.example and configure as needed
+cp .env.example .env
 
 # Run all tasks with default agents (claude, cursor, codex)
 npm run run-tasks
