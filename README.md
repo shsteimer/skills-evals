@@ -56,8 +56,8 @@ Optional:
 # Install dependencies
 npm install
 
-# Create .env with at minimum OPENAI_API_KEY
-# See docs/agent-settings.md for all available variables
+# Optionally create .env for configuration overrides
+# See docs/agent-settings.md for available variables
 
 # Run all tasks with default agents (claude, cursor, codex)
 npm run run-tasks
